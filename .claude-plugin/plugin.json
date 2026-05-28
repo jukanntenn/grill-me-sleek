@@ -1,0 +1,20 @@
+{
+  "name": "grill-me-sleek",
+  "description": "Batch interview the user about plans and designs with a sleek web interface. Generates all questions at once with recommended answers, opens an interactive HTML page for bulk review, and waits for feedback.",
+  "version": "0.1.0",
+  "author": {
+    "name": "jukanntenn"
+  },
+  "homepage": "https://github.com/jukanntenn/grill-me-sleek",
+  "repository": "https://github.com/jukanntenn/grill-me-sleek",
+  "license": "MIT",
+  "keywords": [
+    "interview",
+    "review",
+    "plan",
+    "design",
+    "questions",
+    "web-ui",
+    "interactive"
+  ]
+}
