@@ -16,18 +16,33 @@ If a question can be answered by exploring the codebase, explore the codebase in
 3. **Execute the server script** to present the questions in the browser:
 
    ```
-   python3 skills/grill-me-sleek/server.py << 'EOF'
+   python3 "$GRILL_SERVER" << 'EOF'
    <JSON_DATA>
    EOF
    ```
    - Use a heredoc with single-quoted delimiter to avoid shell escaping issues.
-   - Alternatively, pass JSON as a CLI argument: `python3 skills/grill-me-sleek/server.py '<json>'`
-   - On Windows, use: `python skills/grill-me-sleek/server.py "<JSON_DATA>"`
+   - Alternatively, pass JSON as a CLI argument: `python3 "$GRILL_SERVER" '<json>'`
+   - On Windows, use: `python "$GRILL_SERVER" "<JSON_DATA>"`
+   - The `$GRILL_SERVER` variable resolves to `$CLAUDE_PLUGIN_ROOT/skills/grill-me-sleek/server.py` for plugin installations, or `skills/grill-me-sleek/server.py` for standalone `.claude/skills/` usage.
 
 4. **Block and wait** for the script to output the user's response JSON to stdout. If the browser could not open automatically, the script will print a URL — instruct the user to open it manually.
 5. **Process the user's answers**: acknowledge decisions, and if any answers reveal new issues, generate a new JSON batch and run the server again. The browser tab stays open and reloads automatically — no need to open a new tab.
 6. **Summarize** the final shared understanding once all branches are resolved.
-7. **Signal completion** by running `python3 skills/grill-me-sleek/server.py --done`. This shows the user a completion page in the browser and shuts down the server after 5 seconds.
+7. **Signal completion** by running `python3 "$GRILL_SERVER" --done`. This shows the user a completion page in the browser and shuts down the server after 5 seconds.
+
+## Resolving the server path
+
+Before running any server command, resolve the path with:
+
+```bash
+if [ -n "$CLAUDE_PLUGIN_ROOT" ]; then
+  GRILL_SERVER="$CLAUDE_PLUGIN_ROOT/skills/grill-me-sleek/server.py"
+else
+  GRILL_SERVER="skills/grill-me-sleek/server.py"
+fi
+```
+
+This ensures the server is found whether the skill runs from a plugin installation or a standalone `.claude/skills/` setup.
 
 ## JSON Schema — Input (you generate this)
 

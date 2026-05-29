@@ -74,20 +74,20 @@ body{
 a{color:inherit}
 
 /* ── Layout ────────────────────────────────── */
-.wrap{max-width:720px;margin:0 auto;padding:24px 16px}
+.wrap{max-width:960px;margin:0 auto;padding:24px 16px}
 
 /* ── Header — heading-lg + subtitle ───────── */
-.hdr{padding-bottom:20px;border-bottom:1px solid var(--c-hairline);margin-bottom:24px}
+.hdr{padding-bottom:16px;border-bottom:1px solid var(--c-hairline);margin-bottom:20px}
 .hdr-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
 .hdr-text{flex:1;min-width:0}
 .hdr-text h1{
-  /* heading-lg: 40px/600/1.20/-1px */
-  font-size:40px;font-weight:600;line-height:1.2;letter-spacing:-1px;
+  /* heading-md: 32px/600/1.25/-0.5px */
+  font-size:32px;font-weight:600;line-height:1.25;letter-spacing:-0.5px;
   margin-bottom:4px;
 }
 .hdr-text p{
-  /* subtitle: 18px/500/1.50 */
-  font-size:18px;font-weight:500;line-height:1.5;color:var(--c-slate);
+  /* body-md: 16px/500/1.50 */
+  font-size:16px;font-weight:500;line-height:1.5;color:var(--c-slate);
 }
 .hdr-controls{display:flex;align-items:center;gap:8px;flex-shrink:0;padding-top:10px}
 
@@ -122,76 +122,82 @@ a{color:inherit}
 
 /* ── Question Cards — card-base ────────────── */
 .q-card{
-  /* card-base: canvas bg, rounded-xl(16px), spacing.xl(24px) padding, hairline border */
-  background:var(--c-card-bg);
-  border:1px solid var(--c-card-bc);
-  border-radius:var(--r-xl);
-  padding:24px;
-  margin-bottom:16px;
-  box-shadow:var(--shadow-card);
-  transition:background var(--tr),border-color var(--tr),box-shadow var(--tr);
+  background:transparent;
+  border:none;
+  border-radius:0;
+  padding:12px 0;
+  margin-bottom:0;
+  box-shadow:none;
+  border-bottom:1px solid var(--c-hairline-soft);
+  transition:background var(--tr),border-color var(--tr);
 }
-.q-card:last-of-type{margin-bottom:0}
-/* body-md-bold: 16px/700/1.50 */
-.q-text{font-size:16px;font-weight:700;line-height:1.5;margin-bottom:12px}
+.q-card:last-of-type{border-bottom:none}
+.q-text{font-size:15px;font-weight:600;line-height:1.4;margin-bottom:8px}
 
 /* ── Options — pill-tab style ──────────────── */
-.opts{display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
+.opts{display:flex;flex-direction:column;gap:0;margin-bottom:4px}
 .opt{
-  display:flex;align-items:flex-start;gap:10px;
-  padding:10px 16px;
-  border:1px solid var(--c-hairline);border-radius:var(--r-lg);
-  cursor:pointer;background:var(--c-canvas);
-  /* body-sm: 14px/400/1.50 */
-  font-family:var(--font);font-size:14px;line-height:1.5;
-  color:var(--c-ink);
-  transition:background var(--tr),border-color var(--tr),color var(--tr);
+  display:flex;align-items:flex-start;gap:8px;
+  padding:4px 12px;
+  border:none;border-radius:var(--r-md);
+  cursor:pointer;background:transparent;
+  /* body-sm: 14px/400/1.40 */
+  font-family:var(--font);font-size:14px;line-height:1.4;
+  color:var(--c-slate);
+  transition:color var(--tr);
 }
-.opt:hover{border-color:var(--c-steel)}
-.opt input[type=radio]{margin-top:3px;flex-shrink:0;accent-color:var(--c-ink);width:16px;height:16px}
+.opt:hover{color:var(--c-ink)}
+.opt input[type=radio]{
+  appearance:none;-webkit-appearance:none;
+  margin-top:5px;flex-shrink:0;
+  width:12px;height:12px;
+  border:1.5px solid var(--c-steel);border-radius:50%;
+  background:transparent;position:relative;cursor:pointer;
+  transition:border-color var(--tr);
+}
+.opt input[type=radio]:checked{border-color:var(--c-ink)}
+.opt input[type=radio]:checked::after{
+  content:'';position:absolute;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  width:5px;height:5px;border-radius:50%;background:var(--c-ink);
+}
 /* pill-tab-active state */
-.opt.sel{background:var(--c-opt-bg);border-color:var(--c-opt-bg);color:var(--c-opt-text)}
-.opt.sel input[type=radio]{accent-color:var(--c-opt-text)}
+.opt.sel{background:transparent;color:var(--c-ink)}
 .opt-text{flex:1;word-break:break-word}
 
 /* ── Badge — badge-beta ────────────────────── */
-.badge{
-  /* caption-bold: 13px/600/1.50, brand-blue-200 bg, brand-blue-deep text, rounded-full */
-  display:inline-block;font-size:13px;font-weight:600;line-height:1.5;
-  background:var(--c-brand-blue-200);color:var(--c-brand-blue-deep);
-  padding:4px 10px;border-radius:var(--r-full);
-  margin-left:6px;vertical-align:middle;
+.rec-text{
+  font-size:13px;font-weight:600;color:var(--c-brand-coral);
+  margin-left:4px;
 }
 
 /* ── Explanation — caption ─────────────────── */
 .expl{
-  /* caption: 13px/400/1.70, steel color */
-  font-size:13px;line-height:1.7;color:var(--c-steel);
-  margin-left:26px;margin-top:4px;
+  font-size:13px;line-height:1.6;color:var(--c-steel);
+  margin-left:24px;margin-top:2px;
 }
 
 /* ── Custom Input — text-input ─────────────── */
 .custom-input{
-  margin:8px 0 0 26px;width:calc(100% - 26px);
-  /* text-input: canvas bg, hairline border, rounded-md, 12px 16px padding, 40px height */
-  padding:10px 16px;
+  margin:6px 0 0 24px;width:calc(100% - 24px);
+  padding:8px 12px;
   background:var(--c-surface);border:1px solid var(--c-hairline);
   border-radius:var(--r-md);
   font-family:var(--font);font-size:14px;color:var(--c-ink);
   outline:none;display:none;
   transition:background var(--tr),border-color var(--tr),color var(--tr);
 }
-/* text-input-focused: 2px solid brand-blue-deep */
-.custom-input:focus{border-width:2px;border-color:var(--c-brand-blue-deep);background:var(--c-canvas);padding:9px 15px}
+.custom-input:focus{border-width:2px;border-color:var(--c-brand-blue-deep);background:var(--c-canvas);padding:7px 11px}
 .custom-input.vis{display:block}
 
 /* ── Notes — card-base + text-input ────────── */
 .notes-card{
-  margin-top:24px;
-  background:var(--c-card-bg);border:1px solid var(--c-card-bc);
-  border-radius:var(--r-xl);padding:24px;
-  box-shadow:var(--shadow-card);
-  transition:background var(--tr),border-color var(--tr),box-shadow var(--tr);
+  margin-top:20px;
+  background:transparent;border:none;
+  border-radius:0;padding:16px 0;
+  box-shadow:none;
+  border-top:1px solid var(--c-hairline-soft);
+  transition:background var(--tr),border-color var(--tr);
 }
 /* body-sm-medium: 14px/500 */
 .notes-card label{display:block;font-size:14px;font-weight:500;margin-bottom:8px}
@@ -235,21 +241,21 @@ a{color:inherit}
 
 /* ── Responsive — DESIGN.md breakpoints ────── */
 @media(max-width:1023px){
-  /* heading-md: 32px for tablets */
-  .hdr-text h1{font-size:32px;letter-spacing:-.5px}
-  .hdr-text p{font-size:16px}
+  /* heading-sm: 24px for tablets */
+  .hdr-text h1{font-size:24px;letter-spacing:0}
+  .hdr-text p{font-size:15px}
 }
 @media(max-width:767px){
   .hdr-top{flex-direction:column}
   .hdr-controls{padding-top:0;align-self:flex-start}
-  /* heading-sm: 24px for mobile */
-  .hdr-text h1{font-size:24px;letter-spacing:0}
+  /* body-md: 20px for mobile */
+  .hdr-text h1{font-size:20px;letter-spacing:0}
   .wrap{padding:20px 16px}
 }
 @media(max-width:479px){
   .hdr-text h1{font-size:20px}
   .wrap{padding:16px 12px}
-  .q-card,.notes-card{padding:16px}
+  .q-card,.notes-card{padding:12px 0}
   /* Touch target 44px on mobile */
   .btn-submit{padding:13px 24px}
   .lang-pill{padding:4px 8px;font-size:12px}
@@ -365,7 +371,7 @@ function applyI18n(){
   document.getElementById('label-notes').textContent=t('notes');
   document.getElementById('additional_notes').placeholder=t('notesPh');
   document.getElementById('btn-submit').textContent=t('submit');
-  document.querySelectorAll('.q-badge').forEach(function(b){b.textContent=t('recommended')});
+  document.querySelectorAll('.rec-text').forEach(function(b){b.textContent=' ('+t('recommended')+')'});
   document.querySelectorAll('.custom-input').forEach(function(i){i.placeholder=t('specify')});
 }
 
@@ -415,8 +421,8 @@ function render(){
       var span=document.createElement('span');span.className='opt-text';
       span.appendChild(document.createTextNode(o));
       if(isRec){
-        var b=document.createElement('span');b.className='badge q-badge';
-        b.textContent=t('recommended');span.appendChild(b);
+        var b=document.createElement('span');b.className='rec-text';
+        b.textContent=' ('+t('recommended')+')';span.appendChild(b);
       }
       lbl.appendChild(inp);lbl.appendChild(span);
       lbl.addEventListener('click',function(){
