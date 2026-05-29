@@ -1,0 +1,22 @@
+{
+  "name": "jukanntenn-plugins",
+  "description": "jukanntenn's Claude Code plugins collection",
+  "owner": {
+    "name": "jukanntenn",
+    "url": "https://github.com/jukanntenn"
+  },
+  "plugins": [
+    {
+      "name": "grill-me-sleek",
+      "description": "Stress-test your plan before vibe coding. The AI asks you questions to build a shared understanding — you answer in a sleek web UI.",
+      "version": "0.1.0",
+      "author": {
+        "name": "jukanntenn",
+        "url": "https://github.com/jukanntenn"
+      },
+      "category": "development",
+      "tags": ["planning", "review", "architecture", "debugging"],
+      "source": "./"
+    }
+  ]
+}
