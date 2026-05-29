@@ -1,6 +1,6 @@
 {
   "name": "grill-me-sleek",
-  "description": "Batch interview the user about plans and designs with a sleek web interface. Generates all questions at once with recommended answers, opens an interactive HTML page for bulk review, and waits for feedback.",
+  "description": "Stress-test your plan before vibe coding. The AI asks you questions to build a shared understanding — you answer in a sleek web UI.",
   "version": "0.1.0",
   "author": {
     "name": "jukanntenn"
