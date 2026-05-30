@@ -67,18 +67,21 @@ def _resolve_owner_pid():
 
 
 def _find_live_session():
-    """Find an existing session with a live server (for reuse)."""
-    import glob
+    """Find an existing session with a live server owned by the same owner.
 
-    for d in sorted(glob.glob("/tmp/grill-me-sleek-*"), reverse=True):
-        pf = os.path.join(d, "state", "server.pid")
-        try:
-            with open(pf, "r") as f:
-                pid = int(f.read().strip())
-            os.kill(pid, 0)
-            return d
-        except (FileNotFoundError, ValueError, OSError):
-            pass
+    Only matches sessions whose directory name contains our owner PID, so
+    different Claude instances (different harness PIDs) never collide.
+    """
+    owner = _resolve_owner_pid() or os.getppid()
+    candidate = f"/tmp/grill-me-sleek-{owner}"
+    pf = os.path.join(candidate, "state", "server.pid")
+    try:
+        with open(pf, "r") as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)
+        return candidate
+    except (FileNotFoundError, ValueError, OSError):
+        pass
     return None
 
 
