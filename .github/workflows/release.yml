@@ -24,6 +24,10 @@ jobs:
       run: |
         version=${GITHUB_REF#refs/tags/v}
         awk "/\\[${version}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md > release_notes.md
+        if [ ! -s release_notes.md ]; then
+          echo "::error::CHANGELOG.md 中未找到版本 ${version} 的条目。请确保 CHANGELOG.md 包含 [${version}] 的 section。"
+          exit 1
+        fi
         echo "path=release_notes.md" >> "$GITHUB_OUTPUT"
 
     - name: Create Release
@@ -32,3 +36,4 @@ jobs:
         body_path: ${{ steps.changelog.outputs.path }}
         draft: false
         prerelease: false
+        make_latest: true

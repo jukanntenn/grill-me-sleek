@@ -24,7 +24,6 @@ import base64
 import hashlib
 import json
 import os
-import shutil
 import socket
 import struct
 import subprocess
@@ -251,8 +250,6 @@ def _ws_del(c):
 # HTML rendering
 # ---------------------------------------------------------------------------
 
-_MONO = "'Inter','Helvetica Neue',Helvetica,Arial,sans-serif"
-
 
 def _render_html(grill_data):
     with open(_TEMPLATE_PATH, "r", encoding="utf-8") as f:
@@ -262,60 +259,14 @@ def _render_html(grill_data):
     return tpl.replace("{{GRILL_DATA}}", esc)
 
 
-def _done_page():
-    """Session-complete page — no ws.js, so it won't reconnect after shutdown."""
-    return (
-        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-        "<title>All done</title><style>"
-        "*{box-sizing:border-box;margin:0;padding:0}"
-        ":root{--c:#1a1a1a;--bg:#fff;--m:#666}"
-        "@media(prefers-color-scheme:dark)"
-        "{:root{--c:#e8e8e8;--bg:#1a1a1a;--m:#aaa}}"
-        f"body{{font-family:{_MONO};background:var(--bg);"
-        "color:var(--c);height:100vh;display:flex;"
-        "align-items:center;justify-content:center;"
-        "transition:background .15s,color .15s}}"
-        ".d{text-align:center}"
-        ".ck{font-size:28px;margin-bottom:12px}"
-        "h1{font-size:16px;font-weight:700;margin-bottom:8px}"
-        "p{font-size:14px;color:var(--m)}"
-        "</style></head>"
-        "<body><div class='d'>"
-        "<div class='ck'>&#10003;</div>"
-        "<h1>All done</h1>"
-        "<p>You can close this tab.</p>"
-        "</div></body></html>"
-    )
+def _done_data(title="All done", text="You can close this tab."):
+    """Data dict for done mode — rendered by template.html."""
+    return {"_mode": "done", "title": title, "description": text}
 
 
-def _status_page(title, extra=""):
-    """Waiting/transition page — includes ws.js for auto-reload."""
-    return (
-        "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-        f"<title>{title}</title><style>"
-        "*{box-sizing:border-box;margin:0;padding:0}"
-        ":root{--c:#1a1a1a;--bg:#fff;--m:#666;--bc:rgba(0,0,0,.12)}"
-        "@media(prefers-color-scheme:dark)"
-        "{:root{--c:#e8e8e8;--bg:#1a1a1a;--m:#aaa;--bc:rgba(255,255,255,.12)}}"
-        f"body{{font-family:{_MONO};background:var(--bg);"
-        "color:var(--c);height:100vh;display:flex;"
-        "align-items:center;justify-content:center;"
-        "transition:background .15s,color .15s}}"
-        ".w{text-align:center}"
-        "h1{font-size:16px;font-weight:700;margin-bottom:8px}"
-        "p{font-size:14px;color:var(--m)}"
-        ".sp{display:inline-block;width:12px;height:12px;"
-        "border:2px solid var(--bc);border-top-color:var(--c);"
-        "border-radius:50%;animation:s .8s linear infinite;"
-        "margin-bottom:16px}"
-        "@keyframes s{to{transform:rotate(360deg)}}"
-        "</style></head>"
-        "<body><div class='w'>"
-        "<div class='sp'></div>"
-        f"<h1>{title}</h1>{extra}"
-        "</div></body>"
-        "<script src='/ws.js'></script></html>"
-    )
+def _status_data(title, extra=""):
+    """Data dict for status mode — rendered by template.html."""
+    return {"_mode": "status", "title": title, "description": extra}
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +314,7 @@ class _ContentWatcher:
             with open(path, "r") as f:
                 data = json.load(f)
             if data.get("type") == "done":
-                self.server.current_html = _done_page()
+                self.server.current_html = _render_html(_done_data())
                 _ws_broadcast({"type": "reload"})
                 _log({"type": "session-done"})
                 threading.Thread(
@@ -419,9 +370,11 @@ class _Handler:
             return
         _touch_activity()
         if method == "GET" and path == "/":
-            html = self.server.current_html or _status_page(
-                "Waiting...",
-                "<p>Waiting for questions from the agent...</p>",
+            html = self.server.current_html or _render_html(
+                _status_data(
+                    "Waiting...",
+                    "<p>Waiting for questions from the agent...</p>",
+                )
             )
             self._html(html)
         elif method == "GET" and path == "/ws.js":
@@ -491,11 +444,24 @@ class _Handler:
         answers = {}
         notes = form.get("additional_notes", [""])[0]
         for k, v in form.items():
-            if k.startswith("q_"):
+            if k.startswith("q_") and not k.endswith("_c"):
+                raw = v[0]
+                # Multi-select sends JSON array; single-select sends plain text
+                try:
+                    parsed = json.loads(raw)
+                    selected = parsed if isinstance(parsed, list) else raw
+                except (json.JSONDecodeError, TypeError):
+                    selected = raw
                 answers[k] = {
-                    "selected": v[0],
-                    "custom_text": form.get(f"{k}_custom", [""])[0],
+                    "selected": selected,
+                    "custom_text": form.get(f"{k}_c", [""])[0],
                 }
+        # Handle custom_text without selected (user deselected all radios)
+        for k, v in form.items():
+            if k.startswith("q_") and k.endswith("_c"):
+                qk = k[:-2]  # strip _c
+                if qk not in answers and v[0]:
+                    answers[qk] = {"selected": "", "custom_text": v[0]}
         result = {
             "answers": answers,
             "additional_notes": notes,
@@ -504,13 +470,15 @@ class _Handler:
         with open(RESULT_FILE, "w") as f:
             json.dump(result, f, ensure_ascii=False)
         self._html(
-            _status_page(
-                "Submitted.",
-                "<p>Waiting for the next batch...</p>"
-                "<p style='margin-top:16px;font-size:13px;"
-                "color:#9a9898'>"
-                "Stay on this tab &mdash; "
-                "new questions will appear here.</p>",
+            _render_html(
+                _status_data(
+                    "Submitted.",
+                    "<p>Waiting for the next batch...</p>"
+                    "<p style='margin-top:16px;font-size:13px;"
+                    "color:#9a9898'>"
+                    "Stay on this tab &mdash; "
+                    "new questions will appear here.</p>",
+                )
             )
         )
 
@@ -634,27 +602,39 @@ def _lifecycle(server, owner_pid):
 
 
 def _open_browser(url):
+    """Open URL in browser. WSL: try Windows host commands first."""
+    is_wsl = bool(os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSLENV"))
+
+    if is_wsl:
+        # WSL: prioritize Windows host browser commands
+        # cmd.exe start: first quoted arg is window title, need empty string
+        for cmd in [
+            ["cmd.exe", "/c", "start", '""', url],
+            ["wslview", url],
+            ["powershell.exe", "-c", f"Start-Process '{url}'"],
+        ]:
+            try:
+                subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return True
+            except FileNotFoundError:
+                continue
+
+    # Standard approaches
     import webbrowser
 
-    if os.environ.get("WSL_DISTRO_NAME") or os.environ.get("WSLENV"):
-        browsers = [
-            "google-chrome",
-            "chromium",
-            "chromium-browser",
-            "firefox",
-            "microsoft-edge",
-        ]
-        if not any(shutil.which(b) for b in browsers):
-            return False
     try:
         if webbrowser.open(url):
             return True
     except Exception:
         pass
+
     for cmd in [
         ["xdg-open", url],
         ["open", url],
-        ["cmd.exe", "/c", "start", url],
     ]:
         try:
             subprocess.Popen(
