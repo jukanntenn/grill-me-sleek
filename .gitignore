@@ -6,6 +6,11 @@ __pycache__/
 # Ruff
 .ruff_cache/
 
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Environments
 .env
 .venv
