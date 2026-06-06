@@ -43,13 +43,24 @@ Fail → report which check failed (lint/format) + the specific violations, STOP
    ```bash
    git log --oneline <last_tag_or_initial>..HEAD
    ```
-2. Ask user to confirm new version (suggest semver bump: patch=fixes, minor=features, major=breaking).
-3. Update exactly FOUR files with the new version `X.Y.Z`:
+2. **Determine version number:**
+   - If the user provided a version number → **validate it:**
+     1. Semver format: `X.Y.Z` where X/Y/Z are non-negative integers
+     2. Higher than current version (no downgrades)
+     3. No skipped intermediate versions (e.g. 0.1.1 → 0.3.0 skips 0.2.0 → soft warning, NOT a blocker)
+     4. Tag does not already exist (`git tag -l "vX.Y.Z"` must be empty)
+     - Present validation results as **non-binding suggestions** — the user may override any warning.
+   - If the user did NOT provide a version → recommend one based on semver principles (patch=fixes, minor=features, major=breaking), using your best judgment. **Show your reasoning** (e.g. "3 feat + 2 fix commits since v0.1.1 → recommending minor bump to 0.2.0").
+3. **PAUSE — confirm version number.** Present the chosen version + reasoning/validation results and wait for explicit user confirmation. Do NOT proceed until the user gives a clear affirmative response (e.g. ok / 确认 / yes / 行 / 好的 / LGTM / 没问题 / 可以 / proceed / confirm).
+
+   **⚠️ Anti-ambiguity rule:** You MUST NOT interpret silence, vague acknowledgments, or topic-adjacent replies as consent. Only explicit affirmative words count. When in doubt, ask.
+
+4. Update exactly FOUR files with the confirmed version `X.Y.Z`:
    - `.claude-plugin/plugin.json`: update `"version"` field
    - `.claude-plugin/marketplace.json`: update `"version"` field in the plugins array entry
    - `README.md`: update the badge URL `version-X.Y.Z-brightgreen`
    - `README_zh.md`: update the badge URL `version-X.Y.Z-brightgreen`
-4. Verify all four files show the same new version:
+5. Verify all four files show the same new version:
    ```bash
    grep '"version"' .claude-plugin/plugin.json
    grep '"version"' .claude-plugin/marketplace.json
@@ -59,7 +70,7 @@ Fail → report which check failed (lint/format) + the specific violations, STOP
 
 ### Step 3: Update CHANGELOG
 
-1. Derive user-visible changes from `git log --oneline <last_tag_or_initial>..HEAD`
+1. Derive changes from `git log --oneline <last_tag_or_initial>..HEAD`
 2. If `CHANGELOG.md` does not exist yet, create it with header:
    ```
    # Changelog
@@ -78,7 +89,15 @@ Fail → report which check failed (lint/format) + the specific violations, STOP
    - ...
    ```
 
-   Omit empty sections. Keep `# Changelog` header + blank line at the top. Only user-visible changes — omit chore commits, internal refactorings, or CI changes unless they affect users.
+   Omit empty sections. Keep `# Changelog` header + blank line at the top.
+
+   **Writing style — user-facing, not developer-facing:**
+   - Each entry is **one sentence describing what the user experiences**, not what the code does.
+   - ✅ Good: "Questions load faster — no more waiting for all questions before the first one appears."
+   - ❌ Bad: "Split client into non-blocking push and wait."
+   - ❌ Bad: "Refactored question rendering pipeline."
+   - Do NOT mention implementation details (function names, architecture, internal APIs).
+   - **Completely omit** chore commits, CI changes, internal refactorings, and dependency updates unless they directly affect what users see or do.
 
 4. Verify the entry was inserted correctly (first section after header).
 
@@ -107,7 +126,9 @@ Steps 1–4 complete:
 Ready to commit and publish? Confirm to continue.
 ```
 
-Do NOT proceed until user confirms.
+Do NOT proceed until the user gives a **clear affirmative response** (e.g. ok / 确认 / yes / 行 / 好的 / LGTM / 没问题 / 可以 / proceed / confirm). If the user objects or requests changes, address them and re-present the updated summary.
+
+**⚠️ Anti-ambiguity rule:** You MUST NOT interpret silence, vague acknowledgments, or topic-adjacent replies as consent. Only explicit affirmative words count. When in doubt, ask.
 
 ---
 
