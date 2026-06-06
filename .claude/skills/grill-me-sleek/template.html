@@ -483,12 +483,12 @@ function render(){
     var opts=document.createElement('div');opts.className='opts';
     if(isMulti)opts.setAttribute('data-multiselect','');
 
-    q.options.forEach(function(o){
+    q.options.forEach(function(o,i){
       var lbl=document.createElement('label');lbl.className='opt';
       var inp=document.createElement('input');
       inp.type=isMulti?'checkbox':'radio';
       inp.name=q.id;inp.value=o;
-      var isRec=(o===q.recommended);
+      var isRec=(i===q.recommended);
       if(isRec){inp.checked=true;lbl.classList.add('sel')}
       var span=document.createElement('span');span.className='opt-text';
       span.appendChild(document.createTextNode(o));
