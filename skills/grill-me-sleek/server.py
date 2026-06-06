@@ -273,8 +273,13 @@ def _ws_del(c):
 def _render_html(grill_data):
     with open(_TEMPLATE_PATH, encoding="utf-8") as f:
         tpl = f.read()
-    esc = json.dumps(grill_data).replace("\\", "\\\\")
-    esc = esc.replace("'", "\\'")
+    esc = json.dumps(grill_data)
+    # Escape for embedding inside JS string literal in HTML <script>:
+    # 1. Double backslashes so JS doesn't eat JSON escapes
+    # 2. Escape single quotes (our string delimiter)
+    # 3. Escape < > so HTML parser doesn't see them as tags
+    esc = esc.replace("\\", "\\\\").replace("'", "\\'")
+    esc = esc.replace("<", "\\u003c").replace(">", "\\u003e")
     return tpl.replace("{{GRILL_DATA}}", esc)
 
 

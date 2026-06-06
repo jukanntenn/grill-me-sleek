@@ -44,8 +44,23 @@ If a question can be answered by exploring the codebase, explore the codebase in
 
 6. **Process the user's answers**: acknowledge decisions, and if any answers reveal new issues, generate a new JSON batch and repeat from step 3. The browser tab stays open and reloads automatically — no need to open a new tab.
 
-7. **Summarize** the final shared understanding once all branches are resolved.
-8. **Signal completion** by running `bash "skills/grill-me-sleek/run.sh" --done`. This shows the user a completion page in the browser and shuts down the server after 5 seconds.
+7. **Present final summary** in the terminal as a structured list. Every decision point gets one line showing the choice and reasoning. Example format:
+
+   ```
+   ### Decision 1: [Topic]
+   - **Choice:** [what was decided]
+   - **Reason:** [why]
+   ```
+
+   The summary is terminal-only — do not push it to the browser.
+
+   **Note — `recommended` is a zero-based index** into the `options` array. For example, `recommended: 0` pre-selects the first option and shows the "(recommended)" badge.
+
+8. **Wait for explicit user confirmation.** Do NOT proceed to step 9 until the user gives a clear affirmative response (e.g. ok / 确认 / yes / 行 / 好的 / LGTM / 没问题 / 可以 / proceed / confirm). If the user wants to revise a specific decision, discuss only that item, then re-present the full updated summary and wait for confirmation again.
+
+   **⚠️ Anti-ambiguity rule:** You MUST NOT interpret silence, vague acknowledgments, or topic-adjacent replies as consent. Only explicit affirmative words count. When in doubt, ask.
+
+9. **Signal completion** by running `bash "skills/grill-me-sleek/run.sh" --done`. This shows the user a completion page in the browser and shuts down the server after 5 seconds. This step runs ONLY after the user has confirmed the summary in step 8.
 
 ## JSON Schema — Input (you generate this)
 
@@ -57,7 +72,7 @@ If a question can be answered by exploring the codebase, explore the codebase in
     {
       "id": "q_[unique_id]",
       "text": "Clear, specific question",
-      "recommended": "Your recommended answer",
+      "recommended": 0,
       "options": ["Option 1", "Option 2", "Other (please specify)"],
       "explanation": "Why you recommend this option"
     }
