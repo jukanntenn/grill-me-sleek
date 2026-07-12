@@ -1,0 +1,80 @@
+[package]
+name = "grilling-sleek"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+
+[dependencies]
+# async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+
+# web framework
+axum = { version = "0.8", features = ["tokio"] }
+hyper = { version = "1", features = ["http2"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.7", features = ["trace", "catch-panic", "request-id"] }
+
+# storage — `sqlite-bundled` statically links libsqlite3 into the binary so
+# the runtime image needs no system SQLite (DESIGN.md §2432).
+sqlx = { version = "0.9", features = [
+    "runtime-tokio",
+    "sqlite",
+    "migrate",
+    "sqlite-bundled",
+] }
+
+# serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# time
+time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
+
+# error handling
+thiserror = "2"
+anyhow = "1"
+
+# concurrent collections
+dashmap = "6"
+
+# caching
+moka = { version = "0.12", features = ["future"] }
+
+# hashing
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+
+# ID generation
+getrandom = "0.4"
+
+# base64
+base64 = "0.22"
+
+# JSON Schema validation
+jsonschema = "0.47"
+
+# rate limiting
+axum-governor = "2"
+ipnet = "2"
+
+# logging
+tracing = { version = "0.1", features = ["attributes"] }
+tracing-subscriber = { version = "0.3", features = ["json", "env-filter"] }
+tracing-appender = "0.2"
+
+# observability (OpenTelemetry)
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["metrics", "trace", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.32", features = ["grpc-tonic"] }
+tracing-opentelemetry = "0.33"
+opentelemetry-appender-tracing = "0.32"
+
+# streams
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures = "0.3"
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+uuid = { version = "1", features = ["v4"] }
+tower = { version = "0.5", features = ["util"] }
+tempfile = "3"

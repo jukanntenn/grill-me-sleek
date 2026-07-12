@@ -25,3 +25,23 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+.local/
+
+# Rust
+server/target/
+server/data/
+server/log/
+server/.vite/
+server/.sqlx/
+
+# Node
+node_modules/
+web/dist/
+cli/dist/
+
+# Playwright test artifacts (screenshots/snapshots regenerated on test runs)
+
+# ZCode session plans
+.zcode/plans/
+.playwright-cli/

@@ -1,0 +1,281 @@
+use axum::extract::{Path, State};
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::Json;
+
+use crate::db;
+use crate::error::ApiError;
+use crate::idempotency::{self, IdempotencyEntry};
+use crate::models::*;
+use crate::observability::metrics::{metrics, ACTIVE_SESSIONS};
+use crate::session::{self, time_now, unix_to_rfc3339, SESSION_TTL};
+use crate::validation;
+use crate::AppState;
+
+/// POST /v1/sessions — Create a new session with first round.
+#[tracing::instrument(skip(state, raw), fields(session_id))]
+pub async fn create_session(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(raw): Json<serde_json::Value>,
+) -> Result<(StatusCode, Json<CreateSessionResponse>), ApiError> {
+    // Validate Grilling (JSON Schema + question-id uniqueness). Receiving a raw
+    // Value (not Json<Grilling>) ensures schema violations return 400 from our
+    // authoritative jsonschema check, rather than axum's 422 serde rejection.
+    let body: Grilling = validation::validate_grilling_value(&raw)?;
+
+    let idempotency_key = headers
+        .get("Idempotency-Key")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
+    let body_hash = idempotency::hash_body(&serde_json::to_vec(&raw).unwrap_or_default());
+
+    // The creation closure: generates an ID, writes the session+first round,
+    // registers the SessionHandle, and builds the response entry. Under an
+    // idempotency key, moka's `try_get_with` coalesces concurrent calls into a
+    // single evaluation of this closure (DESIGN.md §1481).
+    let state_for_create = state.clone();
+    let create = move || async move {
+        // Check session capacity
+        if state_for_create.handles.len() >= session::MAX_SESSIONS {
+            record_rejected("max_sessions");
+            return Err(ApiError::MaxSessions);
+        }
+
+        // Generate session ID (retry on collision, max 3 times)
+        let mut session_id = session::generate_session_id();
+        for attempt in 0..3 {
+            let now = time_now();
+            let expires_at = now + SESSION_TTL;
+
+            match db::create_session(&state_for_create.pool, &session_id, &body, now, expires_at)
+                .await
+            {
+                Ok(_round_id) => {
+                    if !session::register_session(&state_for_create.handles, session_id.clone()) {
+                        record_rejected("max_sessions");
+                        return Err(ApiError::MaxSessions);
+                    }
+
+                    let url = format!("{}/#{session_id}", state_for_create.base_url);
+                    let response = CreateSessionResponse {
+                        session_id: session_id.clone(),
+                        url,
+                        status: "active".to_string(),
+                        current_round: 1,
+                        name: Some(body.name.clone()),
+                        description: body.description.clone(),
+                        created_at: unix_to_rfc3339(now),
+                        expires_at: unix_to_rfc3339(expires_at),
+                    };
+
+                    if let Some(m) = metrics() {
+                        m.sessions_created_total.add(1, &[]);
+                        let active =
+                            ACTIVE_SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                        m.sessions_active.record(active as u64, &[]);
+                    }
+
+                    tracing::info!(session_id = %session_id, "session created");
+                    return Ok(IdempotencyEntry {
+                        response_body: serde_json::to_string(&response).unwrap_or_default(),
+                        status_code: 201,
+                        body_hash,
+                    });
+                }
+                Err(e) => {
+                    if let Some(sqlx::Error::Database(db_err)) = e.downcast_ref::<sqlx::Error>() {
+                        // SQLite extended result code 197 = SQLITE_CONSTRAINT_PRIMARYKEY
+                        if db_err.code().is_some_and(|c| c == "197") && attempt < 2 {
+                            session_id = session::generate_session_id();
+                            continue;
+                        }
+                    }
+                    return Err(ApiError::internal(e));
+                }
+            }
+        }
+        Err(ApiError::internal(anyhow::anyhow!(
+            "failed to generate unique session ID after 3 attempts"
+        )))
+    };
+
+    let entry = idempotency::run_idempotent(
+        &state.idempotency_sessions,
+        idempotency_key,
+        body_hash,
+        create,
+    )
+    .await?;
+
+    let response: CreateSessionResponse = serde_json::from_str(&entry.response_body)
+        .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to deserialize response: {e}")))?;
+    Ok((
+        StatusCode::from_u16(entry.status_code).unwrap_or(StatusCode::CREATED),
+        Json(response),
+    ))
+}
+
+/// GET /v1/sessions/{session_id} — Get session state.
+pub async fn get_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<SessionState>, ApiError> {
+    let row = db::get_session_or_gone(&state.pool, &session_id).await?;
+
+    // Get current round number and description from curr_round
+    let (current_round, description) = if let Some(round_id) = row.curr_round {
+        match db::get_round_by_id(&state.pool, round_id).await? {
+            Some(r) => {
+                let desc = serde_json::from_str::<Grilling>(&r.grilling)
+                    .ok()
+                    .and_then(|g| g.description);
+                (r.seq, desc)
+            }
+            None => (1, None),
+        }
+    } else {
+        (1, None)
+    };
+
+    Ok(Json(SessionState {
+        session_id: row.id,
+        status: "active".to_string(),
+        current_round,
+        name: row.name,
+        description,
+        created_at: unix_to_rfc3339(row.created_at),
+        expires_at: unix_to_rfc3339(row.expires_at),
+    }))
+}
+
+/// PATCH /v1/sessions/{session_id} — Update session (complete/cancel).
+#[tracing::instrument(skip(state, body), fields(session_id = %session_id))]
+pub async fn update_session(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(body): Json<SessionUpdate>,
+) -> Result<Json<SessionState>, ApiError> {
+    // Verify session exists. DESIGN.md §348: a PATCH on a terminal session
+    // (whether still in the active table or already archived) returns 409
+    // TerminalState — never 404 (which means "never existed") nor 410.
+    let row = match db::get_session(&state.pool, &session_id).await? {
+        Some(row) => row,
+        None => {
+            // Active row gone — check archive: if present, it's terminal → 409.
+            if db::get_archive_status(&state.pool, &session_id)
+                .await?
+                .is_some()
+            {
+                return Err(ApiError::TerminalState);
+            }
+            return Err(ApiError::NotFound);
+        }
+    };
+
+    if row.status != 0 {
+        return Err(ApiError::TerminalState);
+    }
+
+    // DESIGN.md §653 — server-authoritative: reason/reason_detail/actor are only
+    // adopted when status=cancelled; for status=completed they are ignored
+    // (cancel_* columns written NULL). No 400 for missing/extra fields — be
+    // tolerant of agents. The schema layer already constrains `reason` to the
+    // enum {user_cancelled, agent_aborted, error} and `actor` to {user, agent}.
+    let now = time_now();
+
+    // Determine cancel fields
+    let (status_int, cancel_reason, cancel_detail, cancel_actor) = match body.status {
+        SessionUpdateStatus::Completed => (1i64, None, None, None),
+        SessionUpdateStatus::Cancelled => {
+            let reason = body.reason.map(|r| match r {
+                CancelReason::UserCancelled => "user_cancelled".to_string(),
+                CancelReason::AgentAborted => "agent_aborted".to_string(),
+                CancelReason::Error => "error".to_string(),
+            });
+            let actor = body.actor.map(|a| match a {
+                Actor::User => "user".to_string(),
+                Actor::Agent => "agent".to_string(),
+            });
+            (2i64, reason, body.reason_detail, actor)
+        }
+    };
+
+    // Update session status
+    let affected = db::update_session_status(
+        &state.pool,
+        &session_id,
+        status_int,
+        cancel_reason.as_deref(),
+        cancel_detail.as_deref(),
+        cancel_actor.as_deref(),
+    )
+    .await?;
+
+    if affected == 0 {
+        return Err(ApiError::TerminalState);
+    }
+
+    // Broadcast terminal SSE event and cleanup handle
+    if let Some((_, handle)) = state.handles.remove(&session_id) {
+        let event = match status_int {
+            1 => crate::sse::SseEvent::session_completed(&session_id),
+            2 => crate::sse::SseEvent::session_cancelled(
+                &session_id,
+                cancel_reason.as_deref().unwrap_or("unknown"),
+            ),
+            _ => unreachable!(),
+        };
+        handle.sse_hub.broadcast(event);
+        handle.cancel_token.cancel();
+        handle.agent_notify.notify_waiters();
+    }
+
+    // Archive the session
+    db::archive_session(&state.pool, &session_id, status_int, now).await?;
+
+    // Record metrics
+    if let Some(m) = metrics() {
+        let active = ACTIVE_SESSIONS.fetch_sub(1, std::sync::atomic::Ordering::Relaxed) - 1;
+        m.sessions_active.record(active as u64, &[]);
+    }
+
+    tracing::info!(session_id = %session_id, status = status_int, "session updated");
+
+    Ok(Json(SessionState {
+        session_id,
+        status: if status_int == 1 {
+            "completed".to_string()
+        } else {
+            "cancelled".to_string()
+        },
+        current_round: 0,
+        name: None,
+        description: None,
+        created_at: unix_to_rfc3339(row.created_at),
+        expires_at: unix_to_rfc3339(row.expires_at),
+    }))
+}
+
+/// Record a sessions_rejected_total metric with the given reason label.
+/// DESIGN.md §2301 — reason distinguishes max_sessions / rate_limited / oom_guard.
+fn record_rejected(reason: &str) {
+    if let Some(m) = metrics() {
+        m.sessions_rejected_total
+            .add(1, &[opentelemetry::KeyValue::new("reason", reason.to_string())]);
+    }
+}
+
+/// Health probe (no DB check).
+pub async fn healthz() -> Json<serde_json::Value> {
+    Json(serde_json::json!({"status": "ok"}))
+}
+
+/// Readiness probe (checks SQLite connection).
+pub async fn readyz(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    match sqlx::query("SELECT 1").execute(&state.pool).await {
+        Ok(_) => Ok(Json(serde_json::json!({"status": "ok"}))),
+        Err(_) => Err(StatusCode::SERVICE_UNAVAILABLE),
+    }
+}

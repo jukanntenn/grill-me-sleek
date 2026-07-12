@@ -1,0 +1,333 @@
+/* grilling-sleek web styles.
+ *
+ * Design system (DESIGN.md §1076): DM Sans typeface, pill buttons,
+ * light/dark/system theme via [data-theme] on <html>, responsive layout.
+ */
+
+/* DM Sans (variable, self-hosted — CSP default-src 'self' forbids CDN). */
+@font-face {
+  font-family: "DM Sans";
+  src: url("./assets/fonts/DMSans.ttf") format("truetype-variations");
+  font-weight: 100 1000;
+  font-display: swap;
+}
+
+/* --- Theme tokens -------------------------------------------------------- */
+:root,
+[data-theme="light"] {
+  --bg: #f8f9fa;
+  --fg: #1f2328;
+  --card-bg: #ffffff;
+  --border: #d0d7de;
+  --accent: #0969da;
+  --accent-hover: #0860c7;
+  --accent-contrast: #ffffff;
+  --error: #cf222e;
+  --error-contrast: #ffffff;
+  --muted: #656d76;
+  --chip-bg: #eaeef2;
+  --chip-fg: #1f2328;
+}
+
+[data-theme="dark"] {
+  --bg: #0d1117;
+  --fg: #e6edf3;
+  --card-bg: #161b22;
+  --border: #30363d;
+  --accent: #2f81f7;
+  --accent-hover: #4493f8;
+  --accent-contrast: #ffffff;
+  --error: #f85149;
+  --error-contrast: #ffffff;
+  --muted: #8b949e;
+  --chip-bg: #21262d;
+  --chip-fg: #e6edf3;
+}
+
+/* --- Reset --------------------------------------------------------------- */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+#app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+/* --- Controls bar (theme + language) ------------------------------------- */
+.controls-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.ctrl-select {
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--card-bg);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+/* --- Headings & description --------------------------------------------- */
+h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.description {
+  color: var(--muted);
+  margin-bottom: 24px;
+}
+
+/* --- Status / terminal pages -------------------------------------------- */
+.status-text {
+  text-align: center;
+  color: var(--muted);
+  padding: 48px 0;
+  font-size: 1.1rem;
+}
+
+.terminal-card {
+  text-align: center;
+  padding: 48px 24px;
+  background: var(--card-bg);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  margin-top: 24px;
+}
+
+.terminal-card h1 {
+  margin-bottom: 12px;
+}
+
+.terminal-card p {
+  color: var(--muted);
+}
+
+/* --- Banner -------------------------------------------------------------- */
+.banner {
+  background: var(--error);
+  color: var(--error-contrast);
+  padding: 12px 16px;
+  border-radius: 12px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.banner.hidden {
+  display: none;
+}
+
+/* --- Pill button baseline ----------------------------------------------- */
+/* All actionable buttons use the pill (capsule) shape: border-radius >= half
+ * the height. DESIGN.md §1076. */
+.btn-pill {
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 9999px;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn-retry {
+  background: var(--error-contrast);
+  color: var(--error);
+  border: none;
+  padding: 6px 18px;
+  white-space: nowrap;
+}
+
+.btn-submit {
+  width: 100%;
+  padding: 14px 24px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border: none;
+  font-size: 1.1rem;
+}
+
+.btn-submit:hover {
+  background: var(--accent-hover);
+}
+
+/* --- Questions ----------------------------------------------------------- */
+.question {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.question-header {
+  font-weight: 600;
+  font-size: 1rem;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.required {
+  color: var(--error);
+}
+
+.question-text {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+}
+
+.recommended-inline {
+  color: var(--accent);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.explanation {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* --- Controls ----------------------------------------------------------- */
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.option-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.option-label:hover {
+  border-color: var(--accent);
+}
+
+.option-label input[type="radio"],
+.option-label input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+/* yesno / rating buttons */
+.btn-option {
+  padding: 10px 22px;
+  border: 2px solid var(--border);
+  background: var(--card-bg);
+  color: var(--fg);
+  font-size: 1rem;
+}
+
+.btn-option:hover {
+  border-color: var(--accent);
+}
+
+.btn-option.selected {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.btn-rating {
+  min-width: 48px;
+  text-align: center;
+}
+
+.control:has(.btn-option) {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* --- Text inputs -------------------------------------------------------- */
+.custom-text {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: var(--fg);
+  font-size: 0.9rem;
+  margin-top: 8px;
+}
+
+.text-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-bg);
+  color: var(--fg);
+  font-size: 1rem;
+  min-height: 80px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.custom-text:focus,
+.text-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* --- Field errors ------------------------------------------------------- */
+.field-error {
+  color: var(--error);
+  font-size: 0.85rem;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+.field-error.hidden {
+  display: none;
+}
+
+/* --- Submit ------------------------------------------------------------- */
+.submit-row {
+  margin-top: 24px;
+}
+
+/* --- Additional notes --------------------------------------------------- */
+.additional-notes {
+  margin-top: 8px;
+}
+
+/* --- Responsive --------------------------------------------------------- */
+@media (max-width: 480px) {
+  #app {
+    padding: 16px 12px 64px;
+  }
+
+  .question {
+    padding: 16px;
+  }
+
+  .controls-bar {
+    gap: 6px;
+  }
+}
