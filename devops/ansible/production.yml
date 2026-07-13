@@ -1,0 +1,45 @@
+# grilling-sleek production deployment playbook
+#
+# Usage:
+#   ansible-playbook -i devops/ansible/hosts.yml devops/ansible/production.yml --vault-password-file ~/.ansible-vault/grilling-sleek-production.pwd
+
+- name: Deploy grilling-sleek to production
+  hosts: ttyo
+  gather_facts: false
+  vars_files:
+    - vars/production/vault.yml
+  vars:
+    image_tag: dev
+    app_name: grilling-sleek
+    app_port: 8443
+    public_url: "https://grillingsleek.online"
+
+  tasks:
+    - name: Ensure application directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ home }}/docker/{{ app_name }}"
+        - "{{ home }}/docker/{{ app_name }}/certs"
+        - "{{ home }}/docker/{{ app_name }}/data"
+        - "{{ home }}/docker/{{ app_name }}/log"
+
+    - name: Template docker-compose.yml
+      ansible.builtin.template:
+        src: templates/production/docker-compose.yml.j2
+        dest: "{{ home }}/docker/{{ app_name }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Template Caddyfile
+      ansible.builtin.template:
+        src: templates/production/Caddyfile.j2
+        dest: "{{ home }}/docker/{{ app_name }}/Caddyfile"
+        mode: "0644"
+
+    - name: Pull image and recreate containers on change
+      community.docker.docker_compose_v2:
+        project_src: "{{ home }}/docker/{{ app_name }}"
+        pull: always
+        state: present

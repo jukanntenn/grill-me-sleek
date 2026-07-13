@@ -1,0 +1,45 @@
+# Build context exclusions — keep only what the Dockerfile needs:
+#   server/ (Rust source), web/dist/ (frontend build), docker/ (s6, Caddyfile)
+
+# Everything not needed for the Docker build
+.local/
+.github/
+.claude/
+.claude-plugin/
+.playwright-cli/
+.zcode/
+screenshots/
+skills/
+tests/
+cli/
+
+# Rust build artifacts
+server/target/
+server/data/
+server/log/
+
+# Node (keep web/dist — needed by Dockerfile)
+node_modules/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docs
+*.md
+LICENSE
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+uv.lock
+pyproject.toml
+
+# Dev artifacts
+.env
+.env.*
+*.log
+*.pid

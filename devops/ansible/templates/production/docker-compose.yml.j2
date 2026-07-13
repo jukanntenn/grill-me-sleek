@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+# grilling-sleek production docker-compose
+
+services:
+  grilling-sleek:
+    image: jukanntenn/grilling-sleek:{{ image_tag }}
+    container_name: grilling-sleek
+    restart: always
+    ports:
+      - "{{ app_port }}:8443"
+    volumes:
+      - ./Caddyfile:/app/Caddyfile:ro
+      - ./certs:/app/certs:ro
+      - ./data:/app/data
+      - ./log:/app/log
+    environment:
+      - GS_BASE_URL={{ public_url }}
+      - GS_DB_PATH=/app/data/grilling-sleek.db
+      - GS_LOG_DIR=/app/log
+      - RUST_LOG=info
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

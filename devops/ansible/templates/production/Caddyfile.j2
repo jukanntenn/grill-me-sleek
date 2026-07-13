@@ -1,0 +1,59 @@
+# {{ ansible_managed }}
+# grilling-sleek Caddy configuration (production)
+#
+# TLS with Cloudflare Origin CA certificate (Full Strict mode).
+# Cloudflare terminates public TLS; this handles origin-side TLS.
+
+{
+    auto_https off
+}
+
+:8443 {
+    # TLS: Cloudflare Origin CA certificate
+    tls /app/certs/origin.pem /app/certs/origin.key
+
+    # Security headers
+    header {
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'"
+        X-Content-Type-Options "nosniff"
+    }
+
+    # Compression (exclude SSE path to preserve real-time flush)
+    @compressable {
+        not path /v1/sessions/*/events
+    }
+    encode @compressable zstd gzip
+
+    # Static files (served by Caddy, not Rust)
+    root * /app/web/dist
+    file_server
+
+    # Cache-Control for Entry HTML (5min, so Cloudflare can cache it)
+    @html path /
+    header @html Cache-Control "public, max-age=300"
+
+    # Cache-Control for assets (immutable, 1 year)
+    @assets path /assets/*
+    header @assets Cache-Control "public, max-age=31536000, immutable"
+
+    # Reverse proxy to Rust backend
+    reverse_proxy /v1/* 127.0.0.1:8080 {
+        transport http {
+            versions h2c
+        }
+        health_uri      /healthz
+        health_interval 10s
+        health_timeout  2s
+        flush_interval  -1
+        header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+    }
+
+    # API responses: no-store
+    @api path /v1/*
+    header @api Cache-Control "no-store"
+
+    # Health check endpoint
+    handle /healthz {
+        respond "ok" 200
+    }
+}
