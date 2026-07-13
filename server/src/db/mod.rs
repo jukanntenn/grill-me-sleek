@@ -13,7 +13,7 @@ use crate::models::*;
 
 /// Create and configure the SQLite connection pool.
 pub async fn create_pool() -> Result<Pool<Sqlite>> {
-    let opts = SqliteConnectOptions::from_str(&format!("sqlite://{}?mode=rwc", config::DB_PATH))?
+    let opts = SqliteConnectOptions::from_str(&format!("sqlite://{}?mode=rwc", config::db_path()))?
         .create_if_missing(true)
         .journal_mode(SqliteJournalMode::Wal)
         .synchronous(SqliteSynchronous::Normal)

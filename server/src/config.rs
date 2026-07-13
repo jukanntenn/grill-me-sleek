@@ -1,7 +1,8 @@
-//! All hardcoded runtime constants (per DESIGN.md §2383-2398).
+//! All runtime constants (per DESIGN.md §2383-2398).
 //!
-//! Server-side parameters are fully hardcoded — no runtime configuration.
-//! (CLI-side parameters use `GS_`-prefixed env vars, not defined here.)
+//! Most parameters are hardcoded constants. Three values accept `GS_`-prefixed
+//! env var overrides for deployment flexibility: `GS_BASE_URL`, `GS_DB_PATH`,
+//! `GS_LOG_DIR`.
 
 use std::time::Duration;
 
@@ -45,11 +46,17 @@ pub const IDEMPOTENCY_TTL: Duration = Duration::from_secs(300);
 /// Idempotency cache max capacity (moka TinyLFU eviction).
 pub const IDEMPOTENCY_CAPACITY: u64 = 10_000;
 
-/// SQLite database file path.
-pub const DB_PATH: &str = "./data/grilling-sleek.db";
+/// SQLite database file path (env `GS_DB_PATH` overrides).
+pub fn db_path() -> String {
+    std::env::var("GS_DB_PATH").unwrap_or_else(|_| "./data/grilling-sleek.db".into())
+}
 
-/// Log directory (tracing-appender rolling files).
-pub const LOG_DIR: &str = "./log/grilling-sleek";
+/// Log directory (tracing-appender rolling files; env `GS_LOG_DIR` overrides).
+pub fn log_dir() -> String {
+    std::env::var("GS_LOG_DIR").unwrap_or_else(|_| "./log/grilling-sleek".into())
+}
 
-/// Base URL for session links (`{BASE_URL}/#{session_id}`).
-pub const BASE_URL: &str = "https://grilling-sleek.example.com";
+/// Base URL for session links (`{base_url}/#{session_id}`; env `GS_BASE_URL` overrides).
+pub fn base_url() -> String {
+    std::env::var("GS_BASE_URL").unwrap_or_else(|_| "https://grilling-sleek.example.com".into())
+}

@@ -14,8 +14,8 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::config;
 
-// Re-export for backwards-compat with any reference to `observability::LOG_DIR`.
-pub use config::LOG_DIR;
+// Re-export for backwards-compat with any reference to `observability::log_dir`.
+pub use config::log_dir;
 
 /// Shared OTel Resource identifying this service (DESIGN.md §2278).
 fn service_resource() -> Resource {
@@ -36,10 +36,11 @@ pub fn init_tracing() -> TracingGuard {
     //   traces  — tracing-fmt span events AND real OTel span records (otel:true)
     //   metrics — tracing-fmt events AND real OTel metric snapshots (otel:true)
     //   logs    — real OTel log records (otel:true)
-    let app_appender = rolling::daily(LOG_DIR, "app");
-    let traces_appender = rolling::daily(LOG_DIR, "traces");
-    let metrics_appender = rolling::daily(LOG_DIR, "metrics");
-    let logs_appender = rolling::daily(LOG_DIR, "logs");
+    let log_dir = log_dir();
+    let app_appender = rolling::daily(&log_dir, "app");
+    let traces_appender = rolling::daily(&log_dir, "traces");
+    let metrics_appender = rolling::daily(&log_dir, "metrics");
+    let logs_appender = rolling::daily(&log_dir, "logs");
 
     let (app_writer, app_guard) = tracing_appender::non_blocking(app_appender);
     let (traces_writer, traces_guard) = tracing_appender::non_blocking(traces_appender);

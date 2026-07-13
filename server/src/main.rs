@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
             config::IDEMPOTENCY_TTL,
             config::IDEMPOTENCY_CAPACITY,
         ),
-        base_url: config::BASE_URL.to_string(),
+        base_url: config::base_url(),
     };
 
     // Build rate limiter for POST /sessions only
