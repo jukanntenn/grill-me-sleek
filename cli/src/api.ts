@@ -1,7 +1,7 @@
 import ky, { type KyInstance } from "ky";
 
 // Configuration from environment variables
-const SERVER = process.env.GS_SERVER ?? "https://grilling-sleek.example.com";
+const SERVER = process.env.GS_SERVER ?? "https://grillingsleek.online";
 const HTTP_TIMEOUT = Number(process.env.GS_HTTP_TIMEOUT ?? 10) * 1000;
 const LONGPOLL_HTTP_TIMEOUT = Number(process.env.GS_LONGPOLL_HTTP_TIMEOUT ?? 65) * 1000;
 
