@@ -13,6 +13,22 @@
 # Runtime image bundles s6-overlay + Caddy + Rust binary (all-in-one).
 
 # ===========================================================================
+# Stage 0: Frontend — build web/dist inside Docker (self-contained)
+# ===========================================================================
+FROM node:22-alpine AS frontend
+RUN corepack enable
+WORKDIR /web
+# Copy lockfile + manifest first for layer caching (deps only re-install when they change).
+COPY web/package.json web/pnpm-lock.yaml web/pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+# Copy source and build.
+COPY web/ .
+ENV CI=true
+# Build frontend — this ensures we always use the latest source code
+# Note: .dockerignore excludes web/dist/, so we always build fresh
+RUN pnpm build
+
+# ===========================================================================
 # Stage 1: Chef — prepare the dependency recipe
 # ===========================================================================
 FROM rust:alpine AS chef
@@ -36,10 +52,9 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 
 COPY server/ .
-COPY web/dist /app/web/dist
 
 # sqlx compile-time macros read the offline cache (.sqlx/) committed to the repo.
-# Ensure `cargo sqlx prepare` has been run before docker build.
+# Ensure `cargo sqlx prepare` has been run before docker build when queries change.
 ENV SQLX_OFFLINE=true
 RUN cargo build --release
 
@@ -86,8 +101,8 @@ COPY --from=builder /app/target/release/grilling-sleek /app/grilling-sleek
 # manual inspection / recovery.
 COPY --from=builder /app/migrations /app/migrations
 
-# Frontend build (served by Caddy's file_server).
-COPY --from=builder /app/web/dist /app/web/dist
+# Frontend build (served by Caddy's file_server). Built in the frontend stage.
+COPY --from=frontend /web/dist /app/web/dist
 
 # Data + log directories
 RUN mkdir -p /app/data /app/log

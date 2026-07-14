@@ -18,8 +18,9 @@ server/target/
 server/data/
 server/log/
 
-# Node (keep web/dist — needed by Dockerfile)
+# Node — frontend is built inside Docker (no host node_modules or dist needed)
 node_modules/
+web/dist/
 
 # Git
 .git/
