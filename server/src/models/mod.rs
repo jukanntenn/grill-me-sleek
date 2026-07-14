@@ -157,9 +157,17 @@ pub struct Answer {
 // ResponseInput (POST /response request body)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Cross-field validation requires the persisted [`Grilling`] (to know each
+/// question's type / required flag / max_length). That context is fetched from
+/// the DB at request time, so the extractor cannot supply it — validation runs
+/// in the handler via `validate_with(&grilling)`.
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate)]
+#[garde(context(Grilling))]
+#[garde(custom(crate::validation::validate_response_input))]
 pub struct ResponseInput {
+    #[garde(skip)]
     pub answers: HashMap<String, Answer>,
+    #[garde(skip)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_notes: Option<String>,
 }
@@ -168,13 +176,17 @@ pub struct ResponseInput {
 // SessionUpdate (PATCH /sessions request body)
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate)]
 pub struct SessionUpdate {
+    #[garde(skip)]
     pub status: SessionUpdateStatus,
+    #[garde(skip)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<CancelReason>,
+    #[garde(skip)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason_detail: Option<String>,
+    #[garde(skip)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub actor: Option<Actor>,
 }

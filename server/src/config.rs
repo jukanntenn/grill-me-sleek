@@ -1,10 +1,84 @@
-//! All runtime constants (per DESIGN.md §2383-2398).
+//! Runtime configuration and constants.
 //!
-//! Most parameters are hardcoded constants. Three values accept `GS_`-prefixed
-//! env var overrides for deployment flexibility: `GS_BASE_URL`, `GS_DB_PATH`,
-//! `GS_LOG_DIR`.
+//! Two coexisting layers:
+//! - [`Settings`] — deployment-tunable values loaded via `config-rs` (layered:
+//!   defaults → optional TOML file → `GSLEEK_`-prefixed env overrides). Loaded
+//!   once at startup into a process-wide singleton ([`init`] / [`settings`]).
+//! - `pub const` below — performance/operational constants not yet promoted to
+//!   `Settings` (see `specs/configuration.md` for the extraction roadmap).
 
+use serde::Deserialize;
+use std::sync::OnceLock;
 use std::time::Duration;
+
+// ---------------------------------------------------------------------------
+// Layered configuration (config-rs)
+// ---------------------------------------------------------------------------
+
+/// Deployment-tunable settings, loaded from defaults → TOML file → env.
+///
+/// Env var naming: `GSLEEK_` prefix + field name uppercased with `_`
+/// (e.g. `GSLEEK_BASE_URL`). config-rs strips the prefix and lowercases the
+/// remainder, yielding the struct field name directly.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+pub struct Settings {
+    /// Base URL for session links (`{base_url}/#{session_id}`).
+    pub base_url: String,
+
+    /// SQLite database file path.
+    pub db_path: String,
+
+    /// Log directory (tracing-appender rolling files).
+    pub log_dir: String,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            base_url: "https://grilling-sleek.example.com".into(),
+            db_path: "./data/grilling-sleek.db".into(),
+            log_dir: "./log/grilling-sleek".into(),
+        }
+    }
+}
+
+impl Settings {
+    /// Load layered configuration: defaults ← optional TOML file ← `GSLEEK_` env.
+    ///
+    /// The TOML file path is taken from the `GSLEEK_CONFIG_FILE` env var; when
+    /// unset, only defaults + env are used (no file). Missing env vars fall
+    /// back to [`Default`] via `#[serde(default)]`.
+    pub fn load() -> anyhow::Result<Self> {
+        let mut builder = config::Config::builder().add_source(
+            config::Environment::with_prefix("GSLEEK")
+                .try_parsing(true)
+                .ignore_empty(true),
+        );
+
+        if let Ok(path) = std::env::var("GSLEEK_CONFIG_FILE") {
+            builder = builder.add_source(config::File::with_name(&path).required(true));
+        }
+
+        Ok(builder.build()?.try_deserialize()?)
+    }
+}
+
+static SETTINGS: OnceLock<Settings> = OnceLock::new();
+
+/// Install the process-wide settings singleton. Called once from `main()`.
+pub fn init(settings: Settings) {
+    SETTINGS.set(settings).expect("settings already initialized");
+}
+
+/// Access the process-wide settings. Panics if [`init`] was not called.
+pub fn settings() -> &'static Settings {
+    SETTINGS.get().expect("settings not initialized")
+}
+
+// ---------------------------------------------------------------------------
+// Hardcoded constants (not yet promoted to Settings)
+// ---------------------------------------------------------------------------
 
 /// Listen address (loopback only; Caddy reverse-proxies public traffic).
 pub const LISTEN_ADDR: &str = "127.0.0.1:8080";
@@ -45,18 +119,3 @@ pub const IDEMPOTENCY_TTL: Duration = Duration::from_secs(300);
 
 /// Idempotency cache max capacity (moka TinyLFU eviction).
 pub const IDEMPOTENCY_CAPACITY: u64 = 10_000;
-
-/// SQLite database file path (env `GS_DB_PATH` overrides).
-pub fn db_path() -> String {
-    std::env::var("GS_DB_PATH").unwrap_or_else(|_| "./data/grilling-sleek.db".into())
-}
-
-/// Log directory (tracing-appender rolling files; env `GS_LOG_DIR` overrides).
-pub fn log_dir() -> String {
-    std::env::var("GS_LOG_DIR").unwrap_or_else(|_| "./log/grilling-sleek".into())
-}
-
-/// Base URL for session links (`{base_url}/#{session_id}`; env `GS_BASE_URL` overrides).
-pub fn base_url() -> String {
-    std::env::var("GS_BASE_URL").unwrap_or_else(|_| "https://grilling-sleek.example.com".into())
-}

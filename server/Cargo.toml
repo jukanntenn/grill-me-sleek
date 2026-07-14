@@ -28,6 +28,12 @@ sqlx = { version = "0.9", features = [
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# layered configuration (TOML file + GSLEEK_ env overrides)
+config = { version = "0.15", default-features = false, features = ["toml"] }
+
+# input validation (outer DTO layer)
+garde = { version = "0.23", features = ["derive"] }
+
 # time
 time = { version = "0.3", features = ["serde", "formatting", "parsing"] }
 
@@ -50,8 +56,9 @@ getrandom = "0.4"
 # base64
 base64 = "0.22"
 
-# JSON Schema validation
-jsonschema = "0.47"
+# JSON Schema validation (Grilling provider config; default-features=false
+# drops remote $ref resolution via reqwest/rustls/tokio — schema is bundled).
+jsonschema = { version = "0.47", default-features = false }
 
 # rate limiting
 axum-governor = "2"

@@ -5,6 +5,7 @@ use std::net::{IpAddr, SocketAddr};
 
 use crate::db;
 use crate::error::ApiError;
+use crate::extractors::ValidatedJson;
 use crate::idempotency::{self, IdempotencyEntry};
 use crate::models::*;
 use crate::observability::metrics::{metrics, ACTIVE_SESSIONS};
@@ -196,7 +197,7 @@ pub async fn get_session(
 pub async fn update_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
-    Json(body): Json<SessionUpdate>,
+    ValidatedJson(body): ValidatedJson<SessionUpdate>,
 ) -> Result<Json<SessionState>, ApiError> {
     // Verify session exists. DESIGN.md §348: a PATCH on a terminal session
     // (whether still in the active table or already archived) returns 409

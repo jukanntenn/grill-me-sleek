@@ -21,8 +21,14 @@ use tokio::signal;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing + OTel
-    let _guard = observability::init_tracing();
+    // Load layered configuration (defaults → TOML file → GSLEEK_ env) and install
+    // the process-wide singleton before any module reads it.
+    let settings = config::Settings::load()?;
+    config::init(settings);
+    tracing::info!(base_url = %config::settings().base_url, "configuration loaded");
+
+    // Initialize tracing + OTel (now safe to read config::settings())
+    let _guard = observability::init_tracing(&config::settings().log_dir);
 
     // Initialize business metrics
     observability::metrics::init_metrics();
@@ -57,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
             config::IDEMPOTENCY_TTL,
             config::IDEMPOTENCY_CAPACITY,
         ),
-        base_url: config::base_url(),
+        base_url: config::settings().base_url.clone(),
     };
 
     // Build rate limiter for POST /sessions only

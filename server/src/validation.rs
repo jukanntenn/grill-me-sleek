@@ -15,7 +15,7 @@ use jsonschema::Validator;
 use std::sync::OnceLock;
 
 use crate::error::ApiError;
-use crate::models::Grilling;
+use crate::models::{Grilling, QuestionType, ResponseInput};
 
 static GRILLING_VALIDATOR: OnceLock<Validator> = OnceLock::new();
 
@@ -80,5 +80,106 @@ pub fn validate_unique_question_ids(grilling: &Grilling) -> Result<(), ApiError>
             )));
         }
     }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// ResponseInput cross-field validation (garde struct-level custom)
+// ---------------------------------------------------------------------------
+
+/// Garde struct-level custom validator for [`ResponseInput`].
+///
+/// Runs in the handler after the persisted [`Grilling`] is fetched from the DB
+/// (the validator's context). Enforces the cross-field rules that neither a
+/// static JSON Schema nor a self-contained garde derive can express:
+///   - each answer's `selected` shape matches the corresponding question type
+///     (single/text → string; multi → array);
+///   - text questions honour their `max_length`;
+///   - multi + required → at least one option selected;
+///   - required questions must have an answer;
+///   - the global `additional_notes` box honours its required/max_length config.
+pub fn validate_response_input(
+    input: &ResponseInput,
+    grilling: &Grilling,
+) -> Result<(), garde::Error> {
+    for q in &grilling.questions {
+        if let Some(answer) = input.answers.get(&q.id) {
+            // Validate selected type matches question type
+            match q.question_type {
+                QuestionType::Single | QuestionType::Text => {
+                    if !answer.selected.is_string() {
+                        return Err(garde::Error::new(format!(
+                            "question '{}': selected must be a string for {:?} type",
+                            q.id, q.question_type
+                        )));
+                    }
+                    // Max length check for text
+                    if q.question_type == QuestionType::Text {
+                        if let Some(max_len) = q.max_length {
+                            if let Some(s) = answer.selected.as_str() {
+                                if s.len() as i64 > max_len {
+                                    return Err(garde::Error::new(format!(
+                                        "question '{}': selected exceeds max_length {max_len}",
+                                        q.id
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                }
+                QuestionType::Multi => {
+                    if !answer.selected.is_array() {
+                        return Err(garde::Error::new(format!(
+                            "question '{}': selected must be an array for multi type",
+                            q.id
+                        )));
+                    }
+                    if q.required {
+                        if let Some(arr) = answer.selected.as_array() {
+                            if arr.is_empty() {
+                                return Err(garde::Error::new(format!(
+                                    "question '{}': at least one option must be selected",
+                                    q.id
+                                )));
+                            }
+                        }
+                    }
+                }
+            }
+        } else if q.required {
+            return Err(garde::Error::new(format!(
+                "question '{}': missing required answer",
+                q.id
+            )));
+        }
+    }
+
+    // Validate additional_notes
+    if let Some(notes_config) = &grilling.additional_notes {
+        match &input.additional_notes {
+            None => {
+                if notes_config.required {
+                    return Err(garde::Error::new(
+                        "additional_notes is required".to_string(),
+                    ));
+                }
+            }
+            Some(notes) => {
+                if let Some(max_len) = notes_config.max_length {
+                    if notes.len() as i64 > max_len {
+                        return Err(garde::Error::new(format!(
+                            "additional_notes exceeds max_length {max_len}"
+                        )));
+                    }
+                }
+                if notes_config.required && notes.trim().is_empty() {
+                    return Err(garde::Error::new(
+                        "additional_notes is required".to_string(),
+                    ));
+                }
+            }
+        }
+    }
+
     Ok(())
 }

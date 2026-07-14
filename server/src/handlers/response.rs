@@ -1,6 +1,7 @@
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::Json;
+use garde::Validate;
 use serde::Deserialize;
 use std::time::Duration;
 
@@ -134,11 +135,13 @@ pub async fn submit_response(
         .await?
         .ok_or(ApiError::NotFound)?;
 
-    // Validate response against the grilling schema
+    // Validate response against the grilling schema (garde struct-level
+    // custom: cross-field rules driven by the persisted Grilling as context).
     let grilling: Grilling = serde_json::from_str(&round.grilling).map_err(|e| {
         ApiError::internal(anyhow::anyhow!("failed to deserialize grilling: {e}"))
     })?;
-    validate_response(&grilling, &body)?;
+    body.validate_with(&grilling)
+        .map_err(|e| ApiError::BadRequest(format!("validation failed: {e}")))?;
 
     let now = time_now();
     let submitted_at = unix_to_rfc3339(now);
@@ -188,90 +191,6 @@ pub async fn submit_response(
 
     tracing::info!(session_id = %session_id, round = seq, "response submitted");
     Ok((StatusCode::CREATED, Json(response)))
-}
-
-/// Validate a ResponseInput against the Grilling schema.
-fn validate_response(grilling: &Grilling, input: &ResponseInput) -> Result<(), ApiError> {
-    for q in &grilling.questions {
-        if let Some(answer) = input.answers.get(&q.id) {
-            // Validate selected type matches question type
-            match q.question_type {
-                QuestionType::Single | QuestionType::Text => {
-                    if !answer.selected.is_string() {
-                        return Err(ApiError::BadRequest(format!(
-                            "question '{}': selected must be a string for {:?} type",
-                            q.id, q.question_type
-                        )));
-                    }
-                    // Max length check for text
-                    if q.question_type == QuestionType::Text {
-                        if let Some(max_len) = q.max_length {
-                            if let Some(s) = answer.selected.as_str() {
-                                if s.len() as i64 > max_len {
-                                    return Err(ApiError::BadRequest(format!(
-                                        "question '{}': selected exceeds max_length {max_len}",
-                                        q.id
-                                    )));
-                                }
-                            }
-                        }
-                    }
-                }
-                QuestionType::Multi => {
-                    if !answer.selected.is_array() {
-                        return Err(ApiError::BadRequest(format!(
-                            "question '{}': selected must be an array for multi type",
-                            q.id
-                        )));
-                    }
-                    if q.required {
-                        if let Some(arr) = answer.selected.as_array() {
-                            if arr.is_empty() {
-                                return Err(ApiError::BadRequest(format!(
-                                    "question '{}': at least one option must be selected",
-                                    q.id
-                                )));
-                            }
-                        }
-                    }
-                }
-            }
-        } else if q.required {
-            return Err(ApiError::BadRequest(format!(
-                "question '{}': missing required answer",
-                q.id
-            )));
-        }
-    }
-
-    // Validate additional_notes
-    if let Some(notes_config) = &grilling.additional_notes {
-        match &input.additional_notes {
-            None => {
-                if notes_config.required {
-                    return Err(ApiError::BadRequest(
-                        "additional_notes is required".to_string(),
-                    ));
-                }
-            }
-            Some(notes) => {
-                if let Some(max_len) = notes_config.max_length {
-                    if notes.len() as i64 > max_len {
-                        return Err(ApiError::BadRequest(format!(
-                            "additional_notes exceeds max_length {max_len}"
-                        )));
-                    }
-                }
-                if notes_config.required && notes.trim().is_empty() {
-                    return Err(ApiError::BadRequest(
-                        "additional_notes is required".to_string(),
-                    ));
-                }
-            }
-        }
-    }
-
-    Ok(())
 }
 
 /// Query parameters for the long-poll endpoint.
