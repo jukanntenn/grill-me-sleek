@@ -1,0 +1,24 @@
+{
+  "name": "grill-sleek-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "pretest": "docker compose -f docker-compose.e2e.yml up -d --build && sleep 15 && until curl -sf http://localhost:8443/healthz; do echo 'Waiting for service...'; sleep 2; done",
+    "test": "npx playwright test",
+    "posttest": "docker compose -f docker-compose.e2e.yml down -v",
+    "test:cli": "npx playwright test specs/cli-behavior.spec.ts",
+    "test:lifecycle": "npx playwright test specs/session-lifecycle.spec.ts",
+    "test:debug": "npx playwright test --debug",
+    "test:headed": "npx playwright test --headed",
+    "report": "npx playwright show-report",
+    "docker:up": "docker compose -f docker-compose.e2e.yml up -d --build",
+    "docker:down": "docker compose -f docker-compose.e2e.yml down -v",
+    "docker:logs": "docker compose -f docker-compose.e2e.yml logs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  }
+}

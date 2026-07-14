@@ -1,0 +1,27 @@
+# E2E 测试环境配置
+# 从最新代码构建 Docker 镜像
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8443:8443"
+      - "8080:8080"
+    environment:
+      - GSLEEK_BASE_URL=http://localhost:8443
+      - GSLEEK_DB_PATH=/app/data/e2e-test.db
+      - RUST_LOG=info
+    volumes:
+      - e2e-data:/app/data
+      - ./Caddyfile:/app/Caddyfile:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  e2e-data:
