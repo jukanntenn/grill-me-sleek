@@ -1,6 +1,7 @@
-use axum::extract::{Path, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::extract::{Path, State, ConnectInfo, FromRequestParts};
+use axum::http::{HeaderMap, StatusCode, request::Parts};
 use axum::response::Json;
+use std::net::{IpAddr, SocketAddr};
 
 use crate::db;
 use crate::error::ApiError;
@@ -11,13 +12,55 @@ use crate::session::{self, time_now, unix_to_rfc3339, SESSION_TTL};
 use crate::validation;
 use crate::AppState;
 
+/// Custom extractor for ConnectInfo that falls back to a default SocketAddr
+/// when not available (e.g., in integration tests using oneshot).
+pub struct OptionalConnectInfo(SocketAddr);
+
+impl<S> FromRequestParts<S> for OptionalConnectInfo
+where
+    S: Send + Sync,
+{
+    type Rejection = std::convert::Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let addr = parts
+            .extensions
+            .get::<ConnectInfo<SocketAddr>>()
+            .map(|ci| ci.0)
+            .unwrap_or_else(|| {
+                // Fallback for tests/oneshot: use localhost
+                "127.0.0.1:0".parse::<SocketAddr>().unwrap()
+            });
+        Ok(OptionalConnectInfo(addr))
+    }
+}
+
+/// Extract client IP from headers, falling back to peer IP.
+/// Caddy sets X-Forwarded-For from CF-Connecting-IP, so we trust it.
+/// This mirrors SmartIp's logic but for logging (not rate limiting).
+fn extract_client_ip(headers: &HeaderMap, peer: &SocketAddr) -> IpAddr {
+    headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .and_then(|s| s.trim().parse::<IpAddr>().ok())
+        .unwrap_or_else(|| peer.ip())
+}
+
 /// POST /v1/sessions — Create a new session with first round.
 #[tracing::instrument(skip(state, raw), fields(session_id))]
 pub async fn create_session(
     State(state): State<AppState>,
+    OptionalConnectInfo(peer): OptionalConnectInfo,
     headers: HeaderMap,
     Json(raw): Json<serde_json::Value>,
 ) -> Result<(StatusCode, Json<CreateSessionResponse>), ApiError> {
+    // Extract client IP for logging
+    let client_ip = extract_client_ip(&headers, &peer);
+
     // Validate Grilling (JSON Schema + question-id uniqueness). Receiving a raw
     // Value (not Json<Grilling>) ensures schema violations return 400 from our
     // authoritative jsonschema check, rather than axum's 422 serde rejection.
@@ -75,7 +118,7 @@ pub async fn create_session(
                         m.sessions_active.record(active as u64, &[]);
                     }
 
-                    tracing::info!(session_id = %session_id, "session created");
+                    tracing::info!(session_id = %session_id, client_ip = %client_ip, "session created");
                     return Ok(IdempotencyEntry {
                         response_body: serde_json::to_string(&response).unwrap_or_default(),
                         status_code: 201,
