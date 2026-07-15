@@ -310,10 +310,14 @@ services:
     root * /app/web/dist
     file_server
     
-    reverse_proxy /v1/* 127.0.0.1:8080
-    
-    handle /healthz {
-        respond "ok" 200
+    reverse_proxy /v1/* 127.0.0.1:8080 {
+        transport http {
+            versions h2c
+        }
+        health_uri      /v1/healthz
+        health_interval 10s
+        health_timeout  2s
+        flush_interval  -1
     }
 }
 ```

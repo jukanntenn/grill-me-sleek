@@ -19,7 +19,7 @@ services:
       - GSLEEK_LOG_DIR=/app/log
       - RUST_LOG=info
     healthcheck:
-      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8080/healthz"]
+      test: ["CMD-SHELL", "curl -fsk https://127.0.0.1:8443/v1/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3

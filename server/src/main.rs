@@ -98,8 +98,8 @@ async fn main() -> anyhow::Result<()> {
     // (DESIGN.md §735). The lib::build_app variant omits the governor layer
     // and is used by integration tests to avoid bucket exhaustion.
     let router = Router::new()
-        .route("/healthz", get(handlers::sessions::healthz))
-        .route("/readyz", get(handlers::sessions::readyz))
+        .route("/v1/healthz", get(handlers::sessions::healthz))
+        .route("/v1/readyz", get(handlers::sessions::readyz))
         .route(
             "/v1/sessions",
             post(handlers::sessions::create_session).layer(rate_limit_layer),

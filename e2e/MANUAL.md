@@ -39,7 +39,7 @@ docker compose -f docker-compose.e2e.yml up -d --build
 sleep 15
 
 # 持续检查健康状态，直到服务就绪
-until curl -sf http://localhost:8443/healthz; do
+until curl -sf http://localhost:8443/v1/healthz; do
     echo 'Waiting for service...'
     sleep 2
 done
@@ -710,7 +710,7 @@ services:
       - e2e-data:/app/data
       - ./Caddyfile:/app/Caddyfile:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      test: ["CMD", "curl", "-fs", "http://localhost:8443/v1/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -750,7 +750,7 @@ vim server/src/main.rs
 cd e2e && docker compose -f docker-compose.e2e.yml up -d --build
 
 # 3. 验证功能
-curl -s http://localhost:8080/healthz
+curl -s http://localhost:8443/v1/healthz
 ```
 
 #### 3. 修改前端代码后
@@ -803,7 +803,7 @@ curl -s http://localhost:8443/assets/style-*.css | grep -o "\-\-spacing-[a-z0-9]
 #### 3. 验证健康检查
 ```bash
 # 检查健康状态
-curl -s http://localhost:8080/healthz
+curl -s http://localhost:8443/v1/healthz
 
 # 预期结果：
 # ok

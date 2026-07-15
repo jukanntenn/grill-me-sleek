@@ -46,11 +46,11 @@ export function cleanupDockerCompose() {
  * 等待服务就绪
  */
 function waitForService(maxRetries = 30, intervalMs = 2000) {
-  const serverUrl = process.env.GS_SERVER ?? 'http://localhost:8080';
-  
+  const serverUrl = process.env.GS_SERVER ?? 'http://localhost:8443';
+
   for (let i = 0; i < maxRetries; i++) {
     try {
-      execSync(`curl -sf ${serverUrl}/healthz`, { stdio: 'pipe' });
+      execSync(`curl -sf ${serverUrl}/v1/healthz`, { stdio: 'pipe' });
       console.log('[INFO] Service is ready!');
       return;
     } catch {

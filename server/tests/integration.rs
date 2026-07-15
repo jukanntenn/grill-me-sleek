@@ -496,9 +496,9 @@ async fn test_16_concurrent_submit_conflict() {
 #[tokio::test]
 async fn test_17_health_endpoints() {
     let app = TestApp::new().await;
-    let resp = app.oneshot(get_req("/healthz")).await;
+    let resp = app.oneshot(get_req("/v1/healthz")).await;
     assert_eq!(resp.status(), 200);
-    let resp = app.oneshot(get_req("/readyz")).await;
+    let resp = app.oneshot(get_req("/v1/readyz")).await;
     assert_eq!(resp.status(), 200);
 }
 

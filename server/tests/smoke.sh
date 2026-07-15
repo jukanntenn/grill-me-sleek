@@ -65,9 +65,9 @@ trap cleanup EXIT
 # ──────────────────────────────────────────────
 echo ""
 echo "--- 17. health endpoints ---"
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" $BASE/healthz)
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" $BASE/v1/healthz)
 assert_status "healthz" 200 $STATUS
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" $BASE/readyz)
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" $BASE/v1/readyz)
 assert_status "readyz" 200 $STATUS
 
 # ──────────────────────────────────────────────

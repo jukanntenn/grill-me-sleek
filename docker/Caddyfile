@@ -43,7 +43,7 @@
         transport http {
             versions h2c
         }
-        health_uri      /healthz
+        health_uri      /v1/healthz
         health_interval 10s
         health_timeout  2s
         flush_interval  -1
@@ -53,9 +53,4 @@
     # API responses: no-store
     @api path /v1/*
     header @api Cache-Control "no-store"
-
-    # Health check endpoint
-    handle /healthz {
-        respond "ok" 200
-    }
 }

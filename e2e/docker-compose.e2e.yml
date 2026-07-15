@@ -17,7 +17,7 @@ services:
       - e2e-data:/app/data
       - ./Caddyfile:/app/Caddyfile:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
+      test: ["CMD", "curl", "-fs", "http://localhost:8443/v1/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10

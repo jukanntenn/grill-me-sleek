@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { expect } from '@playwright/test';
 
 const CLI_PATH = process.env.CLI_PATH ?? '../cli/dist/grill.js';
-const GS_SERVER = process.env.GS_SERVER ?? 'http://localhost:8080';
+const GS_SERVER = process.env.GS_SERVER ?? 'http://localhost:8443';
 
 const CLI_ENV = {
   ...process.env,

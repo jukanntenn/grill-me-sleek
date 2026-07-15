@@ -41,8 +41,8 @@ pub struct AppState {
 pub fn build_app(state: AppState) -> Router {
     let router = Router::new()
         // Health probes
-        .route("/healthz", get(handlers::sessions::healthz))
-        .route("/readyz", get(handlers::sessions::readyz))
+        .route("/v1/healthz", get(handlers::sessions::healthz))
+        .route("/v1/readyz", get(handlers::sessions::readyz))
         // Sessions
         .route(
             "/v1/sessions",
