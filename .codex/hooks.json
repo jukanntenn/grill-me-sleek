@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 '/home/alice/Workspace/grill-me-sleek/.codex/hooks/format.py'"
+          },
+          {
+            "type": "command",
+            "command": "python3 '/home/alice/Workspace/grill-me-sleek/.codex/hooks/lint.py'"
+          }
+        ]
+      }
+    ]
+  }
+}
