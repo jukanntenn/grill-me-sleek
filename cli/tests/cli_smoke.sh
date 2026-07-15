@@ -192,3 +192,32 @@ echo "=== results: $PASS/$TESTS passed, $FAIL failed ==="
 if [ $FAIL -gt 0 ]; then
     exit 1
 fi
+
+# 16. session_id 不以 - 或 _ 开头
+echo ""
+echo "--- 16. session_id format (no dash/underscore prefix) ---"
+SESSION_ID_PREFIX_OK=true
+for i in $(seq 1 20); do
+    OUT=$(echo "$J_VALID" | $GRILL create --file - --json 2>/dev/null)
+    SID=$(echo "$OUT" | jq -r '.session_id' 2>/dev/null)
+    if [ -z "$SID" ] || [ "$SID" = "null" ]; then
+        echo "  ✗ Failed to create session"
+        FAIL=$((FAIL + 1))
+        TESTS=$((TESTS + 1))
+        SESSION_ID_PREFIX_OK=false
+        break
+    fi
+    FIRST_CHAR=$(echo "$SID" | cut -c1)
+    if [ "$FIRST_CHAR" = "-" ] || [ "$FIRST_CHAR" = "_" ]; then
+        echo "  ✗ session_id starts with invalid char: $SID"
+        FAIL=$((FAIL + 1))
+        TESTS=$((TESTS + 1))
+        SESSION_ID_PREFIX_OK=false
+        break
+    fi
+done
+if [ "$SESSION_ID_PREFIX_OK" = "true" ]; then
+    echo "  ✓ session_id never starts with - or _ (tested 20 IDs)"
+    PASS=$((PASS + 1))
+    TESTS=$((TESTS + 1))
+fi

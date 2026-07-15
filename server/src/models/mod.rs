@@ -46,6 +46,18 @@ impl SessionStatus {
             Self::Expired => "expired",
         }
     }
+
+    /// 终态 detail 字符串（用于 `Gone` 响应体）。
+    /// 非 0/1/2/3 的非法值返回 `"unknown"`，保持与旧 match 相同的兜底语义。
+    pub fn terminal_detail(status: i64) -> &'static str {
+        match Self::from_i64(status) {
+            Some(Self::Completed) => "completed",
+            Some(Self::Cancelled) => "cancelled",
+            Some(Self::Expired) => "expired",
+            // Active(0) 不应出现在终态路径，按旧逻辑归为 unknown
+            _ => "unknown",
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

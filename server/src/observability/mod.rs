@@ -12,7 +12,6 @@ use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::config;
 
 /// Shared OTel Resource identifying this service (DESIGN.md §2278).
 fn service_resource() -> Resource {

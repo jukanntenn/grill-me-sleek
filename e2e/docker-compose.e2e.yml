@@ -12,6 +12,7 @@ services:
     environment:
       - GSLEEK_BASE_URL=http://localhost:8443
       - GSLEEK_DB_PATH=/app/data/e2e-test.db
+      - GSLEEK_DISABLE_RATE_LIMIT=true
       - RUST_LOG=info
     volumes:
       - e2e-data:/app/data

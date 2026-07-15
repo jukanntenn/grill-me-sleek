@@ -243,7 +243,7 @@ const program = new Command();
 program
   .name("grill")
   .description("grilling-sleek CLI — push structured questions to a web page")
-  .version("0.1.0");
+  .version("0.2.0-rc.1");
 
 // -- create ---------------------------------------------------------------
 
@@ -279,7 +279,7 @@ program
       // If --wait, enter poll loop immediately (= create + poll, DESIGN.md §1894)
       if (opts.wait) {
         process.stderr.write("Waiting for user response...\n");
-        await pollLoop(resp.session_id, resp.current_round, Number(opts.wait));
+        await pollLoop(resp.session_id, resp.current_round, Number(opts.wait), jsonFields);
       }
     } catch (e: unknown) {
       const { status, body } = await extractHttpError(e);
@@ -297,7 +297,8 @@ program
   .description("Wait for user response (long-poll loop)")
   .option("-r, --round <n>", "Specific round to poll (default: current)")
   .option("-w, --wait <sec>", "Total wait timeout (default: 600)", "600")
-  .action(async (sessionId: string, opts: { round?: string; wait: string }) => {
+  .option("-j, --json [fields]", "JSON output")
+  .action(async (sessionId: string, opts: { round?: string; wait: string; json?: string | boolean }) => {
     let round = opts.round ? Number(opts.round) : undefined;
 
     // If no round specified, get current_round
@@ -312,7 +313,7 @@ program
       }
     }
 
-    await pollLoop(sessionId, round, Number(opts.wait));
+    await pollLoop(sessionId, round, Number(opts.wait), parseJsonFields(opts.json));
   });
 
 // -- push -----------------------------------------------------------------
@@ -350,7 +351,7 @@ program
 
       if (opts.wait) {
         process.stderr.write("Waiting for user response...\n");
-        await pollLoop(sessionId, resp.round, Number(opts.wait));
+        await pollLoop(sessionId, resp.round, Number(opts.wait), jsonFields);
       }
     } catch (e: unknown) {
       const { status, body } = await extractHttpError(e);
@@ -510,6 +511,7 @@ async function pollLoop(
   sessionId: string,
   round: number,
   totalWait: number,
+  jsonFields: string[] | null = null,
 ): Promise<void> {
   const deadline = Date.now() + totalWait * 1000;
   const client = apiClient("get", true);
@@ -520,7 +522,7 @@ async function pollLoop(
     const waitSec = Math.min(55, remaining);
 
     if (waitSec <= 0) {
-      output({ status: "timeout" }, null);
+      output({ status: "timeout" }, jsonFields);
       process.exit(75);
     }
 
@@ -540,7 +542,7 @@ async function pollLoop(
       if (status === 200) {
         // User submitted — emit the answers JSON and exit 0.
         const body = (await resp.json()) as PollResponse;
-        output(body as unknown as Record<string, unknown>, null);
+        output(body as unknown as Record<string, unknown>, jsonFields);
         process.exit(0);
       }
 
@@ -556,20 +558,20 @@ async function pollLoop(
           reason?: string;
         };
         if (body.status === "cancelled") {
-          output({ status: "cancelled", reason: body.reason }, null);
+          output({ status: "cancelled", reason: body.reason }, jsonFields);
           process.exit(0); // cancelled is a normal business result
         }
         if (body.status === "expired") {
-          output({ status: "expired" }, null);
+          output({ status: "expired" }, jsonFields);
           process.exit(76);
         }
         // Unknown 410 body — treat as expired.
-        output({ status: "expired" }, null);
+        output({ status: "expired" }, jsonFields);
         process.exit(76);
       }
 
       if (status === 404) {
-        output({ status: "not_found" }, null);
+        output({ status: "not_found" }, jsonFields);
         process.exit(1);
       }
 
@@ -601,7 +603,7 @@ async function pollLoop(
   }
 
   // Total timeout
-  output({ status: "timeout" }, null);
+  output({ status: "timeout" }, jsonFields);
   process.exit(75);
 }
 

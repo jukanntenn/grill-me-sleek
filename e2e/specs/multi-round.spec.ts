@@ -7,6 +7,9 @@ import { createRound, listRounds, generateGrilling } from '../utils/cli';
 
 test.describe('多轮问答', () => {
   test('轮次顺序和历史', async ({ page, multiRoundSession, questionsPage }) => {
+    // 新轮次推送会触发 window.confirm，测试统一接受
+    page.on('dialog', (dialog) => dialog.accept());
+
     const { session, rounds } = multiRoundSession;
 
     // 打开会话
@@ -36,31 +39,31 @@ test.describe('多轮问答', () => {
   });
 
   test('轮次切换确认', async ({ page, multiRoundSession, questionsPage }) => {
+    let confirmCalled = false;
+    page.on('dialog', (dialog) => {
+      if (dialog.type() === 'confirm') {
+        confirmCalled = true;
+      }
+      dialog.accept();
+    });
+
     const { session, rounds } = multiRoundSession;
 
-    // 打开会话
+    // 打开会话（此时用户正在填写第一轮，处于 RENDER_QUESTIONS）
     await page.goto(session.url);
     await questionsPage.waitForLoad();
 
-    // 回答第一轮
-    await questionsPage.selectSingleOption('q_auth', 'JWT');
-    await questionsPage.submit();
-    await questionsPage.waitForSubmitSuccess();
-
-    // 推送第二轮（触发确认对话框）
+    // 在未提交第一轮的情况下推送第二轮，会触发 window.confirm
     await createRound(session.session_id, rounds[1].grillingJson, 'Round 2');
 
-    // 验证确认对话框
-    await expect(page.getByText(/switch to round 2/i)).toBeVisible();
-
-    // 确认切换
-    await page.getByRole('button', { name: /ok/i }).click();
-
-    // 验证第二轮加载
+    // 等待 confirm 被调用并切换到第二轮
+    await expect.poll(() => confirmCalled).toBe(true);
     await questionsPage.expectQuestionText('Which database?');
   });
 
   test('多轮次列表', async ({ page, multiRoundSession, questionsPage }) => {
+    page.on('dialog', (dialog) => dialog.accept());
+
     const { session, rounds } = multiRoundSession;
 
     // 打开会话
@@ -75,11 +78,8 @@ test.describe('多轮问答', () => {
     // 推送第二轮
     await createRound(session.session_id, rounds[1].grillingJson, 'Round 2');
 
-    // 确认切换
-    await page.getByRole('button', { name: /ok/i }).click();
-    await questionsPage.waitForLoad();
-
-    // 回答第二轮
+    // 等待切换后回答第二轮
+    await questionsPage.expectQuestionText('Which database?');
     await questionsPage.selectSingleOption('q_db', 'PostgreSQL');
     await questionsPage.submit();
     await questionsPage.waitForSubmitSuccess();
@@ -103,9 +103,8 @@ test.describe('多轮问答', () => {
     });
     await createRound(session.session_id, round3Json, 'Round 3');
 
-    // 确认切换
-    await page.getByRole('button', { name: /ok/i }).click();
-    await questionsPage.waitForLoad();
+    // 等待切换到第三轮
+    await questionsPage.expectQuestionText('Which cache strategy?');
 
     // 验证轮次列表
     const roundList = await listRounds(session.session_id);

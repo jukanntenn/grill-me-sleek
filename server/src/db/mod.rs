@@ -133,14 +133,8 @@ pub async fn get_session_or_gone(
 ) -> Result<SessionRow, crate::error::ApiError> {
     if let Some(row) = get_session(pool, session_id).await? {
         if row.status != 0 {
-            let detail = match row.status {
-                1 => "completed",
-                2 => "cancelled",
-                3 => "expired",
-                _ => "unknown",
-            };
             return Err(crate::error::ApiError::Gone {
-                detail: detail.to_string(),
+                detail: SessionStatus::terminal_detail(row.status).to_string(),
             });
         }
         return Ok(row);
@@ -148,14 +142,8 @@ pub async fn get_session_or_gone(
 
     // Fall back to archive.
     if let Some((status_int, _reason)) = get_archive_status(pool, session_id).await? {
-        let detail = match status_int {
-            1 => "completed",
-            2 => "cancelled",
-            3 => "expired",
-            _ => "unknown",
-        };
         return Err(crate::error::ApiError::Gone {
-            detail: detail.to_string(),
+            detail: SessionStatus::terminal_detail(status_int).to_string(),
         });
     }
 

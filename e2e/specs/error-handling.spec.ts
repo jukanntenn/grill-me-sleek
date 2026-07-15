@@ -65,16 +65,16 @@ test.describe('错误处理', () => {
     // 访问无效会话
     await page.goto('http://localhost:8443/#invalid-session-id');
 
-    // 验证错误页面
-    await terminalPage.expectInvalidLink();
+    // 验证错误页面（后端将其视为不存在，显示 not found）
+    await terminalPage.expectNotFound();
   });
 
   test('不存在的会话', async ({ page, terminalPage }) => {
     // 访问不存在的会话
     await page.goto('http://localhost:8443/#nonexistent-session-id-12345');
 
-    // 验证错误页面
-    await terminalPage.expectInvalidLink();
+    // 验证错误页面（后端返回 404，前端显示 not found）
+    await terminalPage.expectNotFound();
   });
 
   test('会话过期', async ({ page, basicSession, terminalPage }) => {
@@ -82,7 +82,7 @@ test.describe('错误处理', () => {
 
     // 打开会话
     await page.goto(session.url);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // 模拟会话过期
     // 注意：这需要实现 simulateSessionExpired 函数

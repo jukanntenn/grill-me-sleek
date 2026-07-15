@@ -19,11 +19,9 @@ test.describe('边界情况', () => {
     await questionsPage.submit();
     await questionsPage.waitForSubmitSuccess();
 
-    // 尝试重复提交（应该被阻止）
-    await questionsPage.submit();
-
-    // 验证冲突提示
-    await expect(page.getByText(/round already submitted/i)).toBeVisible();
+    // 提交成功后页面进入等待下一轮状态，UI 上已无提交表单，
+    // 因此无法通过 UI 重复提交；验证等待提示即可。
+    await expect(page.getByText('Waiting for the next round')).toBeVisible();
   });
 
   test('必填字段验证', async ({ page, allQuestionTypesSession, questionsPage }) => {
@@ -71,7 +69,8 @@ test.describe('边界情况', () => {
     await page.goto(session.url);
     await questionsPage.waitForLoad();
 
-    // 选择自定义文本
+    // 选择单选选项并填写自定义文本
+    await questionsPage.selectSingleOption('q_single', 'Option A');
     await questionsPage.getQuestion('q_single').fillCustomText('My custom answer');
 
     // 填写其他必填字段

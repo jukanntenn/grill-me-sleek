@@ -187,14 +187,16 @@ function AdditionalNotesField({
   error: string;
   t: (key: string) => string;
 }) {
+  const label = config.label || t("additionalNotesDefault");
   return (
-    <div className="rounded-[var(--radius-md)] border border-hairline bg-canvas-soft px-[var(--spacing-lg)] py-[var(--spacing-lg)] mb-[var(--spacing-md)] mt-[var(--spacing-xs)]">
-      <label className="block font-semibold text-sm text-ink mb-[var(--spacing-xxs)]">
-        {config.label || t("additionalNotesDefault")}
+    <div data-testid="additional-notes" className="rounded-[var(--radius-md)] border border-hairline bg-canvas-soft px-[var(--spacing-lg)] py-[var(--spacing-lg)] mb-[var(--spacing-md)] mt-[var(--spacing-xs)]">
+      <label htmlFor="additional-notes" className="block font-semibold text-sm text-ink mb-[var(--spacing-xxs)]">
+        {label}
         {config.required && <span className="text-error ml-0.5">*</span>}
       </label>
       {error && <p className="text-sm text-error mb-[var(--spacing-xs)]">{error}</p>}
       <textarea
+        id="additional-notes"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={config.placeholder || t("additionalNotesDefault")}

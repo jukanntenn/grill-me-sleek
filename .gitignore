@@ -41,6 +41,8 @@ web/dist/
 cli/dist/
 
 # Playwright test artifacts (screenshots/snapshots regenerated on test runs)
+e2e/playwright-report/
+e2e/test-results/
 
 # ZCode session plans
 .zcode/plans/

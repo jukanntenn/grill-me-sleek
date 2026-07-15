@@ -12,7 +12,7 @@ export function TerminalPage({ title, body }: TerminalPageProps) {
   return (
     <div className="mt-[var(--spacing-xl)] rounded-[var(--radius-lg)] bg-canvas-soft px-[var(--spacing-3xl)] py-[var(--spacing-3xl)] text-center shadow-[var(--shadow-card)]">
       <h1 className="display-md text-ink">{title}</h1>
-      <p className="mt-[var(--spacing-sm)] body-lg text-body">{body}</p>
+      <p data-testid="terminal-body" className="mt-[var(--spacing-sm)] body-lg text-body">{body}</p>
     </div>
   );
 }

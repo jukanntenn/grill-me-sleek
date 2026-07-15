@@ -58,11 +58,11 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
           })}
         </div>
         {question.allow_custom_text !== false && (
-          <CustomTextInput value={value?.custom_text} onChange={(ct) => onChange({ selected, custom_text: ct })} t={t} />
-        )}
-      </>
-    );
-  }
+        <CustomTextInput value={value?.custom_text} onChange={(ct) => onChange({ selected, custom_text: ct })} t={t} questionId={question.id} />
+      )}
+    </>
+  );
+}
 
   if (variant === "rating") {
     const max = question.rating_max || 5;
@@ -91,7 +91,7 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
           })}
         </div>
         {question.allow_custom_text !== false && (
-          <CustomTextInput value={value?.custom_text} onChange={(ct) => onChange({ selected, custom_text: ct })} t={t} />
+          <CustomTextInput value={value?.custom_text} onChange={(ct) => onChange({ selected, custom_text: ct })} t={t} questionId={question.id} />
         )}
       </>
     );
@@ -134,7 +134,7 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
         })}
       </RadioGroup>
       {question.allow_custom_text !== false && (
-        <CustomTextInput value={value?.custom_text} onChange={(ct) => onChange({ selected, custom_text: ct })} t={t} />
+        <CustomTextInput value={value?.custom_text} onChange={(ct) => onChange({ selected, custom_text: ct })} t={t} questionId={question.id} />
       )}
     </>
   );
@@ -145,14 +145,17 @@ function CustomTextInput({
   value,
   onChange,
   t,
+  questionId,
 }: {
   value: string | undefined;
   onChange: (v: string) => void;
   t: (key: string) => string;
+  questionId: string;
 }) {
   return (
     <input
       type="text"
+      data-testid={`custom-text-${questionId}`}
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value)}
       placeholder={t("customTextPlaceholder")}

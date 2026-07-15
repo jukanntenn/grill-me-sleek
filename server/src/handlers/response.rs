@@ -96,14 +96,34 @@ pub async fn long_poll_response(
                 return Ok(ResponseResult::Pending);
             }
             _ = handle.cancel_token.cancelled() => {
-                // Session entered terminal state — re-check DB
-                let session_row = db::get_session(&state.pool, &session_id)
-                    .await?
-                    .ok_or(ApiError::NotFound)?;
+                // Session entered terminal state — re-check DB.
+                // The session may have been archived between the cancel_token firing
+                // and this re-check, so fall back to the archive table.
+                let session_row = match db::get_session(&state.pool, &session_id).await? {
+                    Some(row) => Some(row),
+                    None => {
+                        // Check archive for a prior terminal transition.
+                        if let Some((status_int, reason)) =
+                            db::get_archive_status(&state.pool, &session_id).await?
+                        {
+                            record_poll_duration(poll_start);
+                            return Ok(terminal_result_for_status(
+                                status_int,
+                                reason.unwrap_or_default(),
+                            ));
+                        }
+                        None
+                    }
+                };
 
-                match session_row.status {
-                    0 => continue, // still active, loop again
-                    2 => {
+                let session_row = match session_row {
+                    Some(row) => row,
+                    None => return Err(ApiError::NotFound),
+                };
+
+                match SessionStatus::from_i64(session_row.status) {
+                    Some(SessionStatus::Active) => continue, // still active, loop again
+                    Some(SessionStatus::Cancelled) => {
                         let reason = session_row.cancel_reason.unwrap_or_default();
                         record_poll_duration(poll_start);
                         return Ok(ResponseResult::Cancelled { reason });
@@ -250,8 +270,8 @@ fn record_poll_duration(start: Instant) {
 /// cancel_reason (possibly empty when sourced from the archive, which doesn't
 /// carry it back into the active row path).
 fn terminal_result_for_status(status: i64, reason: String) -> ResponseResult {
-    match status {
-        2 => ResponseResult::Cancelled { reason },
+    match SessionStatus::from_i64(status) {
+        Some(SessionStatus::Cancelled) => ResponseResult::Cancelled { reason },
         // completed (1), expired (3), or any other terminal: surface as expired-
         // style per response-endpoint body contract.
         _ => ResponseResult::Expired,

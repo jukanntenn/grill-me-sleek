@@ -32,22 +32,15 @@ pub struct AppState {
     pub base_url: String,
 }
 
-/// Build the application router WITHOUT the rate-limit layer.
-///
-/// Used by integration tests (which must not share a per-IP governor bucket
-/// across test cases — DESIGN.md §735 limits only POST /sessions to 20/min,
-/// far below the test suite's creation volume). Production attaches the
-/// governor layer in `main.rs` via `build_app_with_rate_limit`.
-pub fn build_app(state: AppState) -> Router {
-    let router = Router::new()
+/// 组装全部业务路由；`sessions_post` 由调用方注入，使生产环境可挂 governor
+/// 而测试环境保持裸 handler。路由表在此唯一声明（M-SINGLE-ITEM-PATH）。
+pub fn assemble_routes(sessions_post: axum::routing::MethodRouter<AppState>) -> Router<AppState> {
+    Router::new()
         // Health probes
         .route("/v1/healthz", get(handlers::sessions::healthz))
         .route("/v1/readyz", get(handlers::sessions::readyz))
         // Sessions
-        .route(
-            "/v1/sessions",
-            post(handlers::sessions::create_session),
-        )
+        .route("/v1/sessions", sessions_post)
         .route(
             "/v1/sessions/{session_id}",
             get(handlers::sessions::get_session).patch(handlers::sessions::update_session),
@@ -75,8 +68,18 @@ pub fn build_app(state: AppState) -> Router {
         .route(
             "/v1/sessions/{session_id}/events",
             get(handlers::sse::sse_handler),
-        );
-    apply_middleware(router).with_state(state)
+        )
+}
+
+/// Build the application router WITHOUT the rate-limit layer.
+///
+/// Used by integration tests (which must not share a per-IP governor bucket
+/// across test cases — DESIGN.md §735 limits only POST /sessions to 20/min,
+/// far below the test suite's creation volume). Production attaches the
+/// governor layer in `main.rs` via `assemble_routes`.
+pub fn build_app(state: AppState) -> Router {
+    apply_middleware(assemble_routes(post(handlers::sessions::create_session)))
+        .with_state(state)
 }
 
 /// The shared middleware stack applied to both the production router (in

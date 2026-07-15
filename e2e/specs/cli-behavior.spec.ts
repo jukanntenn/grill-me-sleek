@@ -145,7 +145,8 @@ test.describe('cli/ 命令行为', () => {
 
       const session = await createSession('Cancelled Session Query', grillingJson);
       await cancelSession(session.session_id, 'user_cancelled');
-      await expectSessionCancelled(session.session_id, 'user_cancelled');
+      // API 终端状态响应不包含 reason 字段
+      await expectSessionCancelled(session.session_id);
     });
 
     test('查询不存在的会话', async () => {
@@ -176,7 +177,8 @@ test.describe('cli/ 命令行为', () => {
 
       const session = await createSession('Cancel Test', grillingJson);
       await cancelSession(session.session_id, 'user_cancelled');
-      await expectSessionCancelled(session.session_id, 'user_cancelled');
+      // API 终端状态响应不包含 reason 字段
+      await expectSessionCancelled(session.session_id);
     });
 
     test('无效的取消原因', async () => {

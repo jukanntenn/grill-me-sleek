@@ -199,17 +199,35 @@ pub async fn update_session(
     Path(session_id): Path<String>,
     ValidatedJson(body): ValidatedJson<SessionUpdate>,
 ) -> Result<Json<SessionState>, ApiError> {
-    // Verify session exists. DESIGN.md §348: a PATCH on a terminal session
-    // (whether still in the active table or already archived) returns 409
-    // TerminalState — never 404 (which means "never existed") nor 410.
+    // Verify session exists. DESIGN.md §348: A PATCH on a terminal session
+    // returns 409 TerminalState (not 404 / 410). However, to handle retried
+    // requests idempotently (ky retries PATCH on network errors), if the
+    // session is already in the requested terminal state, return the current
+    // state instead of 409.
+    let desired_status = match body.status {
+        SessionUpdateStatus::Completed => SessionStatus::Completed,
+        SessionUpdateStatus::Cancelled => SessionStatus::Cancelled,
+    };
+
     let row = match db::get_session(&state.pool, &session_id).await? {
         Some(row) => row,
         None => {
-            // Active row gone — check archive: if present, it's terminal → 409.
-            if db::get_archive_status(&state.pool, &session_id)
-                .await?
-                .is_some()
+            // Active row gone — check archive: if present, it's terminal.
+            if let Some((status_int, _reason)) =
+                db::get_archive_status(&state.pool, &session_id).await?
             {
+                // Idempotent: already in the desired terminal state → return success.
+                if SessionStatus::from_i64(status_int) == Some(desired_status) {
+                    return Ok(Json(SessionState {
+                        session_id,
+                        status: desired_status.as_str().to_string(),
+                        current_round: 0,
+                        name: None,
+                        description: None,
+                        created_at: String::new(),
+                        expires_at: String::new(),
+                    }));
+                }
                 return Err(ApiError::TerminalState);
             }
             return Err(ApiError::NotFound);
@@ -217,6 +235,18 @@ pub async fn update_session(
     };
 
     if row.status != 0 {
+        // Idempotent: already in the desired terminal state → return success.
+        if SessionStatus::from_i64(row.status) == Some(desired_status) {
+            return Ok(Json(SessionState {
+                session_id,
+                status: desired_status.as_str().to_string(),
+                current_round: 0,
+                name: None,
+                description: None,
+                created_at: unix_to_rfc3339(row.created_at),
+                expires_at: unix_to_rfc3339(row.expires_at),
+            }));
+        }
         return Err(ApiError::TerminalState);
     }
 
@@ -228,8 +258,8 @@ pub async fn update_session(
     let now = time_now();
 
     // Determine cancel fields
-    let (status_int, cancel_reason, cancel_detail, cancel_actor) = match body.status {
-        SessionUpdateStatus::Completed => (1i64, None, None, None),
+    let (cancel_reason, cancel_detail, cancel_actor) = match body.status {
+        SessionUpdateStatus::Completed => (None, None, None),
         SessionUpdateStatus::Cancelled => {
             let reason = body.reason.map(|r| match r {
                 CancelReason::UserCancelled => "user_cancelled".to_string(),
@@ -240,7 +270,7 @@ pub async fn update_session(
                 Actor::User => "user".to_string(),
                 Actor::Agent => "agent".to_string(),
             });
-            (2i64, reason, body.reason_detail, actor)
+            (reason, body.reason_detail, actor)
         }
     };
 
@@ -248,7 +278,7 @@ pub async fn update_session(
     let affected = db::update_session_status(
         &state.pool,
         &session_id,
-        status_int,
+        desired_status as i64,
         cancel_reason.as_deref(),
         cancel_detail.as_deref(),
         cancel_actor.as_deref(),
@@ -256,14 +286,42 @@ pub async fn update_session(
     .await?;
 
     if affected == 0 {
+        // Concurrent update — re-check if already in the desired state.
+        if let Some(row) = db::get_session(&state.pool, &session_id).await? {
+            if SessionStatus::from_i64(row.status) == Some(desired_status) {
+                return Ok(Json(SessionState {
+                    session_id,
+                    status: desired_status.as_str().to_string(),
+                    current_round: 0,
+                    name: None,
+                    description: None,
+                    created_at: unix_to_rfc3339(row.created_at),
+                    expires_at: unix_to_rfc3339(row.expires_at),
+                }));
+            }
+        } else if let Some((status_int, _)) =
+            db::get_archive_status(&state.pool, &session_id).await?
+        {
+            if SessionStatus::from_i64(status_int) == Some(desired_status) {
+                return Ok(Json(SessionState {
+                    session_id,
+                    status: desired_status.as_str().to_string(),
+                    current_round: 0,
+                    name: None,
+                    description: None,
+                    created_at: String::new(),
+                    expires_at: String::new(),
+                }));
+            }
+        }
         return Err(ApiError::TerminalState);
     }
 
     // Broadcast terminal SSE event and cleanup handle
     if let Some((_, handle)) = state.handles.remove(&session_id) {
-        let event = match status_int {
-            1 => crate::sse::SseEvent::session_completed(&session_id),
-            2 => crate::sse::SseEvent::session_cancelled(
+        let event = match desired_status {
+            SessionStatus::Completed => crate::sse::SseEvent::session_completed(&session_id),
+            SessionStatus::Cancelled => crate::sse::SseEvent::session_cancelled(
                 &session_id,
                 cancel_reason.as_deref().unwrap_or("unknown"),
             ),
@@ -275,7 +333,7 @@ pub async fn update_session(
     }
 
     // Archive the session
-    db::archive_session(&state.pool, &session_id, status_int, now).await?;
+    db::archive_session(&state.pool, &session_id, desired_status as i64, now).await?;
 
     // Record metrics
     if let Some(m) = metrics() {
@@ -283,15 +341,11 @@ pub async fn update_session(
         m.sessions_active.record(active as u64, &[]);
     }
 
-    tracing::info!(session_id = %session_id, status = status_int, "session updated");
+    tracing::info!(session_id = %session_id, status = %desired_status.as_str(), "session updated");
 
     Ok(Json(SessionState {
         session_id,
-        status: if status_int == 1 {
-            "completed".to_string()
-        } else {
-            "cancelled".to_string()
-        },
+        status: desired_status.as_str().to_string(),
         current_round: 0,
         name: None,
         description: None,

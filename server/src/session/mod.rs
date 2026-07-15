@@ -6,6 +6,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config;
 use crate::db;
+use crate::models::SessionStatus;
 use crate::sse::SseHub;
 
 // Re-export the constants used by handlers, anchored in `config`.
@@ -119,7 +120,13 @@ pub async fn run_ttl_sweeper(pool: Pool<Sqlite>, map: SessionMap) {
                     remove_session(&map, &session_id);
 
                     // Archive in DB
-                    match db::archive_session(&pool, &session_id, 3, now).await {
+                    match db::archive_session(
+                        &pool,
+                        &session_id,
+                        SessionStatus::Expired as i64,
+                        now,
+                    )
+                    .await {
                         Ok(true) => {
                             if let Some(m) = crate::observability::metrics::metrics() {
                                 m.ttl_swept_total.add(1, &[]);
@@ -166,11 +173,18 @@ pub fn unix_to_rfc3339(unix_secs: i64) -> String {
 }
 
 /// Generate a session ID: 128-bit CSPRNG, base64url encoded (~22 chars).
+/// Ensures the first character is alphanumeric (not `-` or `_`) for CLI compatibility.
 pub fn generate_session_id() -> String {
     let mut buf = [0u8; 16];
     getrandom::fill(&mut buf).expect("getrandom failed");
-    base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, buf)
+    let mut id = base64::Engine::encode(&base64::engine::general_purpose::URL_SAFE_NO_PAD, buf);
+    // Ensure first char is not `-` or `_` (breaks CLI argument parsing)
+    if id.starts_with('-') || id.starts_with('_') {
+        id.replace_range(0..1, "s");
+    }
+    id
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -183,6 +197,20 @@ mod tests {
         assert!(!id.contains('+'));
         assert!(!id.contains('/'));
         assert!(!id.contains('='));
+    }
+
+    #[test]
+    fn session_id_no_dash_or_underscore_prefix() {
+        // Verify that session IDs never start with `-` or `_` which break CLI parsing.
+        // Run multiple times to increase confidence (base64url has ~3% chance of `-`/`_` first char).
+        for _ in 0..100 {
+            let id = generate_session_id();
+            assert!(
+                !id.starts_with('-') && !id.starts_with('_'),
+                "session_id must not start with - or _, got: {}",
+                id
+            );
+        }
     }
 
     #[test]

@@ -21,7 +21,10 @@ export function QuestionCard({ question, error, children }: QuestionCardProps) {
   const required = question.required !== false; // default true
 
   return (
-    <div className="rounded-[var(--radius-md)] border border-hairline bg-canvas-soft px-[var(--spacing-lg)] py-[var(--spacing-lg)] mb-[var(--spacing-md)]">
+    <div
+      data-testid={`question-${question.id}`}
+      className="rounded-[var(--radius-md)] border border-hairline bg-canvas-soft px-[var(--spacing-lg)] py-[var(--spacing-lg)] mb-[var(--spacing-md)]"
+    >
       <label className="block font-semibold text-sm text-ink mb-[var(--spacing-xs)]">
         {question.header}
         {required && <span className="text-error ml-0.5">*</span>}

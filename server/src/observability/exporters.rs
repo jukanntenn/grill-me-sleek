@@ -102,12 +102,11 @@ fn any_value_to_json(v: &opentelemetry::logs::AnyValue) -> serde_json::Value {
 
 /// Format a `SystemTime` as an RFC 3339 string (or null if before epoch).
 fn system_time_to_json(t: SystemTime) -> serde_json::Value {
-    match time::OffsetDateTime::from(t) {
-        dt => serde_json::Value::String(
-            dt.format(&time::format_description::well_known::Rfc3339)
-                .unwrap_or_else(|_| format!("{dt:?}")),
-        ),
-    }
+    let dt = time::OffsetDateTime::from(t);
+    serde_json::Value::String(
+        dt.format(&time::format_description::well_known::Rfc3339)
+            .unwrap_or_else(|_| format!("{dt:?}")),
+    )
 }
 
 /// Duration in milliseconds between two `SystemTime`s (can be negative if

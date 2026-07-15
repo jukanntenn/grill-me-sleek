@@ -9,7 +9,7 @@ test.describe('用户交互', () => {
     const { session } = basicSession;
 
     await page.goto(session.url);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // 验证默认主题
     const defaultTheme = await controls.getCurrentTheme();
@@ -34,19 +34,19 @@ test.describe('用户交互', () => {
     const { session } = basicSession;
 
     await page.goto(session.url);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
     // 验证默认语言（英文）
     await expect(page.getByText('Submit')).toBeVisible();
 
-    // 切换到中文
-    await controls.switchLanguage('简体中文');
+    // 切换到中文（locale value）
+    await controls.switchLanguage('zh-CN');
 
     // 验证中文
     await expect(page.getByText('提交')).toBeVisible();
 
     // 切换回英文
-    await controls.switchLanguage('English');
+    await controls.switchLanguage('en');
 
     // 验证英文
     await expect(page.getByText('Submit')).toBeVisible();
@@ -58,10 +58,10 @@ test.describe('用户交互', () => {
     // 桌面布局
     await page.setViewportSize({ width: 1920, height: 1080 });
     await page.goto(session.url);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
 
-    // 验证桌面布局
-    const desktopCard = page.getByTestId('question-card');
+    // 验证桌面布局（QuestionCard 现在使用 question-${id} 的 testid）
+    const desktopCard = page.locator('[data-testid^="question-"]').first();
     await expect(desktopCard).toBeVisible();
 
     // 平板布局

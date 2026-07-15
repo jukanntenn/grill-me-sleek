@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0-rc.1] - 2026-07-15
+
+### Added
+- OpenAI Codex support — install manually by copying the skill to `~/.agents/skills/`.
+- New web UI rebuilt with React — faster rendering, cleaner layout, and better accessibility.
+- Architecture diagram in README showing how the Agent, CLI, Hub, and Browser interact.
+
+### Changed
+- Rewritten as CLI + Hub architecture — the Agent talks to a hosted Hub (grillingsleek.online) instead of running a local server. No more Python dependency.
+- Now requires Node.js ≥ 22 (the CLI is a bundled Node.js script).
+- Skill renamed from `grill-me-sleek` to `grilling-sleek` to match the new architecture.
+
 ## [0.1.2] - 2026-06-06
 
 ### Added

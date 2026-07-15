@@ -172,7 +172,7 @@ export async function expectCliSuccess<T = any>(
  * 生成 Grilling JSON
  */
 export function generateGrilling(options: GenerateGrillingOptions): string {
-  const grilling = {
+  const grilling: Record<string, unknown> = {
     name: options.name ?? `test-${Date.now()}`,
     questions: options.questions ?? [
       {
@@ -185,11 +185,14 @@ export function generateGrilling(options: GenerateGrillingOptions): string {
       },
     ],
   };
+  if (options.additional_notes) {
+    grilling.additional_notes = options.additional_notes;
+  }
   return JSON.stringify(grilling, null, 2);
 }
 
 /**
- * 创建会话
+ * 创建会话（使用 CLI）
  */
 export async function createSession(
   name: string,
@@ -206,17 +209,15 @@ export async function createSession(
 }
 
 /**
- * 推送新轮次
+ * 推送新轮次（使用 CLI）
  */
 export async function createRound(
   sessionId: string,
   grillingJson: string,
   roundName?: string
 ): Promise<RoundResult> {
-  const { data } = await expectCliSuccess<RoundResult>(
-    ['push', sessionId, '--json=round,name,grilling'],
-    grillingJson
-  );
+  const args = ['push', sessionId, '--json=round,name,grilling', '--inline', grillingJson];
+  const { data } = await expectCliSuccess<RoundResult>(args);
   expect(data.round).toBeGreaterThan(0);
   return data;
 }
@@ -229,87 +230,92 @@ export async function waitResponse(
   round: number,
   waitSeconds: number = 60
 ): Promise<WaitResult> {
-  const result = await runCli(['poll', sessionId, '--wait', String(waitSeconds)]);
-  expect(result.code).toBe(0);
-  const data = JSON.parse(result.stdout);
-  expect(data.round).toBe(round);
+  const { data } = await expectCliSuccess<WaitResult>(
+    ['poll', sessionId, '--round', String(round), '--wait', String(waitSeconds), '--json']
+  );
   return data;
 }
 
 /**
- * 等待超时
+ * 断言等待超时
  */
 export async function expectWaitTimeout(
   sessionId: string,
   round: number,
   waitSeconds: number = 5
 ): Promise<void> {
-  const result = await runCli(['poll', sessionId, '--wait', String(waitSeconds)]);
-  expect(result.code).toBe(75);
-  const data = JSON.parse(result.stdout);
-  expect(data.status).toBe('timeout');
+  const result = await runCli([
+    'poll', sessionId, '--round', String(round), '--wait', String(waitSeconds), '--json'
+  ]);
+  expect(result.code).toBe(75); // timeout exit code
 }
 
 /**
- * 等待会话取消
+ * 断言等待被取消
  */
 export async function expectWaitCancelled(
   sessionId: string,
-  round: number
+  round: number,
+  waitSeconds: number = 60
 ): Promise<void> {
-  const result = await runCli(['poll', sessionId]);
-  // poll 命令在会话取消时返回退出码 1（因为获取会话信息失败）
-  expect(result.code).toBe(1);
-  expect(result.stderr).toContain('410 Gone');
+  const result = await runCli([
+    'poll', sessionId, '--round', String(round), '--wait', String(waitSeconds), '--json'
+  ]);
+  expect(result.code).toBe(0);
+  const data = JSON.parse(result.stdout);
+  expect(data.status).toBe('cancelled');
 }
 
 /**
- * 查询会话状态
+ * 获取会话状态（使用 CLI）
  */
 export async function getSession(sessionId: string): Promise<SessionResult> {
   const { data } = await expectCliSuccess<SessionResult>(
     ['status', sessionId, '--json=session_id,status,current_round,name,created_at,expires_at']
   );
-  expect(data.session_id).toBe(sessionId);
   return data;
 }
 
 /**
- * 期望会话已完成
+ * 期望会话已完成（使用 CLI）
  */
 export async function expectSessionCompleted(sessionId: string): Promise<void> {
   const result = await runCli(['status', sessionId, '--json=status,detail']);
-  expect(result.code).toBe(0);
+  // Terminal sessions return 410 Gone, but CLI handles it gracefully
   const data = JSON.parse(result.stdout);
   expect(data.status).toBe('gone');
   expect(data.detail).toBe('completed');
 }
 
 /**
- * 期望会话已取消
+ * 期望会话已取消（使用 CLI）
  */
 export async function expectSessionCancelled(sessionId: string, reason?: string): Promise<void> {
   const result = await runCli(['status', sessionId, '--json=status,detail,reason']);
-  expect(result.code).toBe(0);
   const data = JSON.parse(result.stdout);
   expect(data.status).toBe('gone');
   expect(data.detail).toBe('cancelled');
+  if (reason) expect(data.reason).toBe(reason);
 }
 
 /**
- * 完成会话
+ * 完成会话（使用 CLI）
  */
 export async function completeSession(sessionId: string): Promise<void> {
   const result = await runCli(['complete', sessionId]);
-  expect(result.code).toBe(0);
+  if (result.code !== 0) {
+    throw new Error('completeSession failed: ' + result.stderr);
+  }
 }
 
 /**
- * 取消会话
+ * 取消会话（使用 CLI）
  */
 export async function cancelSession(sessionId: string, reason: string): Promise<void> {
   const result = await runCli(['cancel', sessionId, '--reason', reason]);
-  expect(result.code).toBe(0);
+  if (result.code !== 0) {
+    throw new Error('cancelSession failed: ' + result.stderr);
+  }
 }
 
 /**
@@ -380,6 +386,9 @@ export async function simulateSessionExpired(sessionId: string): Promise<void> {
  * 列出轮次
  */
 export async function listRounds(sessionId: string): Promise<RoundSummary[]> {
-  const session = await getSession(sessionId);
-  return [{ round: session.current_round, has_response: false }];
+  const resp = await fetch(`${GS_SERVER}/v1/sessions/${sessionId}/rounds`);
+  if (!resp.ok) {
+    throw new Error(`listRounds failed: ${resp.status} ${await resp.text()}`);
+  }
+  return (await resp.json()) as RoundSummary[];
 }

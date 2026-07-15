@@ -59,4 +59,11 @@ export class TerminalPage extends BasePage {
   async expectInvalidLink() {
     await expect(this.title).toHaveText(/invalid link/i);
   }
+
+  /**
+   * 验证会话不存在页面
+   */
+  async expectNotFound() {
+    await expect(this.title).toHaveText(/session not found/i);
+  }
 }

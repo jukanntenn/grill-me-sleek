@@ -14,7 +14,7 @@ The AI asks you questions to build a shared understanding — you answer in a sl
 
 <br />
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Version](https://img.shields.io/badge/version-0.1.2-brightgreen.svg)](https://github.com/jukanntenn/grill-me-sleek) [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-orange.svg)](https://github.com/jukanntenn/grill-me-sleek)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Version](https://img.shields.io/badge/version-0.2.0--rc.1-brightgreen.svg)](https://github.com/jukanntenn/grill-me-sleek) [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-Plugin-orange.svg)](https://github.com/jukanntenn/grill-me-sleek)
 
 </div>
 
@@ -48,28 +48,37 @@ No back-and-forth in the terminal. No scrolling through pages of questions. Just
 
 ## How It Works
 
+```mermaid
+sequenceDiagram
+    participant U as You
+    participant A as Agent (Claude Code / Codex)
+    participant C as grill.js CLI
+    participant H as Hub (grillingsleek.online)
+    participant B as Browser
+
+    U->>A: Describe your plan
+    A->>C: Create session + questions
+    C->>H: POST /sessions
+    H-->>C: Session URL
+    C-->>A: URL returned
+    A-->>U: "Open this link to answer"
+    U->>B: Open URL
+    H-->>B: Serve question page
+    U->>B: Review & submit answers
+    B->>H: POST answers
+    A->>C: Poll for response
+    C->>H: GET /response?wait=
+    H-->>C: Your answers (JSON)
+    C-->>A: Answers parsed
+    A->>A: Process answers, generate next batch
+    Note over A,U: Repeat for each decision branch
+    A->>C: Complete session
+    C->>H: PATCH /sessions/{id}
+    A-->>U: Summary of all decisions
 ```
-  You describe your plan
-          │
-          ▼
-  ┌─────────────┐
-  │    AI       │  Analyzes, generates
-  │  generates  │  a batch of questions
-  │  questions  │  with recommendations
-  └──────┬──────┘
-         │
-         ▼
-  ┌─────────────┐
-  │  Browser UI │  Web page opens
-  │  (auto-open)│  automatically
-  └──────┬──────┘
-         │
-         ▼
-  You review & submit
-         │
-         ▼
-  Next batch if needed  →  Done ✓
-```
+
+Each batch of questions becomes one web page you review and submit. The Hub
+hosts the UI — no local server needed.
 
 ## grill-me-sleek vs grill-me
 
@@ -87,11 +96,13 @@ No back-and-forth in the terminal. No scrolling through pages of questions. Just
 | Platform | Status |
 |---|---|
 | Claude Code | ✅ Supported |
-| OpenAI Codex | 🔜 Planned |
+| OpenAI Codex | ⚡ Supported (manual install) |
 | OpenCode | 🔜 Planned |
 | Trae | 🔜 Planned |
 
 ## Install
+
+**Prerequisites:** Node.js ≥ 22
 
 **Claude Code (via marketplace):**
 
@@ -100,14 +111,26 @@ No back-and-forth in the terminal. No scrolling through pages of questions. Just
 /plugin install grill-me-sleek@jukanntenn
 ```
 
+**OpenAI Codex (manual):**
+
+```bash
+git clone https://github.com/jukanntenn/grill-me-sleek.git
+# User-level (all projects)
+cp -r grill-me-sleek/skills/grilling-sleek ~/.agents/skills/
+# Or project-level (current project only)
+# cp -r grill-me-sleek/skills/grilling-sleek .agents/skills/
+```
+
+Restart Codex after installing. The skill appears in all new conversations.
+
 ## Use Cases
 
 | What you want | What to say |
 |---|---|
 | Review an architecture choice | *"Grill me on choosing gRPC over REST for the payment service"* |
-| Validate a migration plan | *"Stress-test my plan to migrate from MySQL to PostgreSQL"* |
+| Validate a migration plan | *"Grill me on my plan to migrate from MySQL to PostgreSQL"* |
 | Align on a new project | *"Grill me on the roadmap for the new dashboard feature"* |
-| Check a debugging approach | *"Review my approach to fixing the memory leak in the worker pool"* |
+| Check a debugging approach | *"Grill me on my approach to fixing the memory leak in the worker pool"* |
 
 ## License
 

@@ -195,14 +195,12 @@ fn compute_etag(grilling_json: &str) -> String {
 }
 
 /// Check if an If-None-Match value matches the current ETag.
-/// Uses weak comparison per RFC 7232 §3.2.
+/// Uses weak comparison per RFC 7232 §3.2: the `W/` prefix is stripped on
+/// both sides before comparing, so `W/"abc"` matches `"abc"`.
 fn etag_matches(if_none_match: &str, etag: &str) -> bool {
-    // Strip W/ prefix for comparison (weak comparison)
     let clean_etag = etag.strip_prefix("W/").unwrap_or(etag);
-    if_none_match
-        .split(',')
-        .any(|v| {
-            let v = v.trim();
-            v == etag || v == clean_etag || v.strip_prefix("W/").unwrap_or(v) == clean_etag
-        })
+    if_none_match.split(',').any(|v| {
+        let v = v.trim().strip_prefix("W/").unwrap_or_else(|| v.trim());
+        v == clean_etag
+    })
 }

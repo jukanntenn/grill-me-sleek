@@ -15,15 +15,16 @@ class QuestionControl {
     private page: Page,
     private questionId: string
   ) {
-    // 使用问题文本作为定位器
-    this.container = page.locator('label').filter({ hasText: questionId }).locator('..');
+    // 使用问题 id 对应的 data-testid 作为定位器，避免依赖 header 文本
+    this.container = page.locator(`[data-testid="question-${questionId}"]`);
   }
 
   /**
    * 选择选项（单选/多选）
+   * 选项 label 可能附带 "Recommended" 徽章，点击 label 本身比点击文本 span 更稳定。
    */
   async selectOption(optionLabel: string) {
-    await this.container.getByText(optionLabel).click();
+    await this.container.locator('label').filter({ hasText: optionLabel }).click();
   }
 
   /**
@@ -35,24 +36,29 @@ class QuestionControl {
 
   /**
    * 选择评分
+   * 评分按钮可能附带 "(recommended)" 文本，使用 role + 正则匹配。
    */
   async selectRating(value: number) {
-    await this.container.getByText(String(value)).click();
+    await this.container
+      .getByRole('button', { name: new RegExp(`^${value}`) })
+      .click();
   }
 
   /**
    * 选择是/否
+   * 按钮文本可能附带 "(recommended)" 文本，使用 role + 正则匹配。
    */
   async selectYesNo(value: 'yes' | 'no') {
-    await this.container.getByText(value, { exact: false }).click();
+    await this.container
+      .getByRole('button', { name: new RegExp(value, 'i') })
+      .click();
   }
 
   /**
    * 填写自定义文本
    */
   async fillCustomText(text: string) {
-    await this.container.getByText(/custom/i).click();
-    await this.container.locator('textarea, input[type="text"]').last().fill(text);
+    await this.container.locator(`[data-testid="custom-text-${this.questionId}"]`).fill(text);
   }
 
   /**
@@ -87,10 +93,10 @@ export class QuestionsPage extends BasePage {
 
   constructor(page: Page) {
     super(page);
-    // 使用问题标题作为定位器
-    this.questionCards = page.locator('label').filter({ hasText: /\*/ });
+    // QuestionCard 使用 question-${id} 作为 testid
+    this.questionCards = page.locator('[data-testid^="question-"]');
     this.submitButton = page.getByRole('button', { name: /submit/i });
-    this.additionalNotesInput = page.getByLabel(/additional notes/i);
+    this.additionalNotesInput = page.getByTestId('additional-notes').locator('textarea');
     this.errorBanner = page.getByRole('alert');
     this.retryButton = page.getByRole('button', { name: /retry/i });
     this.waitingMessage = page.getByText(/waiting for next round/i);

@@ -19,6 +19,18 @@ use crate::models::{Grilling, QuestionType, ResponseInput};
 
 static GRILLING_VALIDATOR: OnceLock<Validator> = OnceLock::new();
 
+/// 进程级 Grilling JSON Schema 校验器（懒加载，仅编译一次）。
+/// schema 经 `include_str!` 编入二进制；解析/编译失败属不可恢复的构建期 bug，
+/// 故用 `expect`（符合 M-PANIC-ON-BUG：编程错误 → panic）。
+fn grilling_validator() -> &'static Validator {
+    GRILLING_VALIDATOR.get_or_init(|| {
+        let schema: serde_json::Value =
+            serde_json::from_str(include_str!("../schemas/grilling.json"))
+                .expect("invalid grilling schema");
+        jsonschema::validator_for(&schema).expect("failed to compile grilling schema")
+    })
+}
+
 /// Validate a raw JSON value against the Grilling JSON Schema, then deserialize
 /// it into a `Grilling` and check question-id uniqueness.
 ///
@@ -27,12 +39,7 @@ static GRILLING_VALIDATOR: OnceLock<Validator> = OnceLock::new();
 /// jsonschema check — instead of axum's default 422 serde-rejection, which the
 /// design reserves for Idempotency-Key mismatch (DESIGN.md §589).
 pub fn validate_grilling_value(value: &serde_json::Value) -> Result<Grilling, ApiError> {
-    let validator = GRILLING_VALIDATOR.get_or_init(|| {
-        let schema_str = include_str!("../schemas/grilling.json");
-        let schema: serde_json::Value =
-            serde_json::from_str(schema_str).expect("invalid grilling schema");
-        jsonschema::validator_for(&schema).expect("failed to compile grilling schema")
-    });
+    let validator = grilling_validator();
 
     if let Err(e) = validator.validate(value) {
         return Err(ApiError::BadRequest(format!(
@@ -53,12 +60,7 @@ pub fn validate_grilling_value(value: &serde_json::Value) -> Result<Grilling, Ap
 pub fn validate_grilling(grilling: &Grilling) -> Result<(), ApiError> {
     let value = serde_json::to_value(grilling)
         .map_err(|e| ApiError::BadRequest(format!("failed to serialize grilling: {e}")))?;
-    let validator = GRILLING_VALIDATOR.get_or_init(|| {
-        let schema_str = include_str!("../schemas/grilling.json");
-        let schema: serde_json::Value =
-            serde_json::from_str(schema_str).expect("invalid grilling schema");
-        jsonschema::validator_for(&schema).expect("failed to compile grilling schema")
-    });
+    let validator = grilling_validator();
     if let Err(e) = validator.validate(&value) {
         return Err(ApiError::BadRequest(format!(
             "grilling validation failed: {e}"
