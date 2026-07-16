@@ -52,7 +52,7 @@ No back-and-forth in the terminal. No scrolling through pages of questions. Just
 sequenceDiagram
     participant U as You
     participant A as Agent (Claude Code / Codex)
-    participant C as grill.js CLI
+    participant C as grilling-sleek CLI
     participant H as Hub (grillingsleek.online)
     participant B as Browser
 
@@ -104,14 +104,28 @@ hosts the UI — no local server needed.
 
 **Prerequisites:** Node.js ≥ 22
 
-**Claude Code (via marketplace):**
+### CLI Installation
+
+The CLI is distributed via npm. Install it globally:
+
+```bash
+npm install -g @grilling-sleek/cli
+```
+
+Or use it directly with npx:
+
+```bash
+npx @grilling-sleek/cli --help
+```
+
+### Claude Code (via marketplace)
 
 ```bash
 /plugin marketplace add jukanntenn/grill-me-sleek
 /plugin install grill-me-sleek@jukanntenn
 ```
 
-**OpenAI Codex (manual):**
+### OpenAI Codex (manual)
 
 ```bash
 git clone https://github.com/jukanntenn/grill-me-sleek.git
