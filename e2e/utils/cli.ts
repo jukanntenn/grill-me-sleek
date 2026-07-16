@@ -6,13 +6,14 @@ import { spawn } from 'node:child_process';
 import { expect } from '@playwright/test';
 
 const CLI_PATH = process.env.CLI_PATH ?? '../cli/dist/grill.js';
-const GS_SERVER = process.env.GS_SERVER ?? 'http://localhost:8443';
+const GRILLING_SLEEK_SERVER = process.env.GRILLING_SLEEK_SERVER ?? 'https://localhost:8443';
 
 const CLI_ENV = {
   ...process.env,
-  GS_SERVER,
-  GS_HTTP_TIMEOUT: '30',
-  GS_LONGPOLL_HTTP_TIMEOUT: '65',
+  GRILLING_SLEEK_SERVER,
+  GRILLING_SLEEK_HTTP_TIMEOUT: '30',
+  GRILLING_SLEEK_LONGPOLL_HTTP_TIMEOUT: '65',
+  NODE_TLS_REJECT_UNAUTHORIZED: '0',
 };
 
 export interface CliResult {
@@ -386,7 +387,7 @@ export async function simulateSessionExpired(sessionId: string): Promise<void> {
  * 列出轮次
  */
 export async function listRounds(sessionId: string): Promise<RoundSummary[]> {
-  const resp = await fetch(`${GS_SERVER}/v1/sessions/${sessionId}/rounds`);
+  const resp = await fetch(`${GRILLING_SLEEK_SERVER}/v1/sessions/${sessionId}/rounds`);
   if (!resp.ok) {
     throw new Error(`listRounds failed: ${resp.status} ${await resp.text()}`);
   }

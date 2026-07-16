@@ -1,9 +1,10 @@
 import ky, { type KyInstance } from "ky";
+import logger from "./logger";
 
 // Configuration from environment variables
-const SERVER = process.env.GS_SERVER ?? "https://grillingsleek.online";
-const HTTP_TIMEOUT = Number(process.env.GS_HTTP_TIMEOUT ?? 10) * 1000;
-const LONGPOLL_HTTP_TIMEOUT = Number(process.env.GS_LONGPOLL_HTTP_TIMEOUT ?? 65) * 1000;
+const SERVER = process.env.GRILLING_SLEEK_SERVER ?? "https://grillingsleek.online";
+const HTTP_TIMEOUT = Number(process.env.GRILLING_SLEEK_HTTP_TIMEOUT ?? 10) * 1000;
+const LONGPOLL_HTTP_TIMEOUT = Number(process.env.GRILLING_SLEEK_LONGPOLL_HTTP_TIMEOUT ?? 65) * 1000;
 
 /**
  * Create an API client.
@@ -17,6 +18,8 @@ export function apiClient(
   isLongPoll = false,
   idempotencyKey?: string,
 ): KyInstance {
+  let startTime = 0;
+
   return ky.create({
     prefixUrl: `${SERVER}/v1/`,
     method,
@@ -32,9 +35,26 @@ export function apiClient(
       statusCodes: [408, 413, 429, 500, 502, 503, 504],
     },
     hooks: {
-      beforeRequest: idempotencyKey
-        ? [(req) => req.headers.set("Idempotency-Key", idempotencyKey)]
-        : [],
+      beforeRequest: [
+        (req) => {
+          startTime = Date.now();
+          if (idempotencyKey) {
+            req.headers.set("Idempotency-Key", idempotencyKey);
+          }
+        },
+      ],
+      afterResponse: [
+        (_req, _opts, res) => {
+          const duration = Date.now() - startTime;
+          logger.info({
+            event: "http_request",
+            method: _req.method,
+            url: _req.url,
+            status: res.status,
+            duration_ms: duration,
+          });
+        },
+      ],
     },
   });
 }

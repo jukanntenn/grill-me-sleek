@@ -46,7 +46,7 @@ export function cleanupDockerCompose() {
  * 等待服务就绪
  */
 function waitForService(maxRetries = 30, intervalMs = 2000) {
-  const serverUrl = process.env.GS_SERVER ?? 'http://localhost:8443';
+  const serverUrl = process.env.GRILLING_SLEEK_SERVER ?? 'https://localhost:8443';
 
   for (let i = 0; i < maxRetries; i++) {
     try {

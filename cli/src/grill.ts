@@ -4,6 +4,7 @@ import { jsonrepair } from "jsonrepair";
 import Ajv2020 from "ajv/dist/2020.js";
 import { apiClient, readInput } from "./api";
 import { randomUUID } from "node:crypto";
+import logger, { logStartup, logExit, logDebug, logPoll, logRetry, logError } from "./logger";
 // Single source of truth for the Grilling schema: import the same JSON Schema
 // file the server validates against (DESIGN.md §1080, decision #14). esbuild
 // natively bundles JSON imports, so the schema is compiled into the single-
@@ -243,7 +244,8 @@ const program = new Command();
 program
   .name("grill")
   .description("grilling-sleek CLI — push structured questions to a web page")
-  .version("0.2.0-rc.1");
+  .version("0.2.0-rc.1")
+  .option("-v, --verbose", "Enable debug logging");
 
 // -- create ---------------------------------------------------------------
 
@@ -263,6 +265,7 @@ program
     }
 
     const grilling = parseGrilling(raw);
+    logDebug("grilling_input", grilling);
     const idempotencyKey = randomUUID();
 
     const client = apiClient("post", false, idempotencyKey);
@@ -282,6 +285,7 @@ program
         await pollLoop(resp.session_id, resp.current_round, Number(opts.wait), jsonFields);
       }
     } catch (e: unknown) {
+      logError("create session failed", e, { session_id: undefined });
       const { status, body } = await extractHttpError(e);
       if (status > 0) {
         errExit(`API error ${status}: ${body}`, status === 429 ? 77 : 1);
@@ -334,6 +338,7 @@ program
     }
 
     const grilling = parseGrilling(raw);
+    logDebug("grilling_input", grilling);
     const idempotencyKey = randomUUID();
 
     const client = apiClient("post", false, idempotencyKey);
@@ -354,6 +359,7 @@ program
         await pollLoop(sessionId, resp.round, Number(opts.wait), jsonFields);
       }
     } catch (e: unknown) {
+      logError("push round failed", e, { session_id: sessionId });
       const { status, body } = await extractHttpError(e);
       if (status > 0) {
         errExit(`API error ${status}: ${body}`, status === 429 ? 77 : 1);
@@ -517,37 +523,37 @@ async function pollLoop(
   const client = apiClient("get", true);
   let consecutiveErrors = 0;
 
+  logPoll("start", sessionId, round, { total_wait: totalWait });
+
   while (Date.now() < deadline) {
     const remaining = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
     const waitSec = Math.min(55, remaining);
 
     if (waitSec <= 0) {
+      logPoll("timeout", sessionId, round);
       output({ status: "timeout" }, jsonFields);
       process.exit(75);
     }
 
     try {
-      // Fetch the raw response (ky treats 2xx — including 202 — as success, so
-      // we must inspect the status ourselves rather than relying on the catch
-      // path for non-200). throwHttpErrors:false keeps 4xx/5xx in the same path.
       const resp = await client
         .get(`sessions/${sessionId}/rounds/${round}/response`, {
           searchParams: { wait: waitSec },
-          timeout: (waitSec + 10) * 1000, // > server wait + round-trip
+          timeout: (waitSec + 10) * 1000,
           throwHttpErrors: false,
         });
 
       const status = resp.status;
 
       if (status === 200) {
-        // User submitted — emit the answers JSON and exit 0.
         const body = (await resp.json()) as PollResponse;
+        logDebug("poll_response", body);
         output(body as unknown as Record<string, unknown>, jsonFields);
         process.exit(0);
       }
 
       if (status === 202) {
-        // Pending — loop again (reset error counter).
+        logPoll("202", sessionId, round);
         consecutiveErrors = 0;
         continue;
       }
@@ -558,51 +564,53 @@ async function pollLoop(
           reason?: string;
         };
         if (body.status === "cancelled") {
+          logPoll("cancelled", sessionId, round, { reason: body.reason });
           output({ status: "cancelled", reason: body.reason }, jsonFields);
-          process.exit(0); // cancelled is a normal business result
+          process.exit(0);
         }
         if (body.status === "expired") {
+          logPoll("expired", sessionId, round);
           output({ status: "expired" }, jsonFields);
           process.exit(76);
         }
-        // Unknown 410 body — treat as expired.
         output({ status: "expired" }, jsonFields);
         process.exit(76);
       }
 
       if (status === 404) {
+        logPoll("404", sessionId, round);
         output({ status: "not_found" }, jsonFields);
         process.exit(1);
       }
 
       if (status === 429) {
-        // Read Retry-After header (DESIGN.md §2025); fall back to a short fixed
-        // backoff if the header is absent (defensive — axum-governor always
-        // sends it, but don't assume).
         const retryAfter = resp.headers.get("retry-after");
         const delaySec = retryAfter ? Number(retryAfter) : 5;
+        logRetry(consecutiveErrors + 1, delaySec * 1000, `HTTP 429`);
         await sleepMs(Number.isNaN(delaySec) || delaySec <= 0 ? 5000 : delaySec * 1000);
         continue;
       }
 
-      // 5xx / other errors — exponential backoff (1/2/4s, cap 30s).
-      // DESIGN.md §2026, §2420: no hard "give up" count; the --wait total
-      // timeout governs when to stop.
+      // 5xx / other errors — exponential backoff
       const errBody = await resp.text().catch(() => "");
       warnStderr(`API error ${status}: ${errBody}`);
       consecutiveErrors++;
-      await sleepMs(backoffMs(consecutiveErrors));
+      const backoff = backoffMs(consecutiveErrors);
+      logRetry(consecutiveErrors, backoff, `HTTP ${status}: ${errBody}`);
+      await sleepMs(backoff);
       continue;
     } catch (e: unknown) {
-      // Network error (connection refused, DNS, timeout) — exponential backoff.
       const msg = e instanceof Error ? e.message : String(e);
       warnStderr(`network error: ${msg}`);
       consecutiveErrors++;
-      await sleepMs(backoffMs(consecutiveErrors));
+      const backoff = backoffMs(consecutiveErrors);
+      logRetry(consecutiveErrors, backoff, msg);
+      await sleepMs(backoff);
     }
   }
 
   // Total timeout
+  logPoll("timeout", sessionId, round);
   output({ status: "timeout" }, jsonFields);
   process.exit(75);
 }
@@ -610,5 +618,21 @@ async function pollLoop(
 // ---------------------------------------------------------------------------
 // Parse
 // ---------------------------------------------------------------------------
+
+// Set verbose before any command runs
+program.hook("preAction", (thisCommand) => {
+  const opts = thisCommand.opts();
+  if (opts.verbose) {
+    logger.level = "debug";
+  }
+  logStartup(
+    thisCommand.args[0] ?? "unknown",
+    process.argv.slice(2),
+  );
+});
+
+program.hook("postAction", () => {
+  logExit(0);
+});
 
 program.parse();
