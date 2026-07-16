@@ -1,17 +1,14 @@
-# {{ ansible_managed }}
-# grilling-sleek Caddy configuration (production)
+# grilling-sleek Caddy configuration (HTTP mode for self-hosting)
+# Serves static files + reverse proxies to Rust backend
 #
-# TLS with Cloudflare Origin CA certificate (Full Strict mode).
-# Cloudflare terminates public TLS; this handles origin-side TLS.
+# This is the HTTP-only version for self-hosting without TLS.
+# For production with TLS, use the main Caddyfile.
 
 {
     auto_https off
 }
 
-:8443 {
-    # TLS: Cloudflare Origin CA certificate
-    tls /app/certs/origin.pem /app/certs/origin.key
-
+:8080 {
     # Security headers
     header {
         Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'"
@@ -28,7 +25,7 @@
     root * /app/web/dist
     file_server
 
-    # Cache-Control for Entry HTML (5min, so Cloudflare can cache it)
+    # Cache-Control for Entry HTML (5min)
     @html path /
     header @html Cache-Control "public, max-age=300"
 
@@ -45,7 +42,6 @@
         health_interval 10s
         health_timeout  2s
         flush_interval  -1
-        header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
     }
 
     # API responses: no-store

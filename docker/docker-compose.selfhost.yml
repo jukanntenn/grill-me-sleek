@@ -1,0 +1,36 @@
+# grilling-sleek self-hosted deployment
+#
+# Quick Start:
+#   docker compose -f docker/docker-compose.selfhost.yml up -d
+#   open http://localhost:8080
+#
+# Environment variables (optional):
+#   GSLEEK_PORT       - Host port (default: 8080)
+#   GSLEEK_BASE_URL   - Public URL for session links (default: http://localhost:8080)
+#
+# Custom Caddyfile (optional):
+#   Mount your Caddyfile to /app/Caddyfile:ro
+#   docker compose -f docker/docker-compose.selfhost.yml -f docker/docker-compose.selfhost.caddy.yml up -d
+
+services:
+  grilling-sleek:
+    image: jukanntenn/grilling-sleek:latest
+    container_name: grilling-sleek
+    restart: unless-stopped
+    ports:
+      - "${GSLEEK_PORT:-8080}:8080"
+    volumes:
+      - ../data:/app/data
+      - ../log:/app/log
+      - ./Caddyfile.http:/app/Caddyfile:ro
+    environment:
+      - GSLEEK_BASE_URL=${GSLEEK_BASE_URL:-http://localhost:8080}
+      - GSLEEK_DB_PATH=/app/data/grilling-sleek.db
+      - GSLEEK_LOG_DIR=/app/log
+      - RUST_LOG=info
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:8080/v1/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
