@@ -1,0 +1,10 @@
+{
+  "name": "grill-me-sleek",
+  "version": "0.2.0-rc.1",
+  "private": true,
+  "description": "Stress-test your plan before vibe coding",
+  "scripts": {
+    "version": "bash scripts/sync-version.sh && git add cli/package.json web/package.json server/Cargo.toml pyproject.toml skills/grilling-sleek/grilling-sleek.js",
+    "postversion": "git push && git push --tags"
+  }
+}
