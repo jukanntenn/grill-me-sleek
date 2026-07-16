@@ -4,7 +4,7 @@
   "version": "0.2.0-rc.1",
   "type": "module",
   "scripts": {
-    "pretest": "docker compose -f docker-compose.e2e.yml up -d --build && sleep 15 && until curl -sf http://localhost:8443/v1/healthz; do echo 'Waiting for service...'; sleep 2; done",
+    "pretest": "docker compose -f docker-compose.e2e.yml up -d --build && sleep 15 && until curl -sfk https://localhost:8443/v1/healthz; do echo 'Waiting for service...'; sleep 2; done",
     "test": "npx playwright test",
     "posttest": "docker compose -f docker-compose.e2e.yml down -v",
     "test:cli": "npx playwright test specs/cli-behavior.spec.ts",

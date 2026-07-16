@@ -5,7 +5,7 @@
 import { spawn } from 'node:child_process';
 import { expect } from '@playwright/test';
 
-const CLI_PATH = process.env.CLI_PATH ?? '../cli/dist/grill.js';
+const CLI_PATH = process.env.CLI_PATH ?? '../cli/dist/grilling-sleek.js';
 const GRILLING_SLEEK_SERVER = process.env.GRILLING_SLEEK_SERVER ?? 'https://localhost:8443';
 
 const CLI_ENV = {
@@ -147,13 +147,17 @@ export async function expectCliSuccess<T = any>(
   const result = await runCli(args, input);
   
   expect(result.code).toBe(0);
-  // Ignore all warnings and info messages in stderr
+  // Ignore all warnings, info messages, and pino-pretty multi-line output in stderr
   const realErrors = result.stderr.split('\n').filter(
     line => line && 
             !line.includes('Warning:') && 
             !line.includes('warning:') &&
             !line.includes('Use `node --trace-warnings') &&
-            !line.includes('info:')
+            !line.includes('info:') && 
+            !line.includes('INFO') && 
+            !line.includes('ERROR') && 
+            !line.includes('WARN') &&
+            !line.match(/^\s+/)  // Filter out pino-pretty continuation lines (indented)
   ).join('\n');
   if (realErrors.trim()) {
     expect(realErrors).toBe('');
@@ -387,9 +391,20 @@ export async function simulateSessionExpired(sessionId: string): Promise<void> {
  * 列出轮次
  */
 export async function listRounds(sessionId: string): Promise<RoundSummary[]> {
-  const resp = await fetch(`${GRILLING_SLEEK_SERVER}/v1/sessions/${sessionId}/rounds`);
-  if (!resp.ok) {
-    throw new Error(`listRounds failed: ${resp.status} ${await resp.text()}`);
+  // Temporarily disable TLS verification for self-signed certs in e2e
+  const origValue = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  try {
+    const resp = await fetch(`${GRILLING_SLEEK_SERVER}/v1/sessions/${sessionId}/rounds`);
+    if (!resp.ok) {
+      throw new Error(`listRounds failed: ${resp.status} ${await resp.text()}`);
+    }
+    return (await resp.json()) as RoundSummary[];
+  } finally {
+    if (origValue !== undefined) {
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = origValue;
+    } else {
+      delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    }
   }
-  return (await resp.json()) as RoundSummary[];
 }

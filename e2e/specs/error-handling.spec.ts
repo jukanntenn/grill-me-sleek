@@ -63,7 +63,7 @@ test.describe('错误处理', () => {
 
   test('无效会话 ID', async ({ page, terminalPage }) => {
     // 访问无效会话
-    await page.goto('http://localhost:8443/#invalid-session-id');
+    await page.goto('https://localhost:8443/#invalid-session-id');
 
     // 验证错误页面（后端将其视为不存在，显示 not found）
     await terminalPage.expectNotFound();
@@ -71,7 +71,7 @@ test.describe('错误处理', () => {
 
   test('不存在的会话', async ({ page, terminalPage }) => {
     // 访问不存在的会话
-    await page.goto('http://localhost:8443/#nonexistent-session-id-12345');
+    await page.goto('https://localhost:8443/#nonexistent-session-id-12345');
 
     // 验证错误页面（后端返回 404，前端显示 not found）
     await terminalPage.expectNotFound();
