@@ -83,7 +83,7 @@ pub fn settings() -> &'static Settings {
 // ---------------------------------------------------------------------------
 
 /// Listen address (loopback only; Caddy reverse-proxies public traffic).
-pub const LISTEN_ADDR: &str = "127.0.0.1:8080";
+pub const LISTEN_ADDR: &str = "127.0.0.1:8000";
 
 /// Fixed session TTL in seconds (no renewal; `expires_at = created_at + SESSION_TTL`).
 pub const SESSION_TTL: i64 = 3600;
