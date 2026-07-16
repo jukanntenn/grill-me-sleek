@@ -68,7 +68,9 @@ static SETTINGS: OnceLock<Settings> = OnceLock::new();
 
 /// Install the process-wide settings singleton. Called once from `main()`.
 pub fn init(settings: Settings) {
-    SETTINGS.set(settings).expect("settings already initialized");
+    SETTINGS
+        .set(settings)
+        .expect("settings already initialized");
 }
 
 /// Access the process-wide settings. Panics if [`init`] was not called.
@@ -108,11 +110,13 @@ pub const RATE_LIMIT_PER_MIN: u32 = 20;
 pub const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 
 /// SQLite busy_timeout (write-conflict retry bound).
-pub const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+/// Increased to tolerate high concurrent write contention at the cost of latency.
+pub const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// sqlx Pool connection-acquire timeout (sqlx PoolOptions default is 30s; must be set to 5s).
 /// Distinct from the SQLite-layer `BUSY_TIMEOUT`.
-pub const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);
+/// Increased to tolerate pool exhaustion under high concurrency.
+pub const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Idempotency cache entry TTL (moka TTL).
 pub const IDEMPOTENCY_TTL: Duration = Duration::from_secs(300);

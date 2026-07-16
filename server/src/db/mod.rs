@@ -28,8 +28,8 @@ pub async fn create_pool() -> Result<Pool<Sqlite>> {
         .pragma("temp_store", "MEMORY");
 
     let pool = SqlitePoolOptions::new()
-        .max_connections(8)
-        .min_connections(2)
+        .max_connections(50)
+        .min_connections(4)
         .acquire_timeout(config::ACQUIRE_TIMEOUT)
         .connect_with(opts)
         .await?;
