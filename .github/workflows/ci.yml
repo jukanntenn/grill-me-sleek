@@ -1,3 +1,21 @@
+# =============================================================================
+# CI: 快速检查 + 单元测试
+#
+# 技术栈：
+#   - 服务器: Rust + Cargo
+#   - 前端: React + Vite + pnpm
+#   - CLI: TypeScript + esbuild + pnpm
+#
+# 触发条件：
+#   - 所有 PR（快速反馈 < 3分钟）
+#   - 推送到 main
+#
+# 设计原则：
+#   - 并行执行 4 个 Job
+#   - 使用缓存加速
+#   - 取消进行中的同分支 workflow
+# =============================================================================
+
 name: CI
 
 on:
@@ -6,36 +24,54 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  lint-and-test:
-    name: Lint & Test
+  # ---------------------------------------------------------------------------
+  # Job 1: Rust 服务器检查
+  # ---------------------------------------------------------------------------
+  server:
+    name: Server
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          python-version: "3.12"
+          components: rustfmt, clippy
 
-      - name: Install dev dependencies
-        run: uv sync --group dev
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            server/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('server/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
-      - name: Ruff lint
-        run: uv run ruff check .
+      - name: Format check
+        run: cd server && cargo fmt -- --check
 
-      - name: Ruff format check
-        run: uv run ruff format --check .
+      - name: Clippy lint
+        run: cd server && cargo clippy -- -D warnings
 
-      - name: Run tests
-        run: uv run pytest
+      - name: Tests
+        run: cd server && cargo test
 
+      - name: Build
+        run: cd server && cargo build --release
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Web 前端检查
+  # ---------------------------------------------------------------------------
   web:
-    name: Web Build & Test
+    name: Web
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -44,13 +80,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Enable corepack (pnpm)
+      - name: Enable corepack
         run: corepack enable
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            web/node_modules
+          key: ${{ runner.os }}-pnpm-web-${{ hashFiles('web/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-web-
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -58,8 +104,80 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Test
+      - name: Type check
+        run: pnpm tsc --noEmit
+
+      - name: Tests
         run: pnpm test
 
       - name: Build
         run: pnpm build
+
+  # ---------------------------------------------------------------------------
+  # Job 3: CLI 检查
+  # ---------------------------------------------------------------------------
+  cli:
+    name: CLI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            cli/node_modules
+          key: ${{ runner.os }}-pnpm-cli-${{ hashFiles('cli/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-cli-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build (development)
+        run: pnpm build
+
+      - name: Build (production)
+        run: NODE_ENV=production pnpm build:prod
+
+      - name: Smoke test
+        run: node dist/grilling-sleek.js --help
+
+  # ---------------------------------------------------------------------------
+  # Job 4: Docker 构建检查
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          tags: grilling-sleek:ci-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

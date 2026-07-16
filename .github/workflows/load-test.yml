@@ -1,40 +1,102 @@
+# =============================================================================
+# 压力测试
+#
+# 触发条件：
+#   - 发布前（tag 推送）
+#   - 手动触发（可配置参数）
+#
+# 设计原则：
+#   - 使用本地 Docker 环境
+#   - 生成详细报告
+#   - 失败时也上传报告
+# =============================================================================
+
 name: Load Test
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    tags: ['v*', 'cli-v*']
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Test duration (e.g., 1m, 5m)'
+        required: false
+        default: '1m'
+      vus:
+        description: 'Number of virtual users'
+        required: false
+        default: '10'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   load-test:
+    name: Load Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          tags: grilling-sleek:load-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start Docker environment
+        run: docker compose -f e2e/docker-compose.e2e.yml up -d
+
+      - name: Wait for service
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sfk https://localhost:8443/v1/healthz; then
+              echo "Service is ready!"
+              exit 0
+            fi
+            echo "Waiting for service... ($i/60)"
+            sleep 2
+          done
+          echo "Service failed to start"
+          docker compose -f e2e/docker-compose.e2e.yml logs
+          exit 1
 
       - name: Install k6
         run: |
           curl -sL https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar xz
           sudo mv k6-v0.49.0-linux-amd64/k6 /usr/local/bin
 
-      - name: Start server
-        run: |
-          docker compose -f e2e/docker-compose.e2e.yml up -d
-          sleep 10
-
       - name: Run load test
         run: |
-          k6 run --out json=results.json --out csv=results.csv tests/load/core-flow.js
+          DURATION="${{ inputs.duration || '1m' }}"
+          VUS="${{ inputs.vus || '10' }}"
+          k6 run \
+            --out json=results.json \
+            --out csv=results.csv \
+            --duration $DURATION \
+            --vus $VUS \
+            tests/load/core-flow.js
 
       - name: Upload results
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: load-test-results
           path: |
             results.json
             results.csv
+          retention-days: 30
 
-      - name: Stop server
+      - name: Stop Docker environment
         if: always()
         run: docker compose -f e2e/docker-compose.e2e.yml down

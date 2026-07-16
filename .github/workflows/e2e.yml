@@ -1,64 +1,113 @@
-# E2E 测试 CI/CD 配置
+# =============================================================================
+# E2E 测试
+#
+# 触发条件：
+#   - 推送到 main（合并后验证）
+#   - 手动触发
+#   - 定时运行（每天凌晨 2 点）
+#
+# 设计原则：
+#   - 使用 Docker Buildx 缓存加速构建
+#   - 等待服务健康检查通过后再运行测试
+#   - 失败时上传报告用于调试
+#   - 增加健康检查等待时间（60次，2秒间隔）
+# =============================================================================
 
 name: E2E Tests
 
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   e2e:
+    name: E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: "22"
 
-      - name: Build cli/
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pnpm-store
+            cli/node_modules
+            e2e/node_modules
+          key: ${{ runner.os }}-pnpm-e2e-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-e2e-
+
+      - name: Build CLI
         run: |
           cd cli
-          npm install
-          npm run build
+          pnpm install --frozen-lockfile
+          pnpm build
 
-      - name: Install e2e dependencies
+      - name: Install E2E dependencies
         run: |
           cd e2e
-          npm install
+          pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
         run: |
           cd e2e
           npx playwright install --with-deps
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          tags: grilling-sleek:e2e
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Start Docker environment
         run: |
           cd e2e
-          npm run docker:up
+          docker compose -f docker-compose.e2e.yml up -d
 
       - name: Wait for service
         run: |
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:8443/v1/healthz; then
+          for i in $(seq 1 60); do
+            if curl -sf https://localhost:8443/v1/healthz; then
               echo "Service is ready!"
               exit 0
             fi
-            echo "Waiting for service... ($i/30)"
+            echo "Waiting for service... ($i/60)"
             sleep 2
           done
           echo "Service failed to start"
+          echo "=== Docker logs ==="
+          docker compose -f e2e/docker-compose.e2e.yml logs
           exit 1
 
       - name: Run E2E tests
         run: |
           cd e2e
-          npm test
+          npx playwright test
 
       - name: Upload test report
         uses: actions/upload-artifact@v4
@@ -80,4 +129,4 @@ jobs:
         if: always()
         run: |
           cd e2e
-          npm run docker:down
+          docker compose -f docker-compose.e2e.yml down
