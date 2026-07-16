@@ -1,11 +1,14 @@
-# E2E 测试用 Caddy 配置（无 TLS）
+# E2E 测试用 Caddy 配置（自签名 TLS）
+# 使用 Caddy tls internal 自动生成自签名证书，模拟生产环境的 HTTPS
 
 {
-    auto_https off
+    local_certs
 }
 
-:8443 {
-    # 简化配置，不使用 TLS
+localhost:8443 {
+    # 自动生成自签名证书
+    tls internal
+
     # Security headers
     header {
         Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'"

@@ -14,11 +14,15 @@ services:
       - GSLEEK_DB_PATH=/app/data/e2e-test.db
       - GSLEEK_DISABLE_RATE_LIMIT=true
       - RUST_LOG=info
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     volumes:
       - e2e-data:/app/data
       - ./Caddyfile:/app/Caddyfile:ro
     healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:8443/v1/healthz"]
+      test: ["CMD", "curl", "-fsk", "https://localhost:8443/v1/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10

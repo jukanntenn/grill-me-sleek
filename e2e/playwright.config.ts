@@ -14,7 +14,8 @@ export default defineConfig({
   ],
 
   use: {
-    baseURL: process.env.BASE_URL ?? 'http://localhost:8443',
+    baseURL: 'https://localhost:8443',
+    ignoreHTTPSErrors: true,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',

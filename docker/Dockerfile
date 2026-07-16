@@ -32,7 +32,7 @@ RUN pnpm build
 # Stage 1: Chef — prepare the dependency recipe
 # ===========================================================================
 FROM rust:alpine AS chef
-RUN apk add --no-cache musl-dev cmake
+RUN apk add --no-cache musl-dev cmake curl
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 
