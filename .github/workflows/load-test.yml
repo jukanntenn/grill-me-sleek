@@ -1,0 +1,40 @@
+name: Load Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          curl -sL https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar xz
+          sudo mv k6-v0.49.0-linux-amd64/k6 /usr/local/bin
+
+      - name: Start server
+        run: |
+          docker compose -f e2e/docker-compose.e2e.yml up -d
+          sleep 10
+
+      - name: Run load test
+        run: |
+          k6 run --out json=results.json --out csv=results.csv tests/load/core-flow.js
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: |
+            results.json
+            results.csv
+
+      - name: Stop server
+        if: always()
+        run: docker compose -f e2e/docker-compose.e2e.yml down
