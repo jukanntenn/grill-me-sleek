@@ -1,10 +1,11 @@
 import ky, { type KyInstance } from "ky";
 import logger from "./logger";
+import { getServer, getTimeout, getLongPollTimeout } from "./config";
 
-// Configuration from environment variables
-const SERVER = process.env.GRILLING_SLEEK_SERVER ?? "https://grillingsleek.online";
-const HTTP_TIMEOUT = Number(process.env.GRILLING_SLEEK_HTTP_TIMEOUT ?? 10) * 1000;
-const LONGPOLL_HTTP_TIMEOUT = Number(process.env.GRILLING_SLEEK_LONGPOLL_HTTP_TIMEOUT ?? 65) * 1000;
+// Configuration from config file or environment variables
+const SERVER = getServer();
+const HTTP_TIMEOUT = getTimeout();
+const LONGPOLL_HTTP_TIMEOUT = getLongPollTimeout();
 
 /**
  * Create an API client.

@@ -242,7 +242,7 @@ async function extractHttpError(e: unknown): Promise<{ status: number; body: str
 const program = new Command();
 
 program
-  .name("grill")
+  .name("grilling-sleek")
   .description("grilling-sleek CLI — push structured questions to a web page")
   .version("0.2.0-rc.1")
   .option("-v, --verbose", "Enable debug logging");
@@ -634,5 +634,57 @@ program.hook("preAction", (thisCommand) => {
 program.hook("postAction", () => {
   logExit(0);
 });
+
+// -- config ---------------------------------------------------------------
+
+import { getConfigPath, loadConfig, setConfigValue, unsetConfigValue, getConfigValue } from "./config";
+
+const configCmd = program
+  .command("config")
+  .description("Manage CLI configuration");
+
+configCmd
+  .command("set <key> <value>")
+  .description("Set a configuration value")
+  .action((key: string, value: string) => {
+    setConfigValue(key, value);
+    console.log(`✅ Set ${key} = ${value}`);
+  });
+
+configCmd
+  .command("get <key>")
+  .description("Get a configuration value")
+  .action((key: string) => {
+    const value = getConfigValue(key);
+    if (value !== undefined) {
+      console.log(value);
+    } else {
+      console.log(`Configuration '${key}' is not set`);
+    }
+  });
+
+configCmd
+  .command("list")
+  .description("List all configuration")
+  .action(() => {
+    const config = loadConfig();
+    if (Object.keys(config).length === 0) {
+      console.log("No configuration set");
+      console.log(`Config file: ${getConfigPath()}`);
+    } else {
+      Object.entries(config).forEach(([key, value]) => {
+        console.log(`${key} = ${value}`);
+      });
+      console.log(`Config file: ${getConfigPath()}`);
+    }
+  });
+
+configCmd
+  .command("unset <key>")
+  .description("Unset a configuration value")
+  .action((key: string) => {
+    unsetConfigValue(key);
+    console.log(`✅ Unset ${key}`);
+  });
 
 program.parse();

@@ -1,15 +1,38 @@
 {
   "name": "@grilling-sleek/cli",
   "version": "0.2.0-rc.1",
-  "private": true,
+  "description": "CLI tool for grilling-sleek - Stress-test your plan before vibe coding",
   "bin": {
-    "grill": "./dist/grill.js"
+    "grilling-sleek": "./dist/grilling-sleek.js"
   },
+  "files": [
+    "dist/grilling-sleek.js"
+  ],
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "dev": "tsx src/grill.ts",
-    "lint": "eslint src/"
+    "build:prod": "NODE_ENV=production node esbuild.config.mjs",
+    "dev": "tsx src/grilling-sleek.ts",
+    "lint": "eslint src/",
+    "prepublishOnly": "npm run build:prod",
+    "test": "vitest run"
   },
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jukanntenn/grill-me-sleek.git",
+    "directory": "cli"
+  },
+  "keywords": [
+    "grill-me-sleek",
+    "cli",
+    "ai",
+    "planning",
+    "stress-test"
+  ],
+  "author": "jukanntenn",
+  "license": "MIT",
   "dependencies": {
     "ajv": "^8.17.0",
     "commander": "^13.0.0",
@@ -27,6 +50,7 @@
     "eslint": "^10.7.0",
     "tsx": "^4.0.0",
     "typescript": "^5.8.0",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.63.0",
+    "vitest": "^3.2.1"
   }
 }
