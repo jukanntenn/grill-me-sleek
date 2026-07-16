@@ -18,9 +18,76 @@ use axum::Router;
 use std::time::Instant;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::trace::TraceLayer;
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
 use sqlx::{Pool, Sqlite};
 use session::SessionMap;
+
+/// OpenAPI documentation structure.
+#[derive(OpenApi)]
+#[openapi(
+    info(
+        title = "grilling-sleek API",
+        version = "0.2.0",
+        description = "REST API for the grilling-sleek platform"
+    ),
+    paths(
+        handlers::sessions::healthz,
+        handlers::sessions::readyz,
+        handlers::sessions::create_session,
+        handlers::sessions::get_session,
+        handlers::sessions::update_session,
+        handlers::rounds::list_rounds,
+        handlers::rounds::create_round,
+        handlers::rounds::get_current_round,
+        handlers::rounds::get_round,
+        handlers::response::long_poll_response,
+        handlers::response::submit_response,
+        handlers::sse::sse_handler,
+    ),
+    components(schemas(
+        crate::models::Grilling,
+        crate::models::AdditionalNotes,
+        crate::models::Question,
+        crate::models::QuestionType,
+        crate::models::Variant,
+        crate::models::OptionItem,
+        crate::models::Response,
+        crate::models::Answer,
+        crate::models::ResponseInput,
+        crate::models::SessionUpdate,
+        crate::models::SessionUpdateStatus,
+        crate::models::CancelReason,
+        crate::models::Actor,
+        crate::models::CreateSessionResponse,
+        crate::models::SessionState,
+        crate::models::RoundResponse,
+        crate::models::RoundSummary,
+        crate::models::PendingResponse,
+        crate::models::GoneResponse,
+        crate::models::ConflictResponse,
+        crate::models::ErrorResponse,
+    )),
+    tags(
+        (name = "health", description = "Health and readiness probes"),
+        (name = "sessions", description = "Session management endpoints"),
+        (name = "rounds", description = "Round management endpoints"),
+        (name = "response", description = "Response submission and long-poll endpoints"),
+        (name = "sse", description = "Server-Sent Events endpoints"),
+    )
+)]
+pub struct ApiDoc;
+
+/// Build the OpenAPI docs router. Exposed only in dev/test environments;
+/// gated by `GSLEEK_ENABLE_DOCS=true` env var in `main.rs`.
+pub fn build_docs_router() -> Router {
+    Router::new()
+        .merge(SwaggerUi::new("/docs/swagger-ui").url("/docs/openapi.json", ApiDoc::openapi()))
+        .route("/docs/openapi.json", get(|| async {
+            axum::response::Json(ApiDoc::openapi())
+        }))
+}
 
 /// Shared application state.
 #[derive(Clone)]

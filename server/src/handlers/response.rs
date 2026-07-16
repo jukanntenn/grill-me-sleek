@@ -17,6 +17,22 @@ use std::time::Instant;
 ///
 /// Blocks up to `wait` seconds for the user to submit a response.
 /// Returns 200 if submitted, 202 if timed out, 410 if terminal.
+#[utoipa::path(
+    get,
+    path = "/v1/sessions/{session_id}/rounds/{round}/response",
+    tag = "response",
+    params(
+        ("session_id" = String, Path, description = "Session identifier"),
+        ("round" = i64, Path, description = "Round sequence number"),
+        ("wait" = Option<u64>, Query, description = "Maximum wait time in seconds (max 60)")
+    ),
+    responses(
+        (status = 200, description = "Response submitted by user", body = Response),
+        (status = 202, description = "Timed out, still pending", body = PendingResponse),
+        (status = 404, description = "Session or round not found", body = ErrorResponse),
+        (status = 410, description = "Session in terminal state (cancelled/expired)")
+    )
+)]
 #[tracing::instrument(skip(state), fields(session_id = %session_id, round = %seq))]
 pub async fn long_poll_response(
     State(state): State<AppState>,
@@ -141,6 +157,22 @@ pub async fn long_poll_response(
 }
 
 /// POST /v1/sessions/{session_id}/rounds/{seq}/response — Submit user response.
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{session_id}/rounds/{round}/response",
+    tag = "response",
+    request_body = ResponseInput,
+    params(
+        ("session_id" = String, Path, description = "Session identifier"),
+        ("round" = i64, Path, description = "Round sequence number")
+    ),
+    responses(
+        (status = 201, description = "Response submitted successfully", body = Response),
+        (status = 400, description = "Invalid request body", body = ErrorResponse),
+        (status = 404, description = "Session or round not found", body = ErrorResponse),
+        (status = 409, description = "Response already submitted for this round", body = ConflictResponse)
+    )
+)]
 #[tracing::instrument(skip(state, body), fields(session_id = %session_id, round = %seq))]
 pub async fn submit_response(
     State(state): State<AppState>,

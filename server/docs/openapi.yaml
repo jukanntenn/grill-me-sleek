@@ -1,0 +1,755 @@
+openapi: 3.1.0
+info:
+  title: grilling-sleek API
+  description: REST API for the grilling-sleek platform
+  license:
+    name: ''
+  version: 0.2.0
+paths:
+  /v1/healthz:
+    get:
+      tags:
+      - health
+      summary: Health probe (no DB check).
+      operationId: healthz
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema: {}
+  /v1/readyz:
+    get:
+      tags:
+      - health
+      summary: Readiness probe (checks SQLite connection).
+      operationId: readyz
+      responses:
+        '200':
+          description: Server is ready
+          content:
+            application/json:
+              schema: {}
+        '503':
+          description: Service unavailable
+  /v1/sessions:
+    post:
+      tags:
+      - sessions
+      summary: POST /v1/sessions — Create a new session with first round.
+      operationId: create_session
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+        required: true
+      responses:
+        '201':
+          description: Session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateSessionResponse'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Max sessions reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/sessions/{session_id}:
+    get:
+      tags:
+      - sessions
+      summary: GET /v1/sessions/{session_id} — Get session state.
+      operationId: get_session
+      parameters:
+      - name: session_id
+        in: path
+        description: Session identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Session state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionState'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Session gone (expired/completed/cancelled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoneResponse'
+    patch:
+      tags:
+      - sessions
+      summary: PATCH /v1/sessions/{session_id} — Update session (complete/cancel).
+      operationId: update_session
+      parameters:
+      - name: session_id
+        in: path
+        description: Session identifier
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionUpdate'
+        required: true
+      responses:
+        '200':
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionState'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Session already in terminal state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/sessions/{session_id}/events:
+    get:
+      tags:
+      - sse
+      summary: GET /v1/sessions/{session_id}/events — SSE event stream.
+      operationId: sse_handler
+      parameters:
+      - name: session_id
+        in: path
+        description: Session identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: SSE event stream (text/event-stream)
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Session gone (terminal state)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoneResponse'
+        '503':
+          description: Max SSE connections reached
+  /v1/sessions/{session_id}/rounds:
+    get:
+      tags:
+      - rounds
+      summary: GET /v1/sessions/{session_id}/rounds — List all rounds (summary).
+      operationId: list_rounds
+      parameters:
+      - name: session_id
+        in: path
+        description: Session identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: List of rounds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoundSummary'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      tags:
+      - rounds
+      summary: POST /v1/sessions/{session_id}/rounds — Create a new round.
+      operationId: create_round
+      parameters:
+      - name: session_id
+        in: path
+        description: Session identifier
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema: {}
+        required: true
+      responses:
+        '201':
+          description: Round created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundResponse'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Session not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Session gone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoneResponse'
+  /v1/sessions/{session_id}/rounds/current:
+    get:
+      tags:
+      - rounds
+      summary: GET /v1/sessions/{session_id}/rounds/current — Get current round.
+      operationId: get_current_round
+      parameters:
+      - name: session_id
+        in: path
+        description: Session identifier
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Current round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundResponse'
+        '404':
+          description: Session or round not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Session gone
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoneResponse'
+  /v1/sessions/{session_id}/rounds/{round}:
+    get:
+      tags:
+      - rounds
+      summary: GET /v1/sessions/{session_id}/rounds/{seq} — Get a specific round.
+      operationId: get_round
+      parameters:
+      - name: session_id
+        in: path
+        description: Session identifier
+        required: true
+        schema:
+          type: string
+      - name: round
+        in: path
+        description: Round sequence number
+        required: true
+        schema:
+          type: integer
+          format: int64
+      responses:
+        '200':
+          description: Round details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoundResponse'
+        '304':
+          description: Not modified (ETag match)
+        '404':
+          description: Round not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /v1/sessions/{session_id}/rounds/{round}/response:
+    get:
+      tags:
+      - response
+      summary: GET /v1/sessions/{session_id}/rounds/{seq}/response — Long-poll for user response.
+      description: |-
+        Blocks up to `wait` seconds for the user to submit a response.
+        Returns 200 if submitted, 202 if timed out, 410 if terminal.
+      operationId: long_poll_response
+      parameters:
+      - name: session_id
+        in: path
+        description: Session identifier
+        required: true
+        schema:
+          type: string
+      - name: round
+        in: path
+        description: Round sequence number
+        required: true
+        schema:
+          type: integer
+          format: int64
+      - name: wait
+        in: query
+        description: Maximum wait time in seconds (max 60)
+        required: false
+        schema:
+          type: integer
+          format: int64
+          minimum: 0
+      responses:
+        '200':
+          description: Response submitted by user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '202':
+          description: Timed out, still pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingResponse'
+        '404':
+          description: Session or round not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '410':
+          description: Session in terminal state (cancelled/expired)
+    post:
+      tags:
+      - response
+      summary: POST /v1/sessions/{session_id}/rounds/{seq}/response — Submit user response.
+      operationId: submit_response
+      parameters:
+      - name: session_id
+        in: path
+        description: Session identifier
+        required: true
+        schema:
+          type: string
+      - name: round
+        in: path
+        description: Round sequence number
+        required: true
+        schema:
+          type: integer
+          format: int64
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResponseInput'
+        required: true
+      responses:
+        '201':
+          description: Response submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Session or round not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Response already submitted for this round
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictResponse'
+components:
+  schemas:
+    Actor:
+      type: string
+      enum:
+      - user
+      - agent
+    AdditionalNotes:
+      type: object
+      properties:
+        label:
+          type:
+          - string
+          - 'null'
+        max_length:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        placeholder:
+          type:
+          - string
+          - 'null'
+        required:
+          type: boolean
+    Answer:
+      type: object
+      required:
+      - selected
+      properties:
+        custom_text:
+          type: string
+        selected: {}
+    CancelReason:
+      type: string
+      enum:
+      - user_cancelled
+      - agent_aborted
+      - error
+    ConflictResponse:
+      type: object
+      required:
+      - message
+      - status
+      - round
+      - response
+      properties:
+        message:
+          type: string
+        response:
+          $ref: '#/components/schemas/Response'
+        round:
+          type: integer
+          format: int64
+        status:
+          type: integer
+          format: int64
+    CreateSessionResponse:
+      type: object
+      required:
+      - session_id
+      - url
+      - status
+      - current_round
+      - created_at
+      - expires_at
+      properties:
+        created_at:
+          type: string
+        current_round:
+          type: integer
+          format: int64
+        description:
+          type:
+          - string
+          - 'null'
+        expires_at:
+          type: string
+        name:
+          type:
+          - string
+          - 'null'
+        session_id:
+          type: string
+        status:
+          type: string
+        url:
+          type: string
+    ErrorResponse:
+      type: object
+      required:
+      - message
+      - status
+      properties:
+        message:
+          type: string
+        status:
+          type: integer
+          format: int64
+    GoneResponse:
+      type: object
+      required:
+      - status
+      - detail
+      properties:
+        detail:
+          type: string
+        status:
+          type: string
+    Grilling:
+      type: object
+      required:
+      - name
+      - questions
+      properties:
+        additional_notes:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/AdditionalNotes'
+        description:
+          type:
+          - string
+          - 'null'
+        name:
+          type: string
+        questions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Question'
+    OptionItem:
+      type: object
+      required:
+      - label
+      properties:
+        description:
+          type:
+          - string
+          - 'null'
+        label:
+          type: string
+    PendingResponse:
+      type: object
+      required:
+      - status
+      properties:
+        status:
+          type: string
+    Question:
+      type: object
+      required:
+      - id
+      - header
+      - text
+      - type
+      properties:
+        allow_custom_text:
+          type: boolean
+        explanation:
+          type:
+          - string
+          - 'null'
+        header:
+          type: string
+        id:
+          type: string
+        max_length:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        options:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/OptionItem'
+        placeholder:
+          type:
+          - string
+          - 'null'
+        rating_max:
+          type: integer
+          format: int64
+        recommended:
+          type:
+          - integer
+          - 'null'
+          format: int64
+        required:
+          type: boolean
+        text:
+          type: string
+        type:
+          $ref: '#/components/schemas/QuestionType'
+        variant:
+          $ref: '#/components/schemas/Variant'
+    QuestionType:
+      type: string
+      enum:
+      - single
+      - multi
+      - text
+    Response:
+      type: object
+      required:
+      - round
+      - answers
+      - submitted_at
+      properties:
+        additional_notes:
+          type:
+          - string
+          - 'null'
+        answers:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Answer'
+          propertyNames:
+            type: string
+        round:
+          type: integer
+          format: int64
+        submitted_at:
+          type: string
+    ResponseInput:
+      type: object
+      description: |-
+        Cross-field validation requires the persisted [`Grilling`] (to know each
+        question's type / required flag / max_length). That context is fetched from
+        the DB at request time, so the extractor cannot supply it — validation runs
+        in the handler via `validate_with(&grilling)`.
+      required:
+      - answers
+      properties:
+        additional_notes:
+          type:
+          - string
+          - 'null'
+        answers:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Answer'
+          propertyNames:
+            type: string
+    RoundResponse:
+      type: object
+      required:
+      - round
+      - grilling
+      properties:
+        grilling:
+          $ref: '#/components/schemas/Grilling'
+        name:
+          type:
+          - string
+          - 'null'
+        response:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Response'
+        round:
+          type: integer
+          format: int64
+    RoundSummary:
+      type: object
+      required:
+      - round
+      - has_response
+      properties:
+        has_response:
+          type: boolean
+        name:
+          type:
+          - string
+          - 'null'
+        round:
+          type: integer
+          format: int64
+    SessionState:
+      type: object
+      required:
+      - session_id
+      - status
+      - current_round
+      - created_at
+      - expires_at
+      properties:
+        created_at:
+          type: string
+        current_round:
+          type: integer
+          format: int64
+        description:
+          type:
+          - string
+          - 'null'
+        expires_at:
+          type: string
+        name:
+          type:
+          - string
+          - 'null'
+        session_id:
+          type: string
+        status:
+          type: string
+    SessionUpdate:
+      type: object
+      required:
+      - status
+      properties:
+        actor:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/Actor'
+        reason:
+          oneOf:
+          - type: 'null'
+          - $ref: '#/components/schemas/CancelReason'
+        reason_detail:
+          type:
+          - string
+          - 'null'
+        status:
+          $ref: '#/components/schemas/SessionUpdateStatus'
+    SessionUpdateStatus:
+      type: string
+      enum:
+      - completed
+      - cancelled
+    Variant:
+      type: string
+      enum:
+      - default
+      - yesno
+      - rating
+tags:
+- name: health
+  description: Health and readiness probes
+- name: sessions
+  description: Session management endpoints
+- name: rounds
+  description: Round management endpoints
+- name: response
+  description: Response submission and long-poll endpoints
+- name: sse
+  description: Server-Sent Events endpoints

@@ -30,6 +30,7 @@ use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
 use crate::config;
+use crate::models::{ErrorResponse, GoneResponse};
 use crate::observability::metrics::metrics;
 use crate::AppState;
 
@@ -89,6 +90,20 @@ where
 }
 
 /// GET /v1/sessions/{session_id}/events — SSE event stream.
+#[utoipa::path(
+    get,
+    path = "/v1/sessions/{session_id}/events",
+    tag = "sse",
+    params(
+        ("session_id" = String, Path, description = "Session identifier")
+    ),
+    responses(
+        (status = 200, description = "SSE event stream (text/event-stream)"),
+        (status = 404, description = "Session not found", body = ErrorResponse),
+        (status = 410, description = "Session gone (terminal state)", body = GoneResponse),
+        (status = 503, description = "Max SSE connections reached")
+    )
+)]
 pub async fn sse_handler(
     State(state): State<AppState>,
     Path(session_id): Path<String>,

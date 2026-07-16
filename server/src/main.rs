@@ -5,14 +5,17 @@ use grilling_sleek::idempotency;
 use grilling_sleek::observability;
 use grilling_sleek::session;
 use grilling_sleek::AppState;
+use grilling_sleek::ApiDoc;
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::post;
 use axum_governor::{GovernorConfigBuilder, SmartIp};
 use ipnet::IpNet;
+use std::io::Write;
 use std::net::SocketAddr;
 use tokio::signal;
+use utoipa::OpenApi;
 
 // ---------------------------------------------------------------------------
 // Main
@@ -20,6 +23,13 @@ use tokio::signal;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Check for --generate-openapi flag before loading any config
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--generate-openapi") {
+        generate_openapi_specs()?;
+        return Ok(());
+    }
+
     // Load layered configuration (defaults → TOML file → GSLEEK_ env) and install
     // the process-wide singleton before any module reads it.
     let settings = config::Settings::load()?;
@@ -122,6 +132,35 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("server shut down");
     // _guard drops here, flushing OTel exporters
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// OpenAPI spec generation
+// ---------------------------------------------------------------------------
+
+/// Generate OpenAPI 3.1 specs in JSON and YAML formats.
+fn generate_openapi_specs() -> anyhow::Result<()> {
+    let spec = ApiDoc::openapi();
+
+    // JSON output
+    let json = serde_json::to_string_pretty(&spec)?;
+    let json_path = "docs/openapi.json";
+    std::fs::create_dir_all("docs")?;
+    let mut f = std::fs::File::create(json_path)?;
+    f.write_all(json.as_bytes())?;
+    eprintln!("Generated: {json_path}");
+
+    // YAML output
+    let yaml = serde_yaml::to_string(&spec)?;
+    let yaml_path = "docs/openapi.yaml";
+    let mut f = std::fs::File::create(yaml_path)?;
+    f.write_all(yaml.as_bytes())?;
+    eprintln!("Generated: {yaml_path}");
+
+    // Also print to stdout for piping
+    println!("{json}");
+
     Ok(())
 }
 

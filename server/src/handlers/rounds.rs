@@ -12,6 +12,18 @@ use crate::validation;
 use crate::AppState;
 
 /// GET /v1/sessions/{session_id}/rounds — List all rounds (summary).
+#[utoipa::path(
+    get,
+    path = "/v1/sessions/{session_id}/rounds",
+    tag = "rounds",
+    params(
+        ("session_id" = String, Path, description = "Session identifier")
+    ),
+    responses(
+        (status = 200, description = "List of rounds", body = Vec<RoundSummary>),
+        (status = 404, description = "Session not found", body = ErrorResponse)
+    )
+)]
 pub async fn list_rounds(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
@@ -35,6 +47,21 @@ pub async fn list_rounds(
 }
 
 /// POST /v1/sessions/{session_id}/rounds — Create a new round.
+#[utoipa::path(
+    post,
+    path = "/v1/sessions/{session_id}/rounds",
+    tag = "rounds",
+    request_body = serde_json::Value,
+    params(
+        ("session_id" = String, Path, description = "Session identifier")
+    ),
+    responses(
+        (status = 201, description = "Round created", body = RoundResponse),
+        (status = 400, description = "Invalid request body", body = ErrorResponse),
+        (status = 404, description = "Session not found", body = ErrorResponse),
+        (status = 410, description = "Session gone", body = GoneResponse)
+    )
+)]
 #[tracing::instrument(skip(state, raw, headers), fields(session_id = %session_id))]
 pub async fn create_round(
     State(state): State<AppState>,
@@ -108,6 +135,19 @@ pub async fn create_round(
 }
 
 /// GET /v1/sessions/{session_id}/rounds/current — Get current round.
+#[utoipa::path(
+    get,
+    path = "/v1/sessions/{session_id}/rounds/current",
+    tag = "rounds",
+    params(
+        ("session_id" = String, Path, description = "Session identifier")
+    ),
+    responses(
+        (status = 200, description = "Current round", body = RoundResponse),
+        (status = 404, description = "Session or round not found", body = ErrorResponse),
+        (status = 410, description = "Session gone", body = GoneResponse)
+    )
+)]
 pub async fn get_current_round(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
@@ -136,6 +176,20 @@ pub async fn get_current_round(
 }
 
 /// GET /v1/sessions/{session_id}/rounds/{seq} — Get a specific round.
+#[utoipa::path(
+    get,
+    path = "/v1/sessions/{session_id}/rounds/{round}",
+    tag = "rounds",
+    params(
+        ("session_id" = String, Path, description = "Session identifier"),
+        ("round" = i64, Path, description = "Round sequence number")
+    ),
+    responses(
+        (status = 200, description = "Round details", body = RoundResponse),
+        (status = 304, description = "Not modified (ETag match)"),
+        (status = 404, description = "Round not found", body = ErrorResponse)
+    )
+)]
 #[tracing::instrument(skip(state, headers), fields(session_id = %session_id, round = %seq))]
 pub async fn get_round(
     State(state): State<AppState>,

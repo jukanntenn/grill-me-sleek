@@ -52,6 +52,18 @@ fn extract_client_ip(headers: &HeaderMap, peer: &SocketAddr) -> IpAddr {
 }
 
 /// POST /v1/sessions — Create a new session with first round.
+#[utoipa::path(
+    post,
+    path = "/v1/sessions",
+    tag = "sessions",
+    request_body = serde_json::Value,
+    responses(
+        (status = 201, description = "Session created successfully", body = CreateSessionResponse),
+        (status = 400, description = "Invalid request body", body = ErrorResponse),
+        (status = 429, description = "Rate limited", body = ErrorResponse),
+        (status = 503, description = "Max sessions reached", body = ErrorResponse)
+    )
+)]
 #[tracing::instrument(skip(state, raw), fields(session_id))]
 pub async fn create_session(
     State(state): State<AppState>,
@@ -160,6 +172,19 @@ pub async fn create_session(
 }
 
 /// GET /v1/sessions/{session_id} — Get session state.
+#[utoipa::path(
+    get,
+    path = "/v1/sessions/{session_id}",
+    tag = "sessions",
+    params(
+        ("session_id" = String, Path, description = "Session identifier")
+    ),
+    responses(
+        (status = 200, description = "Session state", body = SessionState),
+        (status = 404, description = "Session not found", body = ErrorResponse),
+        (status = 410, description = "Session gone (expired/completed/cancelled)", body = GoneResponse)
+    )
+)]
 pub async fn get_session(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
@@ -193,6 +218,20 @@ pub async fn get_session(
 }
 
 /// PATCH /v1/sessions/{session_id} — Update session (complete/cancel).
+#[utoipa::path(
+    patch,
+    path = "/v1/sessions/{session_id}",
+    tag = "sessions",
+    request_body = SessionUpdate,
+    params(
+        ("session_id" = String, Path, description = "Session identifier")
+    ),
+    responses(
+        (status = 200, description = "Session updated", body = SessionState),
+        (status = 404, description = "Session not found", body = ErrorResponse),
+        (status = 409, description = "Session already in terminal state", body = ErrorResponse)
+    )
+)]
 #[tracing::instrument(skip(state, body), fields(session_id = %session_id))]
 pub async fn update_session(
     State(state): State<AppState>,
@@ -364,11 +403,28 @@ fn record_rejected(reason: &str) {
 }
 
 /// Health probe (no DB check).
+#[utoipa::path(
+    get,
+    path = "/v1/healthz",
+    tag = "health",
+    responses(
+        (status = 200, description = "Server is healthy", body = serde_json::Value)
+    )
+)]
 pub async fn healthz() -> Json<serde_json::Value> {
     Json(serde_json::json!({"status": "ok"}))
 }
 
 /// Readiness probe (checks SQLite connection).
+#[utoipa::path(
+    get,
+    path = "/v1/readyz",
+    tag = "health",
+    responses(
+        (status = 200, description = "Server is ready", body = serde_json::Value),
+        (status = 503, description = "Service unavailable")
+    )
+)]
 pub async fn readyz(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
