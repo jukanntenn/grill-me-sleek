@@ -44,12 +44,16 @@ jobs:
         with:
           components: rustfmt, clippy
 
+      - name: Install sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features sqlite
+
       - name: Cache cargo
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/bin
             server/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('server/Cargo.lock') }}
           restore-keys: |
@@ -60,6 +64,16 @@ jobs:
 
       - name: Clippy lint
         run: cd server && cargo clippy -- -D warnings
+
+      - name: SQLx cache check
+        run: |
+          cd server
+          # Create temp DB from migrations, then verify .sqlx/ cache is up-to-date
+          export DATABASE_URL="sqlite:ci-check.db"
+          sqlx database create
+          sqlx migrate run
+          cargo sqlx prepare --check
+          rm -f ci-check.db
 
       - name: Tests
         run: cd server && cargo test
