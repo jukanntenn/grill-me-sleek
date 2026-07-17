@@ -33,7 +33,6 @@ server/target/
 server/data/
 server/log/
 server/.vite/
-server/.sqlx/
 
 # Node
 node_modules/
