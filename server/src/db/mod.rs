@@ -17,15 +17,15 @@ pub async fn create_pool() -> Result<Pool<Sqlite>> {
         "sqlite://{}?mode=rwc",
         config::settings().db_path
     ))?
-        .create_if_missing(true)
-        .journal_mode(SqliteJournalMode::Wal)
-        .synchronous(SqliteSynchronous::Normal)
-        .busy_timeout(config::BUSY_TIMEOUT)
-        .foreign_keys(true)
-        .pragma("cache_size", "-200000") // 200MB page cache
-        .pragma("mmap_size", "536870912") // 512MB mmap
-        .pragma("wal_autocheckpoint", "1000")
-        .pragma("temp_store", "MEMORY");
+    .create_if_missing(true)
+    .journal_mode(SqliteJournalMode::Wal)
+    .synchronous(SqliteSynchronous::Normal)
+    .busy_timeout(config::BUSY_TIMEOUT)
+    .foreign_keys(true)
+    .pragma("cache_size", "-200000") // 200MB page cache
+    .pragma("mmap_size", "536870912") // 512MB mmap
+    .pragma("wal_autocheckpoint", "1000")
+    .pragma("temp_store", "MEMORY");
 
     let pool = SqlitePoolOptions::new()
         .max_connections(50)
