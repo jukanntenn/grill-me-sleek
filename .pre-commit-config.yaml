@@ -1,0 +1,72 @@
+# =============================================================================
+# Pre-commit hooks (managed by prek — https://github.com/j178/prek)
+#
+# Install:  prek install
+# Run all:  prek run --all-files
+# Update:   prek update
+# =============================================================================
+
+fail_fast: false
+
+repos:
+  # ---------------------------------------------------------------------------
+  # Generic file checks (built-in, no dependencies)
+  # ---------------------------------------------------------------------------
+  - repo: builtin
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: mixed-line-ending
+
+  # ---------------------------------------------------------------------------
+  # Rust — format, lint, sqlx cache
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: bash -c 'cd server && cargo fmt --'
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: bash -c 'cd server && cargo clippy --all-targets -- -D warnings'
+        language: system
+        types: [rust]
+        pass_filenames: false
+
+      # sqlx-prepare: run manually when queries change (requires DATABASE_URL)
+      # Usage: prek run sqlx-prepare --hook-stage manual
+      # Or:    cd server && cargo sqlx prepare
+      - id: sqlx-prepare
+        name: sqlx prepare
+        entry: bash -c 'cd server && cargo sqlx prepare'
+        language: system
+        types: [rust]
+        pass_filenames: false
+        stages: [manual]
+
+  # ---------------------------------------------------------------------------
+  # TypeScript / JavaScript — ESLint
+  # ---------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: eslint-web
+        name: eslint (web)
+        entry: bash -c 'cd web && pnpm lint'
+        language: system
+        types_or: [javascript, jsx, ts, tsx]
+        files: ^web/
+        pass_filenames: false
+
+      - id: eslint-cli
+        name: eslint (cli)
+        entry: bash -c 'cd cli && pnpm lint'
+        language: system
+        types_or: [javascript, jsx, ts, tsx]
+        files: ^cli/
+        pass_filenames: false

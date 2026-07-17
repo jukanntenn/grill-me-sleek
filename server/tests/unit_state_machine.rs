@@ -1,10 +1,10 @@
 // 单元测试 · 状态机转换 + 错误体系
 // 覆盖：PATCH 拒绝矩阵、ApiError → 状态码映射
 
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use grilling_sleek::error::ApiError;
 use grilling_sleek::models::*;
-use axum::response::IntoResponse;
-use axum::http::StatusCode;
 
 // ---------------------------------------------------------------------------
 // SessionUpdate 反序列化
@@ -31,18 +31,17 @@ fn session_update_cancelled_full() {
 
 #[test]
 fn session_update_cancelled_agent_aborted() {
-    let u: SessionUpdate = serde_json::from_str(
-        r#"{"status":"cancelled","reason":"agent_aborted","actor":"agent"}"#
-    ).unwrap();
+    let u: SessionUpdate =
+        serde_json::from_str(r#"{"status":"cancelled","reason":"agent_aborted","actor":"agent"}"#)
+            .unwrap();
     assert_eq!(u.reason, Some(CancelReason::AgentAborted));
     assert_eq!(u.actor, Some(Actor::Agent));
 }
 
 #[test]
 fn session_update_cancelled_error_reason() {
-    let u: SessionUpdate = serde_json::from_str(
-        r#"{"status":"cancelled","reason":"error"}"#
-    ).unwrap();
+    let u: SessionUpdate =
+        serde_json::from_str(r#"{"status":"cancelled","reason":"error"}"#).unwrap();
     assert_eq!(u.reason, Some(CancelReason::Error));
 }
 
@@ -53,19 +52,28 @@ fn session_update_cancelled_error_reason() {
 #[test]
 fn session_update_active_rejected_by_serde() {
     let result = serde_json::from_str::<SessionUpdate>(r#"{"status":"active"}"#);
-    assert!(result.is_err(), "status=active should be rejected by serde enum");
+    assert!(
+        result.is_err(),
+        "status=active should be rejected by serde enum"
+    );
 }
 
 #[test]
 fn session_update_expired_rejected_by_serde() {
     let result = serde_json::from_str::<SessionUpdate>(r#"{"status":"expired"}"#);
-    assert!(result.is_err(), "status=expired should be rejected by serde enum");
+    assert!(
+        result.is_err(),
+        "status=expired should be rejected by serde enum"
+    );
 }
 
 #[test]
 fn session_update_unknown_rejected_by_serde() {
     let result = serde_json::from_str::<SessionUpdate>(r#"{"status":"foobar"}"#);
-    assert!(result.is_err(), "unknown status should be rejected by serde enum");
+    assert!(
+        result.is_err(),
+        "unknown status should be rejected by serde enum"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +96,9 @@ fn api_error_not_found_is_404() {
 
 #[test]
 fn api_error_gone_is_410() {
-    let err = ApiError::Gone { detail: "expired".to_string() };
+    let err = ApiError::Gone {
+        detail: "expired".to_string(),
+    };
     let resp = err.into_response();
     assert_eq!(resp.status(), StatusCode::GONE);
 }

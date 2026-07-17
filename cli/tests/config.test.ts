@@ -39,14 +39,14 @@ describe("CLI Configuration", () => {
   it("should save and load config", () => {
     const config = { server: "http://localhost:3000" };
     saveConfig(config);
-    
+
     const loaded = loadConfig();
     expect(loaded).toEqual(config);
   });
 
   it("should set and get config values", () => {
     setConfigValue("server", "http://localhost:3000");
-    
+
     const value = getConfigValue("server");
     expect(value).toBe("http://localhost:3000");
   });
@@ -54,7 +54,7 @@ describe("CLI Configuration", () => {
   it("should unset config values", () => {
     setConfigValue("server", "http://localhost:3000");
     unsetConfigValue("server");
-    
+
     const value = getConfigValue("server");
     expect(value).toBeUndefined();
   });
@@ -62,7 +62,7 @@ describe("CLI Configuration", () => {
   it("should handle multiple config values", () => {
     setConfigValue("server", "http://localhost:3000");
     setConfigValue("timeout", "30");
-    
+
     const config = loadConfig();
     expect(config.server).toBe("http://localhost:3000");
     expect(config.timeout).toBe("30");

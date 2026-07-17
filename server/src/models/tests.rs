@@ -1,4 +1,5 @@
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod tests {
     use crate::models::*;
     use serde_json;
@@ -58,8 +59,14 @@ mod tests {
                 text: "Test question?".to_string(),
                 question_type: QuestionType::Single,
                 options: Some(vec![
-                    OptionItem { label: "A".to_string(), description: None },
-                    OptionItem { label: "B".to_string(), description: None },
+                    OptionItem {
+                        label: "A".to_string(),
+                        description: None,
+                    },
+                    OptionItem {
+                        label: "B".to_string(),
+                        description: None,
+                    },
                 ]),
                 recommended: Some(0),
                 variant: Variant::Default,

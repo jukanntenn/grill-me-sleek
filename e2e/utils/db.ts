@@ -1,6 +1,6 @@
 /**
  * 数据库操作工具
- * 
+ *
  * 通过 Docker exec 执行 SQLite 命令
  */
 
@@ -27,7 +27,7 @@ export function execSql(sql: string): string {
 
 /**
  * 模拟会话过期
- * 
+ *
  * 通过修改数据库中的 expires_at 字段来模拟会话过期
  */
 export function simulateSessionExpired(sessionId: string): void {
@@ -36,7 +36,7 @@ export function simulateSessionExpired(sessionId: string): void {
   execSql(
     `UPDATE sessions SET expires_at = ${pastTime} WHERE id = '${sessionId}';`
   );
-  
+
   // 触发 sweeper 来清理过期会话
   // 注意：这可能需要等待 sweeper 运行
 }

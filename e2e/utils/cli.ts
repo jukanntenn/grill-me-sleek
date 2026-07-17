@@ -145,31 +145,31 @@ export async function expectCliSuccess<T = any>(
   input?: string
 ): Promise<{ result: CliResult; data: T }> {
   const result = await runCli(args, input);
-  
+
   expect(result.code).toBe(0);
   // Ignore all warnings, info messages, and pino-pretty multi-line output in stderr
   const realErrors = result.stderr.split('\n').filter(
-    line => line && 
-            !line.includes('Warning:') && 
+    line => line &&
+            !line.includes('Warning:') &&
             !line.includes('warning:') &&
             !line.includes('Use `node --trace-warnings') &&
-            !line.includes('info:') && 
-            !line.includes('INFO') && 
-            !line.includes('ERROR') && 
+            !line.includes('info:') &&
+            !line.includes('INFO') &&
+            !line.includes('ERROR') &&
             !line.includes('WARN') &&
             !line.match(/^\s+/)  // Filter out pino-pretty continuation lines (indented)
   ).join('\n');
   if (realErrors.trim()) {
     expect(realErrors).toBe('');
   }
-  
+
   let data: T;
   try {
     data = JSON.parse(result.stdout);
   } catch {
     throw new Error(`Failed to parse CLI output as JSON:\n${result.stdout}`);
   }
-  
+
   return { result, data };
 }
 

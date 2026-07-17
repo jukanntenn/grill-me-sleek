@@ -21,13 +21,13 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
 use opentelemetry::KeyValue;
+use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::error::{OTelSdkError, OTelSdkResult};
 use opentelemetry_sdk::logs::{LogBatch, LogExporter as SdkLogExporter};
+use opentelemetry_sdk::metrics::Temporality;
 use opentelemetry_sdk::metrics::data::{AggregatedMetrics, MetricData, ResourceMetrics};
 use opentelemetry_sdk::metrics::exporter::PushMetricExporter;
-use opentelemetry_sdk::metrics::Temporality;
 use opentelemetry_sdk::trace::{SpanData, SpanExporter as SdkSpanExporter};
-use opentelemetry_sdk::Resource;
 
 use tracing_appender::non_blocking::NonBlocking;
 
@@ -72,7 +72,10 @@ impl JsonlWriter {
 /// Convert a `KeyValue` pair into a `(String, Value)` for insertion into a JSON
 /// object. Uses `Value`'s `Display` impl (opentelemetry implements it).
 fn kv_to_json(kv: &KeyValue) -> (String, serde_json::Value) {
-    (kv.key.as_str().to_string(), serde_json::Value::String(kv.value.to_string()))
+    (
+        kv.key.as_str().to_string(),
+        serde_json::Value::String(kv.value.to_string()),
+    )
 }
 
 /// Convert an OTel `AnyValue` (log-record body/attribute values) to JSON.
@@ -377,7 +380,10 @@ impl SdkLogExporter for FileLogExporter {
                 Some(tc) => (tc.trace_id.to_string(), Some(tc.span_id.to_string())),
                 None => (String::new(), None),
             };
-            let body = record.body().map(any_value_to_json).unwrap_or(serde_json::Value::Null);
+            let body = record
+                .body()
+                .map(any_value_to_json)
+                .unwrap_or(serde_json::Value::Null);
             let rec = serde_json::json!({
                 "otel": true,
                 "signal": "log",
@@ -414,7 +420,10 @@ fn resource_to_json(resource: &Resource) -> serde_json::Value {
     // `Resource::iter()` yields `(&Key, &Value)` in 0.32 (a HashMap iterator).
     let mut obj = serde_json::Map::new();
     for (k, v) in resource.iter() {
-        obj.insert(k.as_str().to_string(), serde_json::Value::String(v.to_string()));
+        obj.insert(
+            k.as_str().to_string(),
+            serde_json::Value::String(v.to_string()),
+        );
     }
     serde_json::Value::Object(obj)
 }

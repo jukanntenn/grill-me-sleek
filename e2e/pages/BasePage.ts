@@ -6,14 +6,14 @@ import { type Page, type Locator } from '@playwright/test';
 
 export abstract class BasePage {
   constructor(protected page: Page) {}
-  
+
   /**
    * 导航到页面
    */
   async goto(url: string) {
     await this.page.goto(url);
   }
-  
+
   /**
    * 等待页面加载完成
    */
@@ -23,14 +23,14 @@ export abstract class BasePage {
     // 等待一小段时间让页面渲染完成
     await this.page.waitForTimeout(1000);
   }
-  
+
   /**
    * 获取页面标题
    */
   async getTitle(): Promise<string> {
     return await this.page.title();
   }
-  
+
   /**
    * 截图
    */

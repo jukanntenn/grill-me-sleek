@@ -1,17 +1,17 @@
-use axum::extract::{Path, State, ConnectInfo, FromRequestParts};
+use axum::extract::{ConnectInfo, FromRequestParts, Path, State};
 use axum::http::{HeaderMap, StatusCode, request::Parts};
 use axum::response::Json;
 use std::net::{IpAddr, SocketAddr};
 
+use crate::AppState;
 use crate::db;
 use crate::error::ApiError;
 use crate::extractors::ValidatedJson;
 use crate::idempotency::{self, IdempotencyEntry};
 use crate::models::*;
-use crate::observability::metrics::{metrics, ACTIVE_SESSIONS};
-use crate::session::{self, time_now, unix_to_rfc3339, SESSION_TTL};
+use crate::observability::metrics::{ACTIVE_SESSIONS, metrics};
+use crate::session::{self, SESSION_TTL, time_now, unix_to_rfc3339};
 use crate::validation;
-use crate::AppState;
 
 /// Custom extractor for ConnectInfo that falls back to a default SocketAddr
 /// when not available (e.g., in integration tests using oneshot).
@@ -23,10 +23,7 @@ where
 {
     type Rejection = std::convert::Infallible;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        _state: &S,
-    ) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let addr = parts
             .extensions
             .get::<ConnectInfo<SocketAddr>>()
@@ -397,8 +394,10 @@ pub async fn update_session(
 /// DESIGN.md §2301 — reason distinguishes max_sessions / rate_limited / oom_guard.
 fn record_rejected(reason: &str) {
     if let Some(m) = metrics() {
-        m.sessions_rejected_total
-            .add(1, &[opentelemetry::KeyValue::new("reason", reason.to_string())]);
+        m.sessions_rejected_total.add(
+            1,
+            &[opentelemetry::KeyValue::new("reason", reason.to_string())],
+        );
     }
 }
 
@@ -425,9 +424,7 @@ pub async fn healthz() -> Json<serde_json::Value> {
         (status = 503, description = "Service unavailable")
     )
 )]
-pub async fn readyz(
-    State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
+pub async fn readyz(State(state): State<AppState>) -> Result<Json<serde_json::Value>, StatusCode> {
     match sqlx::query("SELECT 1").execute(&state.pool).await {
         Ok(_) => Ok(Json(serde_json::json!({"status": "ok"}))),
         Err(_) => Err(StatusCode::SERVICE_UNAVAILABLE),

@@ -5,12 +5,12 @@ use garde::Validate;
 use serde::Deserialize;
 use std::time::Duration;
 
+use crate::AppState;
 use crate::db;
 use crate::error::ApiError;
 use crate::models::*;
 use crate::observability::metrics::metrics;
 use crate::session::{time_now, unix_to_rfc3339};
-use crate::AppState;
 use std::time::Instant;
 
 /// GET /v1/sessions/{session_id}/rounds/{seq}/response — Long-poll for user response.
@@ -189,9 +189,8 @@ pub async fn submit_response(
 
     // Validate response against the grilling schema (garde struct-level
     // custom: cross-field rules driven by the persisted Grilling as context).
-    let grilling: Grilling = serde_json::from_str(&round.grilling).map_err(|e| {
-        ApiError::internal(anyhow::anyhow!("failed to deserialize grilling: {e}"))
-    })?;
+    let grilling: Grilling = serde_json::from_str(&round.grilling)
+        .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to deserialize grilling: {e}")))?;
     body.validate_with(&grilling)
         .map_err(|e| ApiError::BadRequest(format!("validation failed: {e}")))?;
 
@@ -220,7 +219,9 @@ pub async fn submit_response(
                 "response should exist after conflict"
             )))?;
         let existing: Response = serde_json::from_str(&existing_json).map_err(|e| {
-            ApiError::internal(anyhow::anyhow!("failed to deserialize existing response: {e}"))
+            ApiError::internal(anyhow::anyhow!(
+                "failed to deserialize existing response: {e}"
+            ))
         })?;
         return Err(ApiError::RoundAlreadySubmitted {
             round: seq,

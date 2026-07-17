@@ -47,9 +47,8 @@ pub fn validate_grilling_value(value: &serde_json::Value) -> Result<Grilling, Ap
         )));
     }
 
-    let grilling: Grilling = serde_json::from_value(value.clone()).map_err(|e| {
-        ApiError::BadRequest(format!("failed to deserialize grilling: {e}"))
-    })?;
+    let grilling: Grilling = serde_json::from_value(value.clone())
+        .map_err(|e| ApiError::BadRequest(format!("failed to deserialize grilling: {e}")))?;
 
     validate_unique_question_ids(&grilling)?;
     Ok(grilling)

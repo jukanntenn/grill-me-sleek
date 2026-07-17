@@ -1,11 +1,11 @@
+use grilling_sleek::ApiDoc;
+use grilling_sleek::AppState;
 use grilling_sleek::config;
 use grilling_sleek::db;
 use grilling_sleek::handlers;
 use grilling_sleek::idempotency;
 use grilling_sleek::observability;
 use grilling_sleek::session;
-use grilling_sleek::AppState;
-use grilling_sleek::ApiDoc;
 
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
@@ -89,9 +89,9 @@ async fn main() -> anyhow::Result<()> {
     } else {
         let rate_limit_layer = axum_governor::GovernorLayer::new(
             GovernorConfigBuilder::default()
-                .with_extractor(SmartIp::new().with_trusted_proxies([
-                    "127.0.0.1/32".parse::<IpNet>().unwrap(),
-                ]))
+                .with_extractor(
+                    SmartIp::new().with_trusted_proxies(["127.0.0.1/32".parse::<IpNet>().unwrap()]),
+                )
                 .expect_connect_info()
                 .quota_default(axum_governor::Quota::requests_per_minute(
                     std::num::NonZeroU32::new(config::RATE_LIMIT_PER_MIN).unwrap(),
@@ -103,8 +103,7 @@ async fn main() -> anyhow::Result<()> {
                         let headers = response.headers_mut();
                         headers.insert(
                             "retry-after",
-                            axum::http::HeaderValue::from_str(&wait.as_secs().to_string())
-                                .unwrap(),
+                            axum::http::HeaderValue::from_str(&wait.as_secs().to_string()).unwrap(),
                         );
                     }
                     *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;

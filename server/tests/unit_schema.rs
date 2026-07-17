@@ -117,10 +117,15 @@ fn grilling_duplicate_question_id_detected() {
 fn response_selected_string_single() {
     let r = Response {
         round: 1,
-        answers: vec![("q1".to_string(), Answer {
-            selected: serde_json::Value::String("JWT".to_string()),
-            custom_text: "".to_string(),
-        })].into_iter().collect(),
+        answers: vec![(
+            "q1".to_string(),
+            Answer {
+                selected: serde_json::Value::String("JWT".to_string()),
+                custom_text: "".to_string(),
+            },
+        )]
+        .into_iter()
+        .collect(),
         additional_notes: None,
         submitted_at: "2026-07-12T00:00:00Z".to_string(),
     };
@@ -134,10 +139,15 @@ fn response_selected_string_single() {
 fn response_selected_array_multi() {
     let r = Response {
         round: 1,
-        answers: vec![("q1".to_string(), Answer {
-            selected: serde_json::json!(["Redis", "WebSocket"]),
-            custom_text: "".to_string(),
-        })].into_iter().collect(),
+        answers: vec![(
+            "q1".to_string(),
+            Answer {
+                selected: serde_json::json!(["Redis", "WebSocket"]),
+                custom_text: "".to_string(),
+            },
+        )]
+        .into_iter()
+        .collect(),
         additional_notes: None,
         submitted_at: "2026-07-12T00:00:00Z".to_string(),
     };
@@ -153,10 +163,15 @@ fn response_selected_rating_as_number_string() {
     // rating 的 selected 是数字字符串
     let r = Response {
         round: 1,
-        answers: vec![("q1".to_string(), Answer {
-            selected: serde_json::Value::String("4".to_string()),
-            custom_text: "".to_string(),
-        })].into_iter().collect(),
+        answers: vec![(
+            "q1".to_string(),
+            Answer {
+                selected: serde_json::Value::String("4".to_string()),
+                custom_text: "".to_string(),
+            },
+        )]
+        .into_iter()
+        .collect(),
         additional_notes: None,
         submitted_at: "2026-07-12T00:00:00Z".to_string(),
     };

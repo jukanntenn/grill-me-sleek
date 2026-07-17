@@ -93,7 +93,7 @@ test.describe('SSE 事件流', () => {
 
     // 第三阶段：验证页面仍然正常工作
     await questionsPage.expectQuestionCount(1);
-    
+
     // 验证 SSE 连接已建立（至少1次）
     expect(sseConnectionCount).toBeGreaterThanOrEqual(1);
   });

@@ -1,6 +1,6 @@
 use opentelemetry::metrics::{Counter, Gauge, Histogram};
-use std::sync::atomic::AtomicI64;
 use std::sync::OnceLock;
+use std::sync::atomic::AtomicI64;
 
 /// Atomic counter for active sessions. Handlers update this and set the gauge.
 pub static ACTIVE_SESSIONS: AtomicI64 = AtomicI64::new(0);

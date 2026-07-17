@@ -2,6 +2,7 @@ use axum::extract::{Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Json};
 
+use crate::AppState;
 use crate::db;
 use crate::error::ApiError;
 use crate::idempotency::{self, IdempotencyEntry};
@@ -9,7 +10,6 @@ use crate::models::*;
 use crate::observability::metrics::metrics;
 use crate::session::time_now;
 use crate::validation;
-use crate::AppState;
 
 /// GET /v1/sessions/{session_id}/rounds — List all rounds (summary).
 #[utoipa::path(
@@ -124,7 +124,8 @@ pub async fn create_round(
     };
 
     let entry =
-        idempotency::run_idempotent(&state.idempotency_rounds, cache_key, body_hash, create).await?;
+        idempotency::run_idempotent(&state.idempotency_rounds, cache_key, body_hash, create)
+            .await?;
 
     let response: RoundResponse = serde_json::from_str(&entry.response_body)
         .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to deserialize response: {e}")))?;
@@ -158,9 +159,8 @@ pub async fn get_current_round(
         .await?
         .ok_or(ApiError::NotFound)?;
 
-    let grilling: Grilling = serde_json::from_str(&round.grilling).map_err(|e| {
-        ApiError::internal(anyhow::anyhow!("failed to deserialize grilling: {e}"))
-    })?;
+    let grilling: Grilling = serde_json::from_str(&round.grilling)
+        .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to deserialize grilling: {e}")))?;
 
     let response = round
         .response
@@ -217,9 +217,8 @@ pub async fn get_round(
         }
     }
 
-    let grilling: Grilling = serde_json::from_str(&round.grilling).map_err(|e| {
-        ApiError::internal(anyhow::anyhow!("failed to deserialize grilling: {e}"))
-    })?;
+    let grilling: Grilling = serde_json::from_str(&round.grilling)
+        .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to deserialize grilling: {e}")))?;
 
     let response = round
         .response

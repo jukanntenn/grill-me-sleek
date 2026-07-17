@@ -1,6 +1,6 @@
 /**
  * Page Object Model fixtures
- * 
+ *
  * 借鉴 airflow 的 pom.ts 模式
  */
 

@@ -58,10 +58,7 @@ pub fn register_session(map: &SessionMap, session_id: String) -> bool {
     if map.len() >= MAX_SESSIONS {
         return false;
     }
-    map.insert(
-        session_id.clone(),
-        Arc::new(SessionHandle::new(session_id)),
-    );
+    map.insert(session_id.clone(), Arc::new(SessionHandle::new(session_id)));
     true
 }
 
@@ -126,7 +123,8 @@ pub async fn run_ttl_sweeper(pool: Pool<Sqlite>, map: SessionMap) {
                         SessionStatus::Expired as i64,
                         now,
                     )
-                    .await {
+                    .await
+                    {
                         Ok(true) => {
                             if let Some(m) = crate::observability::metrics::metrics() {
                                 m.ttl_swept_total.add(1, &[]);
@@ -184,7 +182,6 @@ pub fn generate_session_id() -> String {
     }
     id
 }
-
 
 #[cfg(test)]
 mod tests {

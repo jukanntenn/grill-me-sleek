@@ -6,14 +6,19 @@
 
 mod common;
 
-use common::{body_json, get_req, grilling_minimal, json_patch, json_post, TestApp};
+use common::{TestApp, body_json, get_req, grilling_minimal, json_patch, json_post};
 use serde_json::json;
 
 // Helper: create a session, return its id.
 async fn create_session(app: &TestApp) -> String {
-    let resp = app.oneshot(json_post("/v1/sessions", &grilling_minimal("s"))).await;
+    let resp = app
+        .oneshot(json_post("/v1/sessions", &grilling_minimal("s")))
+        .await;
     assert_eq!(resp.status(), 201);
-    (body_json(resp).await)["session_id"].as_str().unwrap().to_string()
+    (body_json(resp).await)["session_id"]
+        .as_str()
+        .unwrap()
+        .to_string()
 }
 
 // ---------------------------------------------------------------------------
@@ -55,7 +60,10 @@ async fn test_1_full_session_lifecycle() {
 
     // complete
     let resp = app
-        .oneshot(json_patch(&format!("/v1/sessions/{sid}"), &json!({"status":"completed"})))
+        .oneshot(json_patch(
+            &format!("/v1/sessions/{sid}"),
+            &json!({"status":"completed"}),
+        ))
         .await;
     assert_eq!(resp.status(), 200);
 }
@@ -88,7 +96,9 @@ async fn test_2_multi_round_history_preserved() {
     }
 
     // list all rounds — both should be present, ordered by seq
-    let resp = app.oneshot(get_req(&format!("/v1/sessions/{sid}/rounds"))).await;
+    let resp = app
+        .oneshot(get_req(&format!("/v1/sessions/{sid}/rounds")))
+        .await;
     assert_eq!(resp.status(), 200);
     let list = (body_json(resp).await).as_array().unwrap().clone();
     assert_eq!(list.len(), 2);
@@ -106,7 +116,10 @@ async fn test_3_archive_on_completed() {
     let app = TestApp::new().await;
     let sid = create_session(&app).await;
     let _ = app
-        .oneshot(json_patch(&format!("/v1/sessions/{sid}"), &json!({"status":"completed"})))
+        .oneshot(json_patch(
+            &format!("/v1/sessions/{sid}"),
+            &json!({"status":"completed"}),
+        ))
         .await;
 
     // GET now returns 410 gone, detail=completed (session moved to archive)
@@ -180,11 +193,17 @@ async fn test_6_patch_terminal_returns_409() {
     let sid = create_session(&app).await;
     // complete first
     let _ = app
-        .oneshot(json_patch(&format!("/v1/sessions/{sid}"), &json!({"status":"completed"})))
+        .oneshot(json_patch(
+            &format!("/v1/sessions/{sid}"),
+            &json!({"status":"completed"}),
+        ))
         .await;
     // terminal -> any PATCH must be 409, body {message,status:409} (no round/response)
     let resp = app
-        .oneshot(json_patch(&format!("/v1/sessions/{sid}"), &json!({"status":"cancelled"})))
+        .oneshot(json_patch(
+            &format!("/v1/sessions/{sid}"),
+            &json!({"status":"cancelled"}),
+        ))
         .await;
     assert_eq!(resp.status(), 409);
     let b = body_json(resp).await;
@@ -201,7 +220,10 @@ async fn test_6_patch_invalid_status_rejected_by_serde() {
     let sid = create_session(&app).await;
 
     let resp = app
-        .oneshot(json_patch(&format!("/v1/sessions/{sid}"), &json!({"status":"active"})))
+        .oneshot(json_patch(
+            &format!("/v1/sessions/{sid}"),
+            &json!({"status":"active"}),
+        ))
         .await;
     assert_ne!(resp.status(), 200);
 
@@ -229,7 +251,9 @@ async fn test_7_long_poll_returns_answer_when_submitted() {
 
     // long-poll should immediately return 200 with the answer
     let resp = app
-        .oneshot(get_req(&format!("/v1/sessions/{sid}/rounds/1/response?wait=1")))
+        .oneshot(get_req(&format!(
+            "/v1/sessions/{sid}/rounds/1/response?wait=1"
+        )))
         .await;
     assert_eq!(resp.status(), 200);
     let b = body_json(resp).await;
@@ -243,10 +267,14 @@ async fn test_7_long_poll_pending_returns_202() {
 
     // no answer yet — long-poll should block ~1s then return 202 pending
     let resp = app
-        .oneshot(get_req(&format!("/v1/sessions/{sid}/rounds/1/response?wait=1")))
+        .oneshot(get_req(&format!(
+            "/v1/sessions/{sid}/rounds/1/response?wait=1"
+        )))
         .await;
     let status = resp.status();
-    let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
+    let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+        .await
+        .unwrap();
     let text = String::from_utf8_lossy(&bytes);
     assert_eq!(status, 202, "body was: {text}");
 }
@@ -267,9 +295,17 @@ async fn test_10_etag_conditional() {
     let sid = create_session(&app).await;
 
     // first GET round → 200 + ETag
-    let resp = app.oneshot(get_req(&format!("/v1/sessions/{sid}/rounds/1"))).await;
+    let resp = app
+        .oneshot(get_req(&format!("/v1/sessions/{sid}/rounds/1")))
+        .await;
     assert_eq!(resp.status(), 200);
-    let etag = resp.headers().get("etag").unwrap().to_str().unwrap().to_string();
+    let etag = resp
+        .headers()
+        .get("etag")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
     assert!(etag.starts_with("W/\""));
 
     // second GET with If-None-Match matching → 304
@@ -318,7 +354,10 @@ async fn test_12_idempotency_replay() {
         .unwrap();
     let resp = app.oneshot(req).await;
     assert_eq!(resp.status(), 201);
-    let sid1 = (body_json(resp).await)["session_id"].as_str().unwrap().to_string();
+    let sid1 = (body_json(resp).await)["session_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // replay with same key + same body → same session_id
     let req = axum::http::Request::builder()
@@ -330,7 +369,10 @@ async fn test_12_idempotency_replay() {
         .unwrap();
     let resp = app.oneshot(req).await;
     assert_eq!(resp.status(), 201);
-    let sid2 = (body_json(resp).await)["session_id"].as_str().unwrap().to_string();
+    let sid2 = (body_json(resp).await)["session_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert_eq!(sid1, sid2);
 }
 
@@ -344,19 +386,23 @@ async fn test_12_idempotency_mismatch_returns_422() {
     });
 
     let req = axum::http::Request::builder()
-        .method("POST").uri("/v1/sessions")
+        .method("POST")
+        .uri("/v1/sessions")
         .header("Content-Type", "application/json")
         .header("Idempotency-Key", "key-same")
-        .body(axum::body::Body::from(body1.to_string())).unwrap();
+        .body(axum::body::Body::from(body1.to_string()))
+        .unwrap();
     let resp = app.oneshot(req).await;
     assert_eq!(resp.status(), 201);
 
     // same key, different body → 422
     let req = axum::http::Request::builder()
-        .method("POST").uri("/v1/sessions")
+        .method("POST")
+        .uri("/v1/sessions")
         .header("Content-Type", "application/json")
         .header("Idempotency-Key", "key-same")
-        .body(axum::body::Body::from(body2.to_string())).unwrap();
+        .body(axum::body::Body::from(body2.to_string()))
+        .unwrap();
     let resp = app.oneshot(req).await;
     assert_eq!(resp.status(), 422);
 }
@@ -372,24 +418,31 @@ async fn test_12_idempotency_concurrent_dedup() {
 
     let make_req = || {
         axum::http::Request::builder()
-            .method("POST").uri("/v1/sessions")
+            .method("POST")
+            .uri("/v1/sessions")
             .header("Content-Type", "application/json")
             .header("Idempotency-Key", key)
-            .body(axum::body::Body::from(body.to_string())).unwrap()
+            .body(axum::body::Body::from(body.to_string()))
+            .unwrap()
     };
 
     // Fire both concurrently. oneshot consumes the router, so clone it.
     let app1 = app.clone();
     let app2 = app.clone();
-    let (r1, r2) = tokio::join!(
-        async move { app1.oneshot(make_req()).await },
-        async move { app2.oneshot(make_req()).await },
-    );
+    let (r1, r2) = tokio::join!(async move { app1.oneshot(make_req()).await }, async move {
+        app2.oneshot(make_req()).await
+    },);
 
     assert_eq!(r1.status(), 201);
     assert_eq!(r2.status(), 201);
-    let sid1 = body_json(r1).await["session_id"].as_str().unwrap().to_string();
-    let sid2 = body_json(r2).await["session_id"].as_str().unwrap().to_string();
+    let sid1 = body_json(r1).await["session_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let sid2 = body_json(r2).await["session_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert_eq!(sid1, sid2, "concurrent same-key dedup must return same id");
 }
 
@@ -402,9 +455,11 @@ async fn test_13_content_type_415() {
     let app = TestApp::new().await;
     // POST with text/plain body → axum Json extractor rejects with 415
     let req = axum::http::Request::builder()
-        .method("POST").uri("/v1/sessions")
+        .method("POST")
+        .uri("/v1/sessions")
         .header("Content-Type", "text/plain")
-        .body(axum::body::Body::from("not json")).unwrap();
+        .body(axum::body::Body::from("not json"))
+        .unwrap();
     let resp = app.oneshot(req).await;
     assert_eq!(resp.status(), 415);
 }
@@ -418,12 +473,17 @@ async fn test_14_schema_validation() {
     let app = TestApp::new().await;
 
     // missing questions → 400
-    let resp = app.oneshot(json_post("/v1/sessions", &json!({"name":"t"}))).await;
+    let resp = app
+        .oneshot(json_post("/v1/sessions", &json!({"name":"t"})))
+        .await;
     assert_eq!(resp.status(), 400);
 
     // empty questions → 400
     let resp = app
-        .oneshot(json_post("/v1/sessions", &json!({"name":"t","questions":[]})))
+        .oneshot(json_post(
+            "/v1/sessions",
+            &json!({"name":"t","questions":[]}),
+        ))
         .await;
     assert_eq!(resp.status(), 400);
 
@@ -454,7 +514,12 @@ async fn test_15_duplicate_question_id() {
     let resp = app.oneshot(json_post("/v1/sessions", &body)).await;
     assert_eq!(resp.status(), 400);
     let b = body_json(resp).await;
-    assert!(b["message"].as_str().unwrap().contains("duplicate question id"));
+    assert!(
+        b["message"]
+            .as_str()
+            .unwrap()
+            .contains("duplicate question id")
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -569,7 +634,10 @@ async fn test_20_ttl_no_renewal() {
 
     // capture expires_at after create
     let resp = app.oneshot(get_req(&format!("/v1/sessions/{sid}"))).await;
-    let expires_after_create = (body_json(resp).await)["expires_at"].as_str().unwrap().to_string();
+    let expires_after_create = (body_json(resp).await)["expires_at"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     // answer + push (both write) — expires_at must NOT change
     let _ = app
@@ -586,7 +654,10 @@ async fn test_20_ttl_no_renewal() {
         .await;
 
     let resp = app.oneshot(get_req(&format!("/v1/sessions/{sid}"))).await;
-    let expires_after_activity = (body_json(resp).await)["expires_at"].as_str().unwrap().to_string();
+    let expires_after_activity = (body_json(resp).await)["expires_at"]
+        .as_str()
+        .unwrap()
+        .to_string();
     assert_eq!(expires_after_create, expires_after_activity);
 }
 
@@ -599,7 +670,9 @@ async fn test_21_get_current_round() {
     let app = TestApp::new().await;
     let sid = create_session(&app).await;
 
-    let resp = app.oneshot(get_req(&format!("/v1/sessions/{sid}/rounds/current"))).await;
+    let resp = app
+        .oneshot(get_req(&format!("/v1/sessions/{sid}/rounds/current")))
+        .await;
     assert_eq!(resp.status(), 200);
     let b = body_json(resp).await;
     assert_eq!(b["round"], 1);
@@ -663,7 +736,9 @@ async fn test_23_long_poll_cancelled_body_format() {
         .await;
     // long-poll on the now-terminal session → 410 with {status:"cancelled",reason}
     let resp = app
-        .oneshot(get_req(&format!("/v1/sessions/{sid}/rounds/1/response?wait=1")))
+        .oneshot(get_req(&format!(
+            "/v1/sessions/{sid}/rounds/1/response?wait=1"
+        )))
         .await;
     assert_eq!(resp.status(), 410);
     let b = body_json(resp).await;
@@ -678,5 +753,8 @@ async fn test_23_long_poll_cancelled_body_format() {
 async fn create_session_with(app: &TestApp, body: &serde_json::Value) -> String {
     let resp = app.oneshot(json_post("/v1/sessions", body)).await;
     assert_eq!(resp.status(), 201);
-    (body_json(resp).await)["session_id"].as_str().unwrap().to_string()
+    (body_json(resp).await)["session_id"]
+        .as_str()
+        .unwrap()
+        .to_string()
 }

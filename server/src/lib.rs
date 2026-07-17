@@ -10,19 +10,19 @@ pub mod session;
 pub mod sse;
 pub mod validation;
 
+use axum::Router;
 use axum::extract::{DefaultBodyLimit, Request};
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::{get, post};
-use axum::Router;
 use std::time::Instant;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
-use sqlx::{Pool, Sqlite};
 use session::SessionMap;
+use sqlx::{Pool, Sqlite};
 
 /// OpenAPI documentation structure.
 #[derive(OpenApi)]
@@ -84,9 +84,10 @@ pub struct ApiDoc;
 pub fn build_docs_router() -> Router {
     Router::new()
         .merge(SwaggerUi::new("/docs/swagger-ui").url("/docs/openapi.json", ApiDoc::openapi()))
-        .route("/docs/openapi.json", get(|| async {
-            axum::response::Json(ApiDoc::openapi())
-        }))
+        .route(
+            "/docs/openapi.json",
+            get(|| async { axum::response::Json(ApiDoc::openapi()) }),
+        )
 }
 
 /// Shared application state.
@@ -128,8 +129,7 @@ pub fn assemble_routes(sessions_post: axum::routing::MethodRouter<AppState>) -> 
         // Response (long-poll GET + submit POST)
         .route(
             "/v1/sessions/{session_id}/rounds/{round}/response",
-            get(handlers::response::long_poll_response)
-                .post(handlers::response::submit_response),
+            get(handlers::response::long_poll_response).post(handlers::response::submit_response),
         )
         // SSE
         .route(
@@ -145,8 +145,7 @@ pub fn assemble_routes(sessions_post: axum::routing::MethodRouter<AppState>) -> 
 /// far below the test suite's creation volume). Production attaches the
 /// governor layer in `main.rs` via `assemble_routes`.
 pub fn build_app(state: AppState) -> Router {
-    apply_middleware(assemble_routes(post(handlers::sessions::create_session)))
-        .with_state(state)
+    apply_middleware(assemble_routes(post(handlers::sessions::create_session))).with_state(state)
 }
 
 /// The shared middleware stack applied to both the production router (in

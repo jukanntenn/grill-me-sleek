@@ -101,7 +101,7 @@
   --tracking-body-sm: -0.28px;
 
   /* Shadows - stacked system (Vercel design language) */
-  --shadow-card: 
+  --shadow-card:
     0 1px 2px rgba(0, 0, 0, 0.04),
     0 2px 4px rgba(0, 0, 0, 0.04),
     0 4px 8px rgba(0, 0, 0, 0.04);

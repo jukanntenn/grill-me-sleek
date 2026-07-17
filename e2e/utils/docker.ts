@@ -1,6 +1,6 @@
 /**
  * Docker 管理工具
- * 
+ *
  * 借鉴 obsidian-livesync 的 Docker 管理策略
  */
 
@@ -17,7 +17,7 @@ export function startDockerCompose() {
   execSync(`docker compose -f ${COMPOSE_FILE} -p ${PROJECT_NAME} up -d`, {
     stdio: 'inherit',
   });
-  
+
   // 等待服务就绪
   waitForService();
 }
@@ -58,6 +58,6 @@ function waitForService(maxRetries = 30, intervalMs = 2000) {
       execSync(`sleep ${intervalMs / 1000}`);
     }
   }
-  
+
   throw new Error('Service failed to start within timeout');
 }

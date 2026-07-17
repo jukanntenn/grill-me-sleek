@@ -1,17 +1,16 @@
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::WithExportConfig as _;
+use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::logs::SdkLoggerProvider;
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::trace::SdkTracerProvider;
-use opentelemetry_sdk::Resource;
 use std::sync::OnceLock;
 use tracing_appender::rolling;
 use tracing_subscriber::filter::EnvFilter;
 use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-
 
 /// Shared OTel Resource identifying this service (DESIGN.md §2278).
 fn service_resource() -> Resource {
@@ -72,8 +71,7 @@ pub fn init_tracing(log_dir: &str) -> TracingGuard {
         .with_line_number(false);
 
     // Env filter
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     // OTel providers: OTLP when OTEL_EXPORTER_OTLP_ENDPOINT is set (production),
     // otherwise local file exporters (clone the same NonBlocking writers so the
@@ -85,13 +83,12 @@ pub fn init_tracing(log_dir: &str) -> TracingGuard {
 
     // Build subscriber — use Option<Layer> to handle conditional OTel layers
     let otel_trace_layer = otel_trace_provider.as_ref().map(|provider| {
-        tracing_opentelemetry::layer()
-            .with_tracer(provider.tracer("grilling-sleek"))
+        tracing_opentelemetry::layer().with_tracer(provider.tracer("grilling-sleek"))
     });
 
-    let otel_log_layer = otel_log_provider.as_ref().map(|log_provider| {
-        OpenTelemetryTracingBridge::new(log_provider)
-    });
+    let otel_log_layer = otel_log_provider
+        .as_ref()
+        .map(OpenTelemetryTracingBridge::new);
 
     tracing_subscriber::registry()
         .with(env_filter)
@@ -127,7 +124,9 @@ pub fn init_tracing(log_dir: &str) -> TracingGuard {
 /// built. Otherwise (local development), a [`FileSpanExporter`] is built on the
 /// shared `traces` rolling-file writer — so real OTel span data lands in
 /// `traces.*` alongside the tracing-fmt event lines (tagged `otel:true`).
-fn init_otel_traces(traces_writer: Option<tracing_appender::non_blocking::NonBlocking>) -> Option<SdkTracerProvider> {
+fn init_otel_traces(
+    traces_writer: Option<tracing_appender::non_blocking::NonBlocking>,
+) -> Option<SdkTracerProvider> {
     if let Ok(endpoint) = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
         let exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
@@ -157,7 +156,9 @@ fn init_otel_traces(traces_writer: Option<tracing_appender::non_blocking::NonBlo
 ///
 /// Same OTLP-vs-file branching as [`init_otel_traces`], writing to a dedicated
 /// `logs` rolling file (new — there is no existing fmt layer for OTel logs).
-fn init_otel_logs(logs_writer: Option<tracing_appender::non_blocking::NonBlocking>) -> Option<SdkLoggerProvider> {
+fn init_otel_logs(
+    logs_writer: Option<tracing_appender::non_blocking::NonBlocking>,
+) -> Option<SdkLoggerProvider> {
     if let Ok(endpoint) = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {
         let exporter = opentelemetry_otlp::LogExporter::builder()
             .with_tonic()
@@ -188,7 +189,9 @@ fn init_otel_logs(logs_writer: Option<tracing_appender::non_blocking::NonBlockin
 /// Same OTLP-vs-file branching. The file exporter is driven by the default
 /// `PeriodicReader` (60s export interval); aggregated metric snapshots land in
 /// `metrics.*` alongside the tracing-fmt event lines.
-fn init_otel_metrics(metrics_writer: Option<tracing_appender::non_blocking::NonBlocking>) -> SdkMeterProvider {
+fn init_otel_metrics(
+    metrics_writer: Option<tracing_appender::non_blocking::NonBlocking>,
+) -> SdkMeterProvider {
     let builder = SdkMeterProvider::builder().with_resource(service_resource());
 
     if let Ok(endpoint) = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT") {

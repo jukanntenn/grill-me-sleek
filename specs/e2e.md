@@ -209,11 +209,11 @@ export async function createSession(name: string, grillingJson: string): Promise
 // e2e/pages/QuestionsPage.ts
 export class QuestionsPage extends BasePage {
   readonly submitButton: Locator;
-  
+
   async submit() {
     await this.submitButton.click();
   }
-  
+
   async waitForSubmitSuccess() {
     await expect(this.page.getByText('Waiting for the next round')).toBeVisible();
   }
@@ -309,7 +309,7 @@ services:
 :8443 {
     root * /app/web/dist
     file_server
-    
+
     reverse_proxy /v1/* 127.0.0.1:8080 {
         transport http {
             versions h2c

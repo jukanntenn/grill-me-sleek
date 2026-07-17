@@ -23,16 +23,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 
 use axum::extract::{Path, State};
-use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::IntoResponse;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::Stream;
-use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::BroadcastStream;
 
+use crate::AppState;
 use crate::config;
 use crate::models::{ErrorResponse, GoneResponse};
 use crate::observability::metrics::metrics;
-use crate::AppState;
 
 /// Global SSE connection counter for the soft limit.
 static SSE_ACTIVE: AtomicU64 = AtomicU64::new(0);
@@ -114,8 +114,7 @@ pub async fn sse_handler(
         .map_err(|_| axum::http::StatusCode::NOT_FOUND)?;
 
     // Acquire a connection slot; refuse with 503 if the global limit is hit.
-    let guard = SseConnGuard::acquire()
-        .ok_or(axum::http::StatusCode::SERVICE_UNAVAILABLE)?;
+    let guard = SseConnGuard::acquire().ok_or(axum::http::StatusCode::SERVICE_UNAVAILABLE)?;
     if let Some(m) = metrics() {
         m.sse_connections_active
             .record(SSE_ACTIVE.load(Ordering::Relaxed), &[]);

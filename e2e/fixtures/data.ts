@@ -1,6 +1,6 @@
 /**
  * 数据 fixtures
- * 
+ *
  * 借鉴 airflow 的 data.ts 模式
  * 通过 cli/ 命令准备测试数据
  */

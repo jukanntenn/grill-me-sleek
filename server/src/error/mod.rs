@@ -1,6 +1,6 @@
+use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::Json;
 use std::sync::Arc;
 
 use crate::models::{ConflictResponse, ErrorResponse, Response as ResponseModel};
@@ -28,10 +28,7 @@ pub enum ApiError {
     TerminalState, // 409 (no round/response in body)
 
     #[error("round already submitted")]
-    RoundAlreadySubmitted {
-        round: i64,
-        response: ResponseModel,
-    }, // 409 (with round+response in body)
+    RoundAlreadySubmitted { round: i64, response: ResponseModel }, // 409 (with round+response in body)
 
     #[error("idempotency key reused with different body")]
     IdempotencyMismatch, // 422

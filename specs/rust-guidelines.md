@@ -264,8 +264,8 @@ thread_local! {
 fn main() {
     let _ = panic::catch_unwind(|| {
         ALWAYS_EQUAL.with_borrow_mut(|p| {
-            p.0 += 1;        
-            panic!("Assume some user-provided closure failed here");  
+            p.0 += 1;
+            panic!("Assume some user-provided closure failed here");
             p.1 += 1;
         });
     });
@@ -821,7 +821,7 @@ When a 'macro by example' can do the job, it should be preferred over proc macro
 Proc macros are more powerful, but their expansion can't easily be inspected. Where this versatility isn't needed, a simple 'macro by example' is the better option.
 
 ```rust,ignore
-// Bad, attribute macro requires proc macro machinery, can be hard to 
+// Bad, attribute macro requires proc macro machinery, can be hard to
 // inspect in some IDEs, and isn't needed here.
 #[make_new_id]
 struct MyId;
@@ -911,8 +911,8 @@ Among others, macros must not
 - do anything else that materially detaches _what's written_ from _what's happening_.
 
 ```rust,ignore
-// Bad: Adds extra parameter and marks function `async`. Impossible to 
-// predict from reading code. 
+// Bad: Adds extra parameter and marks function `async`. Impossible to
+// predict from reading code.
 #[magic_transform]
 fn foo() { }
 
@@ -969,7 +969,7 @@ struct UserType;
 // would expand to
 
 struct UserType;
-struct ExtraType; 
+struct ExtraType;
 impl UserType {
     fn foo() -> ExtraType { ... };
 }
@@ -1041,13 +1041,13 @@ Functions marked `async` in the hot path should track their future sizes, and ta
 >     dbg!(&within_future);
 >     // <- `sneaky` dropped here, despite otherwise not being used!
 > }
-> 
-> let future = foo(Large::new()); // `Large` becomes embedded in `foo` type, 
+>
+> let future = foo(Large::new()); // `Large` becomes embedded in `foo` type,
 >                                 // blowing up its size, despite it not even
 >                                 // being used.
-> 
-> // Here, despite `foo` not running yet, we might consume up to `Large` + 
-> // 2kb of this thread's stack memory. Once we spawn this is memcpy'ed 
+>
+> // Here, despite `foo` not running yet, we might consume up to `Large` +
+> // 2kb of this thread's stack memory. Once we spawn this is memcpy'ed
 > // to runtime Task structure:
 > rt.spawn(future);
 >```
@@ -1069,22 +1069,22 @@ fn has_reasonable_size() {
 Then consider a combination of the following:
 
 ```rust,ignore
-// 1) Return an `impl Future` instead, this prevents large arguments 
+// 1) Return an `impl Future` instead, this prevents large arguments
 //    from infecting the future size, among others.
-fn hot(args: Args) -> impl Future<Output = Result<T>> { 
+fn hot(args: Args) -> impl Future<Output = Result<T>> {
     // 2) Process arguments outside async context if processing does
     //    not require async functionality.
-    let args = args.do_something(); 
+    let args = args.do_something();
 
     if args.invalid() {
         // 3) Use `Either` to return a single `impl Future` type, as
-        //    otherwise you'd have to invent a new type. 
-        async { Err(InvalidArgs) }.left_future() 
+        //    otherwise you'd have to invent a new type.
+        async { Err(InvalidArgs) }.left_future()
     } else {
-        // 4) Chain future invocations via future helpers, which again 
-        //    prevents heavy locals from being passed through the state 
+        // 4) Chain future invocations via future helpers, which again
+        //    prevents heavy locals from being passed through the state
         //    machine.
-        read(args).then(|x| foo(x)).right_future() 
+        read(args).then(|x| foo(x)).right_future()
     }
 }
 ```
@@ -1095,15 +1095,15 @@ fn hot(args: Args) -> impl Future<Output = Result<T>> {
 
 <why>fast, cache-friendly memory access.</why>
 
-Hot types should avoid nested heap indirection and consider lifting hot, cacheable deep fields to improve cache utilization.  
+Hot types should avoid nested heap indirection and consider lifting hot, cacheable deep fields to improve cache utilization.
 
 While the gold standard is to benchmark, a pattern that emerges repeatedly when porting C# code to Rust is to reflexively `Arc` nested types, often multiple layers deep. Although this can make sense on very wide or heavyweight types that genuinely need to be shared by multiple owners, this pattern can ruin access latency when multiple rounds of DRAM lookup have to be performed sequentially.
 
 Where nested, shared ownership isn't strictly needed, it is usually better to start with local, embedded data, and lift cacheable fields.
 
 ```rust,ignore
-// Bad, `print` (assuming it is reasonably hot) needs 2 indirections 
-// to query whether it is enabled. 
+// Bad, `print` (assuming it is reasonably hot) needs 2 indirections
+// to query whether it is enabled.
 struct Item {
     config: Arc<Config>,
     payload: Payload,
@@ -1119,7 +1119,7 @@ impl Item {
     }
 }
 
-// Better: `enabled` resides nearby and is likely immediately available 
+// Better: `enabled` resides nearby and is likely immediately available
 // once `print` is called.
 struct Item {
     config: Arc<Config>,
@@ -1153,12 +1153,12 @@ Some collections provide dedicated methods for this, e.g., `String::into_boxed_s
 
 ```rust,ignore
 // Bad, with many entries this wastes space and makes
-// traversal ultimately slower. 
+// traversal ultimately slower.
 struct Data {
     ids: Vec<String>
 }
 
-// Good, reduces memory consumption and fits more elements 
+// Good, reduces memory consumption and fits more elements
 // into cache.
 struct Data {
     ids: Vec<Box<str>>
@@ -1280,7 +1280,7 @@ for m in messages {
     log(("Emitting message", m.id()))
 }
 
-// Best: If possible, let telemetry users reconstruct what happened offline 
+// Best: If possible, let telemetry users reconstruct what happened offline
 log(("Processing message batch", messages.batch_id()))
 for m in messages { ... }
 ```
@@ -1326,7 +1326,7 @@ In heavyweight, deeply nested libraries it can be worthwhile to either pass a bu
 struct Query {
     arena: Arena,
     request: Request,
-    data: Vec<u8>    
+    data: Vec<u8>
 }
 
 fn client_do_work(query: &mut Query) {
@@ -1461,10 +1461,10 @@ A repository should contain a single workspace `Cargo.toml`, and all Rust crates
 # Ideal for most workspaces
 Cargo.toml
 crates/
-  foo/Cargo.toml 
-  foo_core/Cargo.toml 
-  foo_proc/Cargo.toml 
-  foo_tests/Cargo.toml 
+  foo/Cargo.toml
+  foo_core/Cargo.toml
+  foo_proc/Cargo.toml
+  foo_tests/Cargo.toml
   bar/Cargo.toml
   baz/Cargo.toml
 
@@ -1473,8 +1473,8 @@ crates/
 Cargo.toml
 crates/
   server/
-    main/Cargo.toml 
-    routes/Cargo.toml 
+    main/Cargo.toml
+    routes/Cargo.toml
   client/
     foo/Cargo.toml
     bar/Cargo.toml
@@ -1488,9 +1488,9 @@ Placing crates inside other crates (at or below their `Cargo.toml`), or even ins
 # Never acceptable, crates inside `src/` folder
 Cargo.toml
 crates/
-  foo/Cargo.toml 
+  foo/Cargo.toml
     src/lib.rs
-       deps/bar/Cargo.toml 
+       deps/bar/Cargo.toml
 ```
 
 Rare exceptions to this rule can occur if your crate is in the business of processing workspaces and has a collection of UI tests or similar it relies on; but even then these are usually dummy crates in nature.
@@ -2503,7 +2503,7 @@ Foo::builder()
     .distance(42)?
     .build();
 
-// Good, consolidates sanity checking and allows for cross-checks 
+// Good, consolidates sanity checking and allows for cross-checks
 // between properties.
 Foo::builder()
     .name("Foo")
@@ -2680,7 +2680,7 @@ mod windows { /* ... */ }
 mod linux { /* ... */ }
 
 // Acceptable use of glob re-exports, this is a common pattern
-// and it is clear everything is just forwarded from a single 
+// and it is clear everything is just forwarded from a single
 // platform.
 
 #[cfg(target_os = "windows")]
@@ -3342,7 +3342,7 @@ _ = Client::new();
 // error[E0659]: `Client` is ambiguous
 //   --> src/lib.rs:17:13
 //    |
-// 17 |     _ = Client; 
+// 17 |     _ = Client;
 //    |         ^^^^^^ ambiguous name
 //    |
 //    = note: ambiguous because of multiple glob imports of a name in the same module
@@ -3501,4 +3501,3 @@ should be free to do so.
 
 
 ---
-

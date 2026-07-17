@@ -12,7 +12,7 @@
 use grilling_sleek::idempotency;
 use grilling_sleek::observability::metrics;
 use grilling_sleek::session;
-use grilling_sleek::{build_app, AppState};
+use grilling_sleek::{AppState, build_app};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
@@ -34,22 +34,23 @@ impl TestApp {
 
         let dir = TempDir::new().expect("temp dir");
         let db_path = dir.path().join("test.db");
-        let opts = SqliteConnectOptions::from_str(&format!(
-            "sqlite://{}?mode=rwc",
-            db_path.display()
-        ))
-        .unwrap()
-        .create_if_missing(true)
-        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
-        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
-        .foreign_keys(true);
+        let opts =
+            SqliteConnectOptions::from_str(&format!("sqlite://{}?mode=rwc", db_path.display()))
+                .unwrap()
+                .create_if_missing(true)
+                .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+                .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+                .foreign_keys(true);
 
         let pool: Pool<Sqlite> = SqlitePoolOptions::new()
             .max_connections(8)
             .connect_with(opts)
             .await
             .expect("connect pool");
-        sqlx::migrate!("./migrations").run(&pool).await.expect("migrate");
+        sqlx::migrate!("./migrations")
+            .run(&pool)
+            .await
+            .expect("migrate");
 
         let handles = session::new_session_map();
         let state = AppState {
