@@ -1,0 +1,98 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT r.id, r.session_id, r.seq, r.name, r.grilling, r.response, r.created_at\n         FROM rounds r\n         JOIN sessions s ON s.curr_round = r.id\n         WHERE s.id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "name": "session_id",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "session_id"
+          }
+        }
+      },
+      {
+        "name": "seq",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "seq"
+          }
+        }
+      },
+      {
+        "name": "name",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "name": "grilling",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "grilling"
+          }
+        }
+      },
+      {
+        "name": "response",
+        "ordinal": 5,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "response"
+          }
+        }
+      },
+      {
+        "name": "created_at",
+        "ordinal": 6,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "019c60dd1c129745aab9aeb0cfd12b1cd1aef1100c5640e64e4aa9ea495d25b9"
+}

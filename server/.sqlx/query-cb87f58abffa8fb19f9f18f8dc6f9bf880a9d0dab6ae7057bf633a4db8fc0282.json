@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE sessions SET curr_round = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "cb87f58abffa8fb19f9f18f8dc6f9bf880a9d0dab6ae7057bf633a4db8fc0282"
+}

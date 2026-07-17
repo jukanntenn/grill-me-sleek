@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE sessions SET status = ?, cancel_reason = ?, cancel_detail = ?, cancel_actor = ?\n         WHERE id = ? AND status = 0",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "d479c9229ec205c405f7292313689c58d7813b52c282c00cf6939610e2dd0bb5"
+}

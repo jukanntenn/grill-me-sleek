@@ -1,0 +1,21 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT MAX(seq) FROM rounds WHERE session_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "MAX(seq)",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "718b607219c7a2eb2e603ebe075466c2827c1ab5ac2c1a2ea0a4336791d3ef1a"
+}

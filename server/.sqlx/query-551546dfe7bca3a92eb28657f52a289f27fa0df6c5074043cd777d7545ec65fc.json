@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT response FROM rounds WHERE session_id = ? AND seq = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "response",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "response"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "551546dfe7bca3a92eb28657f52a289f27fa0df6c5074043cd777d7545ec65fc"
+}

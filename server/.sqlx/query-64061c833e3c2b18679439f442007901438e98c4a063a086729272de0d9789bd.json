@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO session_archive\n         (id, status, name, cancel_reason, cancel_detail, cancel_actor, total_rounds, created_at, archived_at, snapshot)\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 10
+    },
+    "nullable": []
+  },
+  "hash": "64061c833e3c2b18679439f442007901438e98c4a063a086729272de0d9789bd"
+}
