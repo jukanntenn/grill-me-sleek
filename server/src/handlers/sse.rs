@@ -155,7 +155,6 @@ pub async fn sse_handler(
 }
 
 /// Get the current SSE connection count (for diagnostics).
-#[allow(dead_code)]
 pub fn sse_active_count() -> u64 {
     SSE_ACTIVE.load(Ordering::Relaxed)
 }

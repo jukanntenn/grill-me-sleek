@@ -192,7 +192,7 @@ pub async fn get_session(
     let (current_round, description) = if let Some(round_id) = row.curr_round {
         match db::get_round_by_id(&state.pool, round_id).await? {
             Some(r) => {
-                let desc = serde_json::from_str::<Grilling>(&r.grilling)
+                let desc = super::deserialize_grilling(&r.grilling)
                     .ok()
                     .and_then(|g| g.description);
                 (r.seq, desc)
@@ -240,10 +240,7 @@ pub async fn update_session(
     // requests idempotently (ky retries PATCH on network errors), if the
     // session is already in the requested terminal state, return the current
     // state instead of 409.
-    let desired_status = match body.status {
-        SessionUpdateStatus::Completed => SessionStatus::Completed,
-        SessionUpdateStatus::Cancelled => SessionStatus::Cancelled,
-    };
+    let desired_status: SessionStatus = body.status.into();
 
     let row = match db::get_session(&state.pool, &session_id).await? {
         Some(row) => row,

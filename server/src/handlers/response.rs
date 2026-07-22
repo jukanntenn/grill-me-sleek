@@ -189,8 +189,7 @@ pub async fn submit_response(
 
     // Validate response against the grilling schema (garde struct-level
     // custom: cross-field rules driven by the persisted Grilling as context).
-    let grilling: Grilling = serde_json::from_str(&round.grilling)
-        .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to deserialize grilling: {e}")))?;
+    let grilling = super::deserialize_grilling(&round.grilling)?;
     body.validate_with(&grilling)
         .map_err(|e| ApiError::BadRequest(format!("validation failed: {e}")))?;
 

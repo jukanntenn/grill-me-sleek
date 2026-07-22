@@ -159,8 +159,7 @@ pub async fn get_current_round(
         .await?
         .ok_or(ApiError::NotFound)?;
 
-    let grilling: Grilling = serde_json::from_str(&round.grilling)
-        .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to deserialize grilling: {e}")))?;
+    let grilling = super::deserialize_grilling(&round.grilling)?;
 
     let response = round
         .response
@@ -217,8 +216,7 @@ pub async fn get_round(
         }
     }
 
-    let grilling: Grilling = serde_json::from_str(&round.grilling)
-        .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to deserialize grilling: {e}")))?;
+    let grilling = super::deserialize_grilling(&round.grilling)?;
 
     let response = round
         .response

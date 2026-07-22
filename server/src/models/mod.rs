@@ -16,9 +16,21 @@ pub enum SessionStatus {
     Expired = 3,
 }
 
+/// Error returned when an integer does not map to a valid [`SessionStatus`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidSessionStatus(pub i64);
+
+impl std::fmt::Display for InvalidSessionStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid session status: {}", self.0)
+    }
+}
+
+impl std::error::Error for InvalidSessionStatus {}
+
 /// `TryFrom<i64>` per DESIGN.md §1262 spec (DB stores status as int).
 impl TryFrom<i64> for SessionStatus {
-    type Error = ();
+    type Error = InvalidSessionStatus;
 
     fn try_from(v: i64) -> Result<Self, Self::Error> {
         match v {
@@ -26,7 +38,7 @@ impl TryFrom<i64> for SessionStatus {
             1 => Ok(Self::Completed),
             2 => Ok(Self::Cancelled),
             3 => Ok(Self::Expired),
-            _ => Err(()),
+            _ => Err(InvalidSessionStatus(v)),
         }
     }
 }
@@ -202,11 +214,20 @@ pub struct SessionUpdate {
     pub actor: Option<Actor>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum SessionUpdateStatus {
     Completed,
     Cancelled,
+}
+
+impl From<SessionUpdateStatus> for SessionStatus {
+    fn from(status: SessionUpdateStatus) -> Self {
+        match status {
+            SessionUpdateStatus::Completed => Self::Completed,
+            SessionUpdateStatus::Cancelled => Self::Cancelled,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]

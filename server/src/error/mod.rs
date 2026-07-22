@@ -86,7 +86,7 @@ impl IntoResponse for ApiError {
         match &self {
             // Variants with custom message or body structure — keep explicit.
             ApiError::BadRequest(msg) => (
-                StatusCode::BAD_REQUEST,
+                status,
                 Json(ErrorResponse {
                     message: msg.clone(),
                     status: status.as_u16() as i64,

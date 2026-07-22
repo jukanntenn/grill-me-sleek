@@ -85,16 +85,32 @@ pub fn settings() -> &'static Settings {
 /// Listen address (loopback only; Caddy reverse-proxies public traffic).
 pub const LISTEN_ADDR: &str = "127.0.0.1:8000";
 
-/// Fixed session TTL in seconds (no renewal; `expires_at = created_at + SESSION_TTL`).
+/// Fixed session TTL in seconds.
+///
+/// Sessions are not renewed; `expires_at = created_at + SESSION_TTL`.
+/// 1 hour balances agent workflow completion time against resource holding.
+/// Increasing this raises peak concurrent session count and SQLite WAL size.
 pub const SESSION_TTL: i64 = 3600;
 
 /// SessionHandle map (DashMap) soft capacity limit.
+///
+/// Sized for ~15k concurrent sessions at ~2 KB per handle (~30 MB peak).
+/// The TTL sweeper reaps expired entries, so this is a burst ceiling, not steady-state.
+/// Exceeding this returns 503 to new POST /sessions requests.
 pub const MAX_SESSIONS: usize = 15_000;
 
 /// Global SSE connection soft limit (AtomicU64 counter; guards FD/memory exhaustion).
+///
+/// Each SSE connection holds one TCP FD + ~4 KB stream buffer.
+/// 50k ≈ 200 MB memory + 50k FDs (well below typical ulimit -n 1048576).
+/// Exceeding this returns 503 to new SSE requests.
 pub const MAX_SSE_CONNECTIONS: u64 = 50_000;
 
-/// Single long-poll blocking upper bound (avoids proxy/gateway 60s timeouts).
+/// Single long-poll blocking upper bound in seconds.
+///
+/// Set to 55s to stay safely under the 60s timeout common in reverse proxies
+/// and API gateways (Cloudflare, nginx, Caddy). A 5s margin prevents spurious
+/// 502/504 errors from proxy timeout races.
 pub const LONGPOLL_WAIT: u64 = 55;
 
 /// SSE keepalive interval (axum KeepAlive::interval; under CF Proxy Read Timeout 120s → 524).
