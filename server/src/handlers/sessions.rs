@@ -253,16 +253,12 @@ pub async fn update_session(
                 db::get_archive_status(&state.pool, &session_id).await?
             {
                 // Idempotent: already in the desired terminal state → return success.
-                if SessionStatus::from_i64(status_int) == Some(desired_status) {
-                    return Ok(Json(SessionState {
+                if SessionStatus::try_from(status_int).ok() == Some(desired_status) {
+                    return Ok(Json(terminal_session_state(
                         session_id,
-                        status: desired_status.as_str().to_string(),
-                        current_round: 0,
-                        name: None,
-                        description: None,
-                        created_at: String::new(),
-                        expires_at: String::new(),
-                    }));
+                        &desired_status,
+                        None,
+                    )));
                 }
                 return Err(ApiError::TerminalState);
             }
@@ -272,16 +268,12 @@ pub async fn update_session(
 
     if row.status != 0 {
         // Idempotent: already in the desired terminal state → return success.
-        if SessionStatus::from_i64(row.status) == Some(desired_status) {
-            return Ok(Json(SessionState {
+        if SessionStatus::try_from(row.status).ok() == Some(desired_status) {
+            return Ok(Json(terminal_session_state(
                 session_id,
-                status: desired_status.as_str().to_string(),
-                current_round: 0,
-                name: None,
-                description: None,
-                created_at: unix_to_rfc3339(row.created_at),
-                expires_at: unix_to_rfc3339(row.expires_at),
-            }));
+                &desired_status,
+                Some(&row),
+            )));
         }
         return Err(ApiError::TerminalState);
     }
@@ -324,30 +316,22 @@ pub async fn update_session(
     if affected == 0 {
         // Concurrent update — re-check if already in the desired state.
         if let Some(row) = db::get_session(&state.pool, &session_id).await? {
-            if SessionStatus::from_i64(row.status) == Some(desired_status) {
-                return Ok(Json(SessionState {
+            if SessionStatus::try_from(row.status).ok() == Some(desired_status) {
+                return Ok(Json(terminal_session_state(
                     session_id,
-                    status: desired_status.as_str().to_string(),
-                    current_round: 0,
-                    name: None,
-                    description: None,
-                    created_at: unix_to_rfc3339(row.created_at),
-                    expires_at: unix_to_rfc3339(row.expires_at),
-                }));
+                    &desired_status,
+                    Some(&row),
+                )));
             }
         } else if let Some((status_int, _)) =
             db::get_archive_status(&state.pool, &session_id).await?
         {
-            if SessionStatus::from_i64(status_int) == Some(desired_status) {
-                return Ok(Json(SessionState {
+            if SessionStatus::try_from(status_int).ok() == Some(desired_status) {
+                return Ok(Json(terminal_session_state(
                     session_id,
-                    status: desired_status.as_str().to_string(),
-                    current_round: 0,
-                    name: None,
-                    description: None,
-                    created_at: String::new(),
-                    expires_at: String::new(),
-                }));
+                    &desired_status,
+                    None,
+                )));
             }
         }
         return Err(ApiError::TerminalState);
@@ -379,15 +363,33 @@ pub async fn update_session(
 
     tracing::info!(session_id = %session_id, status = %desired_status.as_str(), "session updated");
 
-    Ok(Json(SessionState {
+    Ok(Json(terminal_session_state(
         session_id,
-        status: desired_status.as_str().to_string(),
+        &desired_status,
+        Some(&row),
+    )))
+}
+
+/// Build a `SessionState` for a terminal (completed/cancelled) response.
+/// `row` is `None` when the session was already archived (timestamps unavailable).
+fn terminal_session_state(
+    session_id: String,
+    status: &SessionStatus,
+    row: Option<&db::SessionRow>,
+) -> SessionState {
+    let (created_at, expires_at) = match row {
+        Some(r) => (unix_to_rfc3339(r.created_at), unix_to_rfc3339(r.expires_at)),
+        None => (String::new(), String::new()),
+    };
+    SessionState {
+        session_id,
+        status: status.as_str().to_string(),
         current_round: 0,
         name: None,
         description: None,
-        created_at: unix_to_rfc3339(row.created_at),
-        expires_at: unix_to_rfc3339(row.expires_at),
-    }))
+        created_at,
+        expires_at,
+    }
 }
 
 /// Record a sessions_rejected_total metric with the given reason label.

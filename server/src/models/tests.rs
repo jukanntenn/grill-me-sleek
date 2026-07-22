@@ -7,25 +7,29 @@ mod tests {
     // --- SessionStatus ---
 
     #[test]
-    fn session_status_from_i64() {
-        assert_eq!(SessionStatus::from_i64(0), Some(SessionStatus::Active));
-        assert_eq!(SessionStatus::from_i64(1), Some(SessionStatus::Completed));
-        assert_eq!(SessionStatus::from_i64(2), Some(SessionStatus::Cancelled));
-        assert_eq!(SessionStatus::from_i64(3), Some(SessionStatus::Expired));
-        assert_eq!(SessionStatus::from_i64(4), None);
-        assert_eq!(SessionStatus::from_i64(-1), None);
-    }
-
-    #[test]
     fn session_status_try_from_i64() {
-        // DESIGN.md §1262: derive(TryFrom<i64>) equivalent
-        use std::convert::TryFrom;
         assert_eq!(SessionStatus::try_from(0), Ok(SessionStatus::Active));
         assert_eq!(SessionStatus::try_from(1), Ok(SessionStatus::Completed));
         assert_eq!(SessionStatus::try_from(2), Ok(SessionStatus::Cancelled));
         assert_eq!(SessionStatus::try_from(3), Ok(SessionStatus::Expired));
         assert!(SessionStatus::try_from(4).is_err());
         assert!(SessionStatus::try_from(-1).is_err());
+    }
+
+    #[test]
+    fn session_status_display() {
+        assert_eq!(format!("{}", SessionStatus::Active), "active");
+        assert_eq!(format!("{}", SessionStatus::Completed), "completed");
+        assert_eq!(format!("{}", SessionStatus::Cancelled), "cancelled");
+        assert_eq!(format!("{}", SessionStatus::Expired), "expired");
+    }
+
+    #[test]
+    fn session_status_terminal_detail() {
+        assert_eq!(SessionStatus::Completed.terminal_detail(), "completed");
+        assert_eq!(SessionStatus::Cancelled.terminal_detail(), "cancelled");
+        assert_eq!(SessionStatus::Expired.terminal_detail(), "expired");
+        assert_eq!(SessionStatus::Active.terminal_detail(), "unknown");
     }
 
     #[test]

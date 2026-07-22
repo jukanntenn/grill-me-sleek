@@ -16,28 +16,27 @@ pub enum SessionStatus {
     Expired = 3,
 }
 
-impl SessionStatus {
-    pub fn from_i64(v: i64) -> Option<Self> {
+/// `TryFrom<i64>` per DESIGN.md §1262 spec (DB stores status as int).
+impl TryFrom<i64> for SessionStatus {
+    type Error = ();
+
+    fn try_from(v: i64) -> Result<Self, Self::Error> {
         match v {
-            0 => Some(Self::Active),
-            1 => Some(Self::Completed),
-            2 => Some(Self::Cancelled),
-            3 => Some(Self::Expired),
-            _ => None,
+            0 => Ok(Self::Active),
+            1 => Ok(Self::Completed),
+            2 => Ok(Self::Cancelled),
+            3 => Ok(Self::Expired),
+            _ => Err(()),
         }
     }
 }
 
-/// `TryFrom<i64>` per DESIGN.md §1262 spec (DB stores status as int).
-impl std::convert::TryFrom<i64> for SessionStatus {
-    type Error = ();
-
-    fn try_from(v: i64) -> Result<Self, Self::Error> {
-        Self::from_i64(v).ok_or(())
+impl std::fmt::Display for SessionStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
-/// Lowercase string representation as used in API responses.
 impl SessionStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -48,15 +47,14 @@ impl SessionStatus {
         }
     }
 
-    /// 终态 detail 字符串（用于 `Gone` 响应体）。
-    /// 非 0/1/2/3 的非法值返回 `"unknown"`，保持与旧 match 相同的兜底语义。
-    pub fn terminal_detail(status: i64) -> &'static str {
-        match Self::from_i64(status) {
-            Some(Self::Completed) => "completed",
-            Some(Self::Cancelled) => "cancelled",
-            Some(Self::Expired) => "expired",
-            // Active(0) 不应出现在终态路径，按旧逻辑归为 unknown
-            _ => "unknown",
+    /// Terminal state detail string for `Gone` responses.
+    /// Returns `"unknown"` for `Active` (should not appear in terminal paths).
+    pub fn terminal_detail(&self) -> &'static str {
+        match self {
+            Self::Completed => "completed",
+            Self::Cancelled => "cancelled",
+            Self::Expired => "expired",
+            Self::Active => "unknown",
         }
     }
 }
@@ -316,6 +314,42 @@ pub struct ArchiveRound {
     pub grilling: String,         // raw JSON string
     pub response: Option<String>, // raw JSON string
     pub created_at: i64,
+}
+
+// ---------------------------------------------------------------------------
+// DB row types — used by `db` module queries and returned to handlers.
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct SessionRow {
+    pub id: String,
+    pub status: i64,
+    pub curr_round: Option<i64>,
+    pub name: Option<String>,
+    pub created_at: i64,
+    pub expires_at: i64,
+    pub cancel_reason: Option<String>,
+    pub cancel_detail: Option<String>,
+    pub cancel_actor: Option<String>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct RoundRow {
+    pub id: i64,
+    pub session_id: String,
+    pub seq: i64,
+    pub name: Option<String>,
+    pub grilling: String,
+    pub response: Option<String>,
+    pub created_at: i64,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct RoundSummaryRow {
+    pub seq: i64,
+    pub name: Option<String>,
+    // SQLite booleans are INTEGER (0/1); the handler converts to bool.
+    pub has_response: i64,
 }
 
 // NOTE: unit tests live in `tests.rs` (separate file) — no inline test module

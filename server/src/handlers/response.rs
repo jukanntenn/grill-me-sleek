@@ -137,7 +137,7 @@ pub async fn long_poll_response(
                     None => return Err(ApiError::NotFound),
                 };
 
-                match SessionStatus::from_i64(session_row.status) {
+                match SessionStatus::try_from(session_row.status).ok() {
                     Some(SessionStatus::Active) => continue, // still active, loop again
                     Some(SessionStatus::Cancelled) => {
                         let reason = session_row.cancel_reason.unwrap_or_default();
@@ -303,7 +303,7 @@ fn record_poll_duration(start: Instant) {
 /// cancel_reason (possibly empty when sourced from the archive, which doesn't
 /// carry it back into the active row path).
 fn terminal_result_for_status(status: i64, reason: String) -> ResponseResult {
-    match SessionStatus::from_i64(status) {
+    match SessionStatus::try_from(status).ok() {
         Some(SessionStatus::Cancelled) => ResponseResult::Cancelled { reason },
         // completed (1), expired (3), or any other terminal: surface as expired-
         // style per response-endpoint body contract.

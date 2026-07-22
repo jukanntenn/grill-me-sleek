@@ -123,3 +123,11 @@ pub const IDEMPOTENCY_TTL: Duration = Duration::from_secs(300);
 
 /// Idempotency cache max capacity (moka TinyLFU eviction).
 pub const IDEMPOTENCY_CAPACITY: u64 = 10_000;
+
+/// SQLite pool maximum connections.
+/// Sized for moderate concurrency; SQLite writers serialize anyway.
+pub const DB_POOL_MAX: u32 = 50;
+
+/// SQLite pool minimum idle connections.
+/// Keeps a warm floor to avoid cold-start latency on low-traffic periods.
+pub const DB_POOL_MIN: u32 = 4;

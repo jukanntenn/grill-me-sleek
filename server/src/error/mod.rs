@@ -45,6 +45,20 @@ impl ApiError {
     pub fn internal(err: anyhow::Error) -> Self {
         ApiError::Internal(Arc::new(err))
     }
+
+    /// Map each variant to its HTTP status code.
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::BadRequest(_) => StatusCode::BAD_REQUEST,
+            Self::NotFound => StatusCode::NOT_FOUND,
+            Self::Gone { .. } => StatusCode::GONE,
+            Self::TerminalState => StatusCode::CONFLICT,
+            Self::RoundAlreadySubmitted { .. } => StatusCode::CONFLICT,
+            Self::IdempotencyMismatch => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::MaxSessions => StatusCode::SERVICE_UNAVAILABLE,
+            Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
 }
 
 /// Allow `?` on `anyhow::Error` / `Result<_, anyhow::Error>` to produce
@@ -67,21 +81,15 @@ impl From<sqlx::Error> for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
+        let status = self.status_code();
+
         match &self {
+            // Variants with custom message or body structure — keep explicit.
             ApiError::BadRequest(msg) => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
                     message: msg.clone(),
-                    status: 400,
-                }),
-            )
-                .into_response(),
-
-            ApiError::NotFound => (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    message: "session not found".to_string(),
-                    status: 404,
+                    status: status.as_u16() as i64,
                 }),
             )
                 .into_response(),
@@ -95,40 +103,26 @@ impl IntoResponse for ApiError {
             )
                 .into_response(),
 
-            ApiError::TerminalState => (
-                StatusCode::CONFLICT,
-                Json(ErrorResponse {
-                    message: "session is in terminal state".to_string(),
-                    status: 409,
-                }),
-            )
-                .into_response(),
-
             ApiError::RoundAlreadySubmitted { round, response } => (
                 StatusCode::CONFLICT,
                 Json(ConflictResponse {
-                    message: "round already submitted".to_string(),
-                    status: 409,
+                    message: self.to_string(),
+                    status: status.as_u16() as i64,
                     round: *round,
                     response: response.clone(),
                 }),
             )
                 .into_response(),
 
-            ApiError::IdempotencyMismatch => (
-                StatusCode::UNPROCESSABLE_ENTITY,
+            // Variants using standard ErrorResponse — delegate to Display.
+            ApiError::NotFound
+            | ApiError::TerminalState
+            | ApiError::IdempotencyMismatch
+            | ApiError::MaxSessions => (
+                status,
                 Json(ErrorResponse {
-                    message: "idempotency key reused with different body".to_string(),
-                    status: 422,
-                }),
-            )
-                .into_response(),
-
-            ApiError::MaxSessions => (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(ErrorResponse {
-                    message: "max sessions reached".to_string(),
-                    status: 503,
+                    message: self.to_string(),
+                    status: status.as_u16() as i64,
                 }),
             )
                 .into_response(),
@@ -138,8 +132,8 @@ impl IntoResponse for ApiError {
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
-                        message: "internal server error".to_string(),
-                        status: 500,
+                        message: self.to_string(),
+                        status: status.as_u16() as i64,
                     }),
                 )
                     .into_response()

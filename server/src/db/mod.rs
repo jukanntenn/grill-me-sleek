@@ -9,7 +9,11 @@ use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
 
 use crate::config;
-use crate::models::*;
+use crate::models::{ArchiveRound, ArchiveSnapshot, Grilling, SessionStatus};
+
+// Re-export row types — definitions live in `models`, surfaced here for callers
+// that import via `crate::db::*`.
+pub use crate::models::{RoundRow, RoundSummaryRow, SessionRow};
 
 /// Create and configure the SQLite connection pool.
 pub async fn create_pool() -> Result<Pool<Sqlite>> {
@@ -28,8 +32,8 @@ pub async fn create_pool() -> Result<Pool<Sqlite>> {
     .pragma("temp_store", "MEMORY");
 
     let pool = SqlitePoolOptions::new()
-        .max_connections(50)
-        .min_connections(4)
+        .max_connections(config::DB_POOL_MAX)
+        .min_connections(config::DB_POOL_MIN)
         .acquire_timeout(config::ACQUIRE_TIMEOUT)
         .connect_with(opts)
         .await?;
@@ -133,8 +137,9 @@ pub async fn get_session_or_gone(
 ) -> Result<SessionRow, crate::error::ApiError> {
     if let Some(row) = get_session(pool, session_id).await? {
         if row.status != 0 {
+            let status = SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired);
             return Err(crate::error::ApiError::Gone {
-                detail: SessionStatus::terminal_detail(row.status).to_string(),
+                detail: status.terminal_detail().to_string(),
             });
         }
         return Ok(row);
@@ -142,8 +147,9 @@ pub async fn get_session_or_gone(
 
     // Fall back to archive.
     if let Some((status_int, _reason)) = get_archive_status(pool, session_id).await? {
+        let status = SessionStatus::try_from(status_int).unwrap_or(SessionStatus::Expired);
         return Err(crate::error::ApiError::Gone {
-            detail: SessionStatus::terminal_detail(status_int).to_string(),
+            detail: status.terminal_detail().to_string(),
         });
     }
 
@@ -455,40 +461,4 @@ pub async fn get_archive_status(
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|r| (r.status, r.cancel_reason)))
-}
-
-// ---------------------------------------------------------------------------
-// DB row types — implement FromRow manually for use with query_as!.
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct SessionRow {
-    pub id: String,
-    pub status: i64,
-    pub curr_round: Option<i64>,
-    pub name: Option<String>,
-    pub created_at: i64,
-    pub expires_at: i64,
-    pub cancel_reason: Option<String>,
-    pub cancel_detail: Option<String>,
-    pub cancel_actor: Option<String>,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct RoundRow {
-    pub id: i64,
-    pub session_id: String,
-    pub seq: i64,
-    pub name: Option<String>,
-    pub grilling: String,
-    pub response: Option<String>,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Clone, sqlx::FromRow)]
-pub struct RoundSummaryRow {
-    pub seq: i64,
-    pub name: Option<String>,
-    // SQLite booleans are INTEGER (0/1); the handler converts to bool.
-    pub has_response: i64,
 }
