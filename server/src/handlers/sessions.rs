@@ -1,15 +1,18 @@
 use axum::extract::{ConnectInfo, FromRequestParts, Path, State};
 use axum::http::{HeaderMap, StatusCode, request::Parts};
 use axum::response::Json;
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 
 use crate::AppState;
 use crate::db;
 use crate::error::ApiError;
 use crate::extractors::ValidatedJson;
 use crate::idempotency::{self, IdempotencyEntry};
-use crate::models::*;
-use crate::observability::metrics::{ACTIVE_SESSIONS, metrics};
+use crate::models::{
+    CreateSessionResponse, ErrorResponse, GoneResponse, Grilling, SessionState, SessionStatus,
+    SessionUpdate, SessionUpdateStatus,
+};
+use crate::observability::metrics::{metrics, record_session_created};
 use crate::session::{self, SESSION_TTL, time_now, unix_to_rfc3339};
 use crate::validation;
 
@@ -36,18 +39,6 @@ where
     }
 }
 
-/// Extract client IP from headers, falling back to peer IP.
-/// Caddy sets X-Forwarded-For from CF-Connecting-IP, so we trust it.
-/// This mirrors SmartIp's logic but for logging (not rate limiting).
-fn extract_client_ip(headers: &HeaderMap, peer: &SocketAddr) -> IpAddr {
-    headers
-        .get("x-forwarded-for")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|s| s.split(',').next())
-        .and_then(|s| s.trim().parse::<IpAddr>().ok())
-        .unwrap_or_else(|| peer.ip())
-}
-
 /// POST /v1/sessions — Create a new session with first round.
 #[utoipa::path(
     post,
@@ -69,18 +60,14 @@ pub async fn create_session(
     Json(raw): Json<serde_json::Value>,
 ) -> Result<(StatusCode, Json<CreateSessionResponse>), ApiError> {
     // Extract client IP for logging
-    let client_ip = extract_client_ip(&headers, &peer);
+    let client_ip = super::extract_client_ip(&headers, &peer);
 
     // Validate Grilling (JSON Schema + question-id uniqueness). Receiving a raw
     // Value (not Json<Grilling>) ensures schema violations return 400 from our
     // authoritative jsonschema check, rather than axum's 422 serde rejection.
     let body: Grilling = validation::validate_grilling_value(&raw)?;
 
-    let idempotency_key = headers
-        .get("Idempotency-Key")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
-    let body_hash = idempotency::hash_body(&serde_json::to_vec(&raw).unwrap_or_default());
+    let (idempotency_key, body_hash) = super::extract_idempotency(&headers, &raw);
 
     // The creation closure: generates an ID, writes the session+first round,
     // registers the SessionHandle, and builds the response entry. Under an
@@ -90,7 +77,15 @@ pub async fn create_session(
     let create = move || async move {
         // Check session capacity
         if state_for_create.handles.len() >= session::MAX_SESSIONS {
-            record_rejected("max_sessions");
+            if let Some(m) = metrics() {
+                m.sessions_rejected_total.add(
+                    1,
+                    &[opentelemetry::KeyValue::new(
+                        "reason",
+                        "max_sessions".to_string(),
+                    )],
+                );
+            }
             return Err(ApiError::MaxSessions);
         }
 
@@ -105,32 +100,39 @@ pub async fn create_session(
             {
                 Ok(_round_id) => {
                     if !session::register_session(&state_for_create.handles, session_id.clone()) {
-                        record_rejected("max_sessions");
+                        if let Some(m) = metrics() {
+                            m.sessions_rejected_total.add(
+                                1,
+                                &[opentelemetry::KeyValue::new(
+                                    "reason",
+                                    "max_sessions".to_string(),
+                                )],
+                            );
+                        }
                         return Err(ApiError::MaxSessions);
                     }
 
                     let url = format!("{}/#{session_id}", state_for_create.base_url);
+                    // Extract fields before they are consumed by the response
+                    let name = body.name;
+                    let description = body.description;
+
                     let response = CreateSessionResponse {
                         session_id: session_id.clone(),
                         url,
                         status: "active".to_string(),
                         current_round: 1,
-                        name: Some(body.name.clone()),
-                        description: body.description.clone(),
+                        name: Some(name),
+                        description,
                         created_at: unix_to_rfc3339(now),
                         expires_at: unix_to_rfc3339(expires_at),
                     };
 
-                    if let Some(m) = metrics() {
-                        m.sessions_created_total.add(1, &[]);
-                        let active =
-                            ACTIVE_SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
-                        m.sessions_active.record(active as u64, &[]);
-                    }
+                    record_session_created();
 
                     tracing::info!(session_id = %session_id, client_ip = %client_ip, "session created");
                     return Ok(IdempotencyEntry {
-                        response_body: serde_json::to_string(&response).unwrap_or_default(),
+                        response_body: serde_json::to_string(&response).unwrap_or_default().into(),
                         status_code: 201,
                         body_hash,
                     });
@@ -138,7 +140,11 @@ pub async fn create_session(
                 Err(e) => {
                     if let Some(sqlx::Error::Database(db_err)) = e.downcast_ref::<sqlx::Error>() {
                         // SQLite extended result code 197 = SQLITE_CONSTRAINT_PRIMARYKEY
-                        if db_err.code().is_some_and(|c| c == "197") && attempt < 2 {
+                        if db_err
+                            .code()
+                            .is_some_and(|c| c == crate::db::SQLITE_CONSTRAINT_PRIMARYKEY)
+                            && attempt < 2
+                        {
                             session_id = session::generate_session_id();
                             continue;
                         }
@@ -160,8 +166,7 @@ pub async fn create_session(
     )
     .await?;
 
-    let response: CreateSessionResponse = serde_json::from_str(&entry.response_body)
-        .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to deserialize response: {e}")))?;
+    let response: CreateSessionResponse = serde_json::from_str(&entry.response_body)?;
     Ok((
         StatusCode::from_u16(entry.status_code).unwrap_or(StatusCode::CREATED),
         Json(response),
@@ -205,7 +210,7 @@ pub async fn get_session(
 
     Ok(Json(SessionState {
         session_id: row.id,
-        status: "active".to_string(),
+        status: SessionStatus::Active,
         current_round,
         name: row.name,
         description,
@@ -263,9 +268,10 @@ pub async fn update_session(
         }
     };
 
-    if row.status != 0 {
+    let current_status = SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired);
+    if current_status.is_terminal() {
         // Idempotent: already in the desired terminal state → return success.
-        if SessionStatus::try_from(row.status).ok() == Some(desired_status) {
+        if current_status == desired_status {
             return Ok(Json(terminal_session_state(
                 session_id,
                 &desired_status,
@@ -285,25 +291,18 @@ pub async fn update_session(
     // Determine cancel fields
     let (cancel_reason, cancel_detail, cancel_actor) = match body.status {
         SessionUpdateStatus::Completed => (None, None, None),
-        SessionUpdateStatus::Cancelled => {
-            let reason = body.reason.map(|r| match r {
-                CancelReason::UserCancelled => "user_cancelled".to_string(),
-                CancelReason::AgentAborted => "agent_aborted".to_string(),
-                CancelReason::Error => "error".to_string(),
-            });
-            let actor = body.actor.map(|a| match a {
-                Actor::User => "user".to_string(),
-                Actor::Agent => "agent".to_string(),
-            });
-            (reason, body.reason_detail, actor)
-        }
+        SessionUpdateStatus::Cancelled => (
+            body.reason.map(|r| r.to_string()),
+            body.reason_detail,
+            body.actor.map(|a| a.to_string()),
+        ),
     };
 
     // Update session status
     let affected = db::update_session_status(
         &state.pool,
         &session_id,
-        desired_status as i64,
+        desired_status,
         cancel_reason.as_deref(),
         cancel_detail.as_deref(),
         cancel_actor.as_deref(),
@@ -334,8 +333,13 @@ pub async fn update_session(
         return Err(ApiError::TerminalState);
     }
 
-    // Broadcast terminal SSE event and cleanup handle
-    if let Some((_, handle)) = state.handles.remove(&session_id) {
+    // Archive the session (must happen before cancel_token.cancel() so the
+    // long-poll handler can query the DB and find the terminal state).
+    db::archive_session(&state.pool, &session_id, desired_status, now).await?;
+
+    // Broadcast terminal SSE event before removing the handle (remove_session
+    // cancels the token, which wakes long-poll handlers).
+    if let Some(handle) = state.handles.get(&session_id) {
         let event = match desired_status {
             SessionStatus::Completed => crate::sse::SseEvent::session_completed(&session_id),
             SessionStatus::Cancelled => crate::sse::SseEvent::session_cancelled(
@@ -345,18 +349,10 @@ pub async fn update_session(
             _ => unreachable!(),
         };
         handle.sse_hub.broadcast(event);
-        handle.cancel_token.cancel();
-        handle.agent_notify.notify_waiters();
     }
 
-    // Archive the session
-    db::archive_session(&state.pool, &session_id, desired_status as i64, now).await?;
-
-    // Record metrics
-    if let Some(m) = metrics() {
-        let active = ACTIVE_SESSIONS.fetch_sub(1, std::sync::atomic::Ordering::Relaxed) - 1;
-        m.sessions_active.record(active as u64, &[]);
-    }
+    // Remove handle + decrement ACTIVE_SESSIONS gauge (single responsibility).
+    session::remove_session(&state.handles, &session_id);
 
     tracing::info!(session_id = %session_id, status = %desired_status.as_str(), "session updated");
 
@@ -380,23 +376,12 @@ fn terminal_session_state(
     };
     SessionState {
         session_id,
-        status: status.as_str().to_string(),
+        status: *status,
         current_round: 0,
         name: None,
         description: None,
         created_at,
         expires_at,
-    }
-}
-
-/// Record a sessions_rejected_total metric with the given reason label.
-/// DESIGN.md §2301 — reason distinguishes max_sessions / rate_limited / oom_guard.
-fn record_rejected(reason: &str) {
-    if let Some(m) = metrics() {
-        m.sessions_rejected_total.add(
-            1,
-            &[opentelemetry::KeyValue::new("reason", reason.to_string())],
-        );
     }
 }
 

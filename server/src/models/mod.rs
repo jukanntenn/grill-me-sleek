@@ -7,7 +7,8 @@ use utoipa::ToSchema;
 // Session status
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
 #[repr(i64)]
 pub enum SessionStatus {
     Active = 0,
@@ -57,6 +58,16 @@ impl SessionStatus {
             Self::Cancelled => "cancelled",
             Self::Expired => "expired",
         }
+    }
+
+    /// Whether this session is still accepting requests.
+    pub fn is_active(self) -> bool {
+        self == Self::Active
+    }
+
+    /// Whether this session has reached a terminal state.
+    pub fn is_terminal(self) -> bool {
+        !self.is_active()
     }
 
     /// Terminal state detail string for `Gone` responses.
@@ -172,8 +183,8 @@ pub struct Response {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Answer {
     pub selected: Value, // string for single/text, string[] for multi
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub custom_text: String,
+    #[serde(default, skip_serializing_if = "<str>::is_empty")]
+    pub custom_text: Box<str>,
 }
 
 // ---------------------------------------------------------------------------
@@ -238,11 +249,42 @@ pub enum CancelReason {
     Error,
 }
 
+impl CancelReason {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::UserCancelled => "user_cancelled",
+            Self::AgentAborted => "agent_aborted",
+            Self::Error => "error",
+        }
+    }
+}
+
+impl std::fmt::Display for CancelReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Actor {
     User,
     Agent,
+}
+
+impl Actor {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::User => "user",
+            Self::Agent => "agent",
+        }
+    }
+}
+
+impl std::fmt::Display for Actor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -252,7 +294,7 @@ pub enum Actor {
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct SessionState {
     pub session_id: String,
-    pub status: String, // "active"
+    pub status: SessionStatus,
     pub current_round: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,

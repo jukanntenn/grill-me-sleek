@@ -9,27 +9,50 @@ use sqlx::{Pool, Sqlite};
 use std::str::FromStr;
 
 use crate::config;
-use crate::models::{ArchiveRound, ArchiveSnapshot, Grilling, SessionStatus};
+use crate::models::{ArchiveRound, ArchiveSnapshot, Grilling, Response, SessionStatus};
 
 // Re-export row types — definitions live in `models`, surfaced here for callers
 // that import via `crate::db::*`.
 pub use crate::models::{RoundRow, RoundSummaryRow, SessionRow};
 
+// ---------------------------------------------------------------------------
+// SQLite pragma constants
+// ---------------------------------------------------------------------------
+
+/// SQLite page cache size in pages (negative = KiB). 200 MiB.
+/// Tuned for typical session workload; increase if working set grows.
+const SQLITE_CACHE_SIZE: &str = "-200000";
+
+/// SQLite mmap size in bytes. 512 MiB.
+/// Enables memory-mapped I/O for read-heavy workloads.
+const SQLITE_MMAP_SIZE: &str = "536870912";
+
+/// SQLite WAL auto-checkpoint threshold in pages.
+/// Default 1000 pages ~ 4 MiB; balances write throughput vs recovery time.
+const SQLITE_WAL_AUTOCHECKPOINT: &str = "1000";
+
+/// SQLite temp_store mode. MEMORY avoids disk I/O for transient sort/hash.
+const SQLITE_TEMP_STORE: &str = "MEMORY";
+
+/// SQLite extended result code for PRIMARY KEY constraint violation.
+/// Used for session ID collision retry logic.
+pub const SQLITE_CONSTRAINT_PRIMARYKEY: &str = "197";
+
 /// Create and configure the SQLite connection pool.
 pub async fn create_pool() -> Result<Pool<Sqlite>> {
     let opts = SqliteConnectOptions::from_str(&format!(
         "sqlite://{}?mode=rwc",
-        config::settings().db_path
+        config::settings().db_path.display()
     ))?
     .create_if_missing(true)
     .journal_mode(SqliteJournalMode::Wal)
     .synchronous(SqliteSynchronous::Normal)
     .busy_timeout(config::BUSY_TIMEOUT)
     .foreign_keys(true)
-    .pragma("cache_size", "-200000") // 200MB page cache
-    .pragma("mmap_size", "536870912") // 512MB mmap
-    .pragma("wal_autocheckpoint", "1000")
-    .pragma("temp_store", "MEMORY");
+    .pragma("cache_size", SQLITE_CACHE_SIZE)
+    .pragma("mmap_size", SQLITE_MMAP_SIZE)
+    .pragma("wal_autocheckpoint", SQLITE_WAL_AUTOCHECKPOINT)
+    .pragma("temp_store", SQLITE_TEMP_STORE);
 
     let pool = SqlitePoolOptions::new()
         .max_connections(config::DB_POOL_MAX)
@@ -136,8 +159,8 @@ pub async fn get_session_or_gone(
     session_id: &str,
 ) -> Result<SessionRow, crate::error::ApiError> {
     if let Some(row) = get_session(pool, session_id).await? {
-        if row.status != 0 {
-            let status = SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired);
+        let status = SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired);
+        if status.is_terminal() {
             return Err(crate::error::ApiError::Gone {
                 detail: status.terminal_detail().to_string(),
             });
@@ -160,7 +183,7 @@ pub async fn get_session_or_gone(
 pub async fn update_session_status(
     pool: &Pool<Sqlite>,
     session_id: &str,
-    status: i64,
+    status: SessionStatus,
     cancel_reason: Option<&str>,
     cancel_detail: Option<&str>,
     cancel_actor: Option<&str>,
@@ -168,7 +191,7 @@ pub async fn update_session_status(
     let result = sqlx::query!(
         "UPDATE sessions SET status = ?, cancel_reason = ?, cancel_detail = ?, cancel_actor = ?
          WHERE id = ? AND status = 0",
-        status,
+        status as i64,
         cancel_reason,
         cancel_detail,
         cancel_actor,
@@ -354,28 +377,19 @@ pub async fn get_response(
 pub async fn archive_session(
     pool: &Pool<Sqlite>,
     session_id: &str,
-    status: i64,
+    status: SessionStatus,
     now: i64,
 ) -> Result<bool> {
-    let mut tx = pool.begin().await?;
-
-    let session = sqlx::query_as!(
-        SessionRow,
-        r#"SELECT id as "id!", status, curr_round, name, created_at, expires_at,
-                cancel_reason, cancel_detail, cancel_actor
-         FROM sessions WHERE id = ?"#,
-        session_id
-    )
-    .fetch_optional(&mut *tx)
-    .await?;
-
-    let session = match session {
+    // Reuse get_session to avoid duplicating the session SELECT query.
+    // The lookup is outside the transaction (session archiving is infrequent;
+    // a concurrent archive between this check and the INSERT below is harmless
+    // — the INSERT will simply find the session already deleted).
+    let session = match get_session(pool, session_id).await? {
         Some(s) => s,
-        None => {
-            tx.commit().await?;
-            return Ok(false);
-        }
+        None => return Ok(false),
     };
+
+    let mut tx = pool.begin().await?;
 
     let rounds = sqlx::query_as!(
         RoundRow,
@@ -406,7 +420,7 @@ pub async fn archive_session(
          (id, status, name, cancel_reason, cancel_detail, cancel_actor, total_rounds, created_at, archived_at, snapshot)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         session_id,
-        status,
+        status as i64,
         session.name,
         session.cancel_reason,
         session.cancel_detail,
@@ -427,6 +441,24 @@ pub async fn archive_session(
     Ok(true)
 }
 
+/// Extract non-null session IDs from sqlx query rows.
+///
+/// `id` is `TEXT NOT NULL` in the schema, but sqlx infers `Option<String>`
+/// because SQLite only makes `INTEGER PRIMARY KEY` implicitly NOT NULL.
+/// The `expect` documents this schema invariant — if the schema changes,
+/// this is the single place to update.
+///
+/// Compare `get_session` which uses `id as "id!"` for the same reason;
+/// different SQL here requires the macro approach for offline cache compat.
+macro_rules! collect_session_ids {
+    ($rows:expr) => {
+        $rows
+            .into_iter()
+            .map(|r| r.id.expect("session id is NOT NULL per schema constraint"))
+            .collect::<Vec<_>>()
+    };
+}
+
 /// Find expired sessions (status=0 and expires_at < now).
 pub async fn find_expired_sessions(pool: &Pool<Sqlite>, now: i64) -> Result<Vec<String>> {
     let rows = sqlx::query!(
@@ -435,7 +467,7 @@ pub async fn find_expired_sessions(pool: &Pool<Sqlite>, now: i64) -> Result<Vec<
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows.into_iter().filter_map(|r| r.id).collect())
+    Ok(collect_session_ids!(rows))
 }
 
 /// Find all active sessions for crash recovery.
@@ -446,7 +478,7 @@ pub async fn find_active_sessions(pool: &Pool<Sqlite>, now: i64) -> Result<Vec<S
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows.into_iter().filter_map(|r| r.id).collect())
+    Ok(collect_session_ids!(rows))
 }
 
 /// Look up a session's terminal status (+ cancel_reason) in the archive.
@@ -461,4 +493,21 @@ pub async fn get_archive_status(
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|r| (r.status, r.cancel_reason)))
+}
+
+// ---------------------------------------------------------------------------
+// Row deserialization helpers
+// ---------------------------------------------------------------------------
+
+/// Deserialize a stored grilling JSON string into a [`Grilling`].
+///
+/// Centralises the repeated `serde_json::from_str` + error wrapping found in
+/// round/response handlers.
+pub fn deserialize_grilling(json: &str) -> Result<Grilling> {
+    Ok(serde_json::from_str(json)?)
+}
+
+/// Deserialize an optional stored response JSON string.
+pub fn response_or_none(json: Option<&str>) -> Option<Response> {
+    json.and_then(|r| serde_json::from_str(r).ok())
 }

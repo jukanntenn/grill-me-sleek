@@ -121,7 +121,7 @@ fn response_selected_string_single() {
             "q1".to_string(),
             Answer {
                 selected: serde_json::Value::String("JWT".to_string()),
-                custom_text: "".to_string(),
+                custom_text: "".into(),
             },
         )]
         .into_iter()
@@ -143,7 +143,7 @@ fn response_selected_array_multi() {
             "q1".to_string(),
             Answer {
                 selected: serde_json::json!(["Redis", "WebSocket"]),
-                custom_text: "".to_string(),
+                custom_text: "".into(),
             },
         )]
         .into_iter()
@@ -167,7 +167,7 @@ fn response_selected_rating_as_number_string() {
             "q1".to_string(),
             Answer {
                 selected: serde_json::Value::String("4".to_string()),
-                custom_text: "".to_string(),
+                custom_text: "".into(),
             },
         )]
         .into_iter()

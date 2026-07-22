@@ -1,5 +1,8 @@
 #[cfg(test)]
-#[allow(clippy::module_inception)]
+#[expect(
+    clippy::module_inception,
+    reason = "test module mirrors source module structure"
+)]
 mod tests {
     use crate::models::*;
     use serde_json;
@@ -119,7 +122,7 @@ mod tests {
                 "q1".to_string(),
                 Answer {
                     selected: serde_json::Value::String("A".to_string()),
-                    custom_text: "".to_string(),
+                    custom_text: "".into(),
                 },
             )]
             .into_iter()
@@ -139,7 +142,7 @@ mod tests {
                 "q1".to_string(),
                 Answer {
                     selected: serde_json::json!(["A", "B"]),
-                    custom_text: "".to_string(),
+                    custom_text: "".into(),
                 },
             )]
             .into_iter()

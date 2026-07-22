@@ -25,13 +25,13 @@ static METER_PROVIDER: OnceLock<SdkMeterProvider> = OnceLock::new();
 /// Initialize tracing with JSON file output + optional OTLP export.
 ///
 /// Returns a guard that must be dropped before shutdown to flush buffered logs.
-pub fn init_tracing(log_dir: &str) -> TracingGuard {
+pub fn init_tracing(log_dir: &std::path::Path) -> TracingGuard {
     // Rolling file appenders (daily rotation, four files per design):
     //   app     — tracing logs (business/operational events)
     //   traces  — tracing-fmt span events AND real OTel span records (otel:true)
     //   metrics — tracing-fmt events AND real OTel metric snapshots (otel:true)
     //   logs    — real OTel log records (otel:true)
-    let log_dir = log_dir.to_string();
+    let log_dir = log_dir.to_path_buf();
     let app_appender = rolling::daily(&log_dir, "app");
     let traces_appender = rolling::daily(&log_dir, "traces");
     let metrics_appender = rolling::daily(&log_dir, "metrics");

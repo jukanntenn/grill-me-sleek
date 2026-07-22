@@ -31,6 +31,7 @@ use tokio_stream::wrappers::BroadcastStream;
 
 use crate::AppState;
 use crate::config;
+use crate::error::ApiError;
 use crate::models::{ErrorResponse, GoneResponse};
 use crate::observability::metrics::metrics;
 
@@ -107,14 +108,12 @@ where
 pub async fn sse_handler(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
-) -> Result<axum::response::Response, axum::http::StatusCode> {
+) -> Result<axum::response::Response, ApiError> {
     // Verify session exists and is active.
-    let _row = crate::db::get_session_or_gone(&state.pool, &session_id)
-        .await
-        .map_err(|_| axum::http::StatusCode::NOT_FOUND)?;
+    let _row = crate::db::get_session_or_gone(&state.pool, &session_id).await?;
 
     // Acquire a connection slot; refuse with 503 if the global limit is hit.
-    let guard = SseConnGuard::acquire().ok_or(axum::http::StatusCode::SERVICE_UNAVAILABLE)?;
+    let guard = SseConnGuard::acquire().ok_or(ApiError::MaxSessions)?;
     if let Some(m) = metrics() {
         m.sse_connections_active
             .record(SSE_ACTIVE.load(Ordering::Relaxed), &[]);
@@ -124,7 +123,7 @@ pub async fn sse_handler(
     let handle = state
         .handles
         .get(&session_id)
-        .ok_or(axum::http::StatusCode::NOT_FOUND)?
+        .ok_or(ApiError::NotFound)?
         .clone();
     let rx = handle.sse_hub.subscribe();
 
@@ -134,9 +133,9 @@ pub async fn sse_handler(
     let inner = BroadcastStream::new(rx).filter_map(|result| match result {
         Ok(sse_event) => {
             let event = Event::default()
-                .event(&sse_event.event)
+                .event(sse_event.event)
                 .json_data(&sse_event.data)
-                .unwrap_or_default();
+                .expect("SseEvent.data is always valid JSON");
             Some(Ok::<_, Infallible>(event))
         }
         Err(_) => None, // Lagged — skip

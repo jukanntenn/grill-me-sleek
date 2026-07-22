@@ -6,7 +6,7 @@ use crate::AppState;
 use crate::db;
 use crate::error::ApiError;
 use crate::idempotency::{self, IdempotencyEntry};
-use crate::models::*;
+use crate::models::{ErrorResponse, GoneResponse, Grilling, RoundResponse, RoundSummary};
 use crate::observability::metrics::metrics;
 use crate::session::time_now;
 use crate::validation;
@@ -76,11 +76,7 @@ pub async fn create_round(
     // Verify session is active
     let _row = db::get_session_or_gone(&state.pool, &session_id).await?;
 
-    let idempotency_key = headers
-        .get("Idempotency-Key")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string());
-    let body_hash = idempotency::hash_body(&serde_json::to_vec(&raw).unwrap_or_default());
+    let (idempotency_key, body_hash) = super::extract_idempotency(&headers, &raw);
 
     // Idempotency key is scoped per-session: DESIGN.md §1479 — key dimension is
     // (session_id, key). We namespace it by prefixing with the session id.
@@ -93,10 +89,12 @@ pub async fn create_round(
         let (new_seq, _round_id) =
             db::create_round(&state_for_create.pool, &session_id_for_create, &body, now).await?;
 
+        // Clone only the name String; move body into grilling (avoids deep clone).
+        let name = Some(body.name.clone());
         let response = RoundResponse {
             round: new_seq,
-            name: Some(body.name.clone()),
-            grilling: body.clone(),
+            name,
+            grilling: body,
             response: None,
         };
 
@@ -117,7 +115,7 @@ pub async fn create_round(
             "round created"
         );
         Ok(IdempotencyEntry {
-            response_body: serde_json::to_string(&response).unwrap_or_default(),
+            response_body: serde_json::to_string(&response).unwrap_or_default().into(),
             status_code: 201,
             body_hash,
         })
@@ -127,8 +125,7 @@ pub async fn create_round(
         idempotency::run_idempotent(&state.idempotency_rounds, cache_key, body_hash, create)
             .await?;
 
-    let response: RoundResponse = serde_json::from_str(&entry.response_body)
-        .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to deserialize response: {e}")))?;
+    let response: RoundResponse = serde_json::from_str(&entry.response_body)?;
     Ok((
         StatusCode::from_u16(entry.status_code).unwrap_or(StatusCode::CREATED),
         Json(response),
@@ -159,19 +156,7 @@ pub async fn get_current_round(
         .await?
         .ok_or(ApiError::NotFound)?;
 
-    let grilling = super::deserialize_grilling(&round.grilling)?;
-
-    let response = round
-        .response
-        .as_ref()
-        .and_then(|r| serde_json::from_str::<Response>(r).ok());
-
-    Ok(Json(RoundResponse {
-        round: round.seq,
-        name: round.name,
-        grilling,
-        response,
-    }))
+    Ok(Json(super::build_round_response(&round)?))
 }
 
 /// GET /v1/sessions/{session_id}/rounds/{seq} — Get a specific round.
@@ -216,19 +201,7 @@ pub async fn get_round(
         }
     }
 
-    let grilling = super::deserialize_grilling(&round.grilling)?;
-
-    let response = round
-        .response
-        .as_ref()
-        .and_then(|r| serde_json::from_str::<Response>(r).ok());
-
-    let body = RoundResponse {
-        round: round.seq,
-        name: round.name,
-        grilling,
-        response,
-    };
+    let body = super::build_round_response(&round)?;
 
     // 200: JSON body + ETag header
     let mut resp = Json(body).into_response();

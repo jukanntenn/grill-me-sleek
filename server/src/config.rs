@@ -8,6 +8,7 @@
 //!   `Settings` (see `specs/configuration.md` for the extraction roadmap).
 
 use serde::Deserialize;
+use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -27,18 +28,18 @@ pub struct Settings {
     pub base_url: String,
 
     /// SQLite database file path.
-    pub db_path: String,
+    pub db_path: PathBuf,
 
     /// Log directory (tracing-appender rolling files).
-    pub log_dir: String,
+    pub log_dir: PathBuf,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             base_url: "https://grilling-sleek.example.com".into(),
-            db_path: "./data/grilling-sleek.db".into(),
-            log_dir: "./log/grilling-sleek".into(),
+            db_path: PathBuf::from("./data/grilling-sleek.db"),
+            log_dir: PathBuf::from("./log/grilling-sleek"),
         }
     }
 }
@@ -83,6 +84,10 @@ pub fn settings() -> &'static Settings {
 // ---------------------------------------------------------------------------
 
 /// Listen address (loopback only; Caddy reverse-proxies public traffic).
+///
+/// Chosen: common dev port; Caddy config is pre-set to proxy to this.
+/// Side effects: changing requires a matching Caddy reverse-proxy update.
+/// External systems: Caddy reverse proxy.
 pub const LISTEN_ADDR: &str = "127.0.0.1:8000";
 
 /// Fixed session TTL in seconds.
@@ -90,6 +95,10 @@ pub const LISTEN_ADDR: &str = "127.0.0.1:8000";
 /// Sessions are not renewed; `expires_at = created_at + SESSION_TTL`.
 /// 1 hour balances agent workflow completion time against resource holding.
 /// Increasing this raises peak concurrent session count and SQLite WAL size.
+///
+/// Chosen: 1 h is enough for typical agent workflows while bounding resources.
+/// Side effects: increasing raises peak concurrent sessions and SQLite WAL size.
+/// External systems: none.
 pub const SESSION_TTL: i64 = 3600;
 
 /// SessionHandle map (DashMap) soft capacity limit.
@@ -97,6 +106,10 @@ pub const SESSION_TTL: i64 = 3600;
 /// Sized for ~15k concurrent sessions at ~2 KB per handle (~30 MB peak).
 /// The TTL sweeper reaps expired entries, so this is a burst ceiling, not steady-state.
 /// Exceeding this returns 503 to new POST /sessions requests.
+///
+/// Chosen: ~30 MB memory footprint, suitable for medium deployments.
+/// Side effects: exceeding returns 503; new session creation fails.
+/// External systems: none.
 pub const MAX_SESSIONS: usize = 15_000;
 
 /// Global SSE connection soft limit (AtomicU64 counter; guards FD/memory exhaustion).
@@ -104,6 +117,10 @@ pub const MAX_SESSIONS: usize = 15_000;
 /// Each SSE connection holds one TCP FD + ~4 KB stream buffer.
 /// 50k ≈ 200 MB memory + 50k FDs (well below typical ulimit -n 1048576).
 /// Exceeding this returns 503 to new SSE requests.
+///
+/// Chosen: ~200 MB memory + 50k FDs, well under typical ulimit.
+/// Side effects: exceeding returns 503; SSE connections rejected.
+/// External systems: OS ulimit settings.
 pub const MAX_SSE_CONNECTIONS: u64 = 50_000;
 
 /// Single long-poll blocking upper bound in seconds.
@@ -111,39 +128,83 @@ pub const MAX_SSE_CONNECTIONS: u64 = 50_000;
 /// Set to 55s to stay safely under the 60s timeout common in reverse proxies
 /// and API gateways (Cloudflare, nginx, Caddy). A 5s margin prevents spurious
 /// 502/504 errors from proxy timeout races.
+///
+/// Chosen: 5 s below the 60 s proxy timeout to avoid race conditions.
+/// Side effects: increasing may trigger proxy timeout errors (502/504).
+/// External systems: Cloudflare, nginx, Caddy reverse proxies.
 pub const LONGPOLL_WAIT: u64 = 55;
 
 /// SSE keepalive interval (axum KeepAlive::interval; under CF Proxy Read Timeout 120s → 524).
+///
+/// Chosen: 35 s below Cloudflare 120 s timeout for stability.
+/// Side effects: decreasing increases network overhead; increasing may trigger 524.
+/// External systems: Cloudflare Proxy Read Timeout.
 pub const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(85);
 
 /// Graceful shutdown upper bound (systemd TimeoutStopSec=35 > this).
+///
+/// Chosen: 5 s below systemd default 35 s for graceful shutdown.
+/// Side effects: increasing may delay service restarts.
+/// External systems: systemd.
 pub const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Per-IP create-session rate limit (axum-governor Quota).
+///
+/// Chosen: prevents single-IP abuse while allowing normal usage.
+/// Side effects: decreasing may block legitimate users; increasing may allow abuse.
+/// External systems: axum-governor.
 pub const RATE_LIMIT_PER_MIN: u32 = 20;
 
 /// TTL sweeper scan period.
+///
+/// Chosen: balances scan frequency against CPU overhead.
+/// Side effects: decreasing increases CPU usage; increasing delays expired session cleanup.
+/// External systems: none.
 pub const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 
 /// SQLite busy_timeout (write-conflict retry bound).
 /// Increased to tolerate high concurrent write contention at the cost of latency.
+///
+/// Chosen: high concurrency needs longer retry window for write conflicts.
+/// Side effects: decreasing may cause write failures; increasing adds latency.
+/// External systems: SQLite.
 pub const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// sqlx Pool connection-acquire timeout (sqlx PoolOptions default is 30s; must be set to 5s).
 /// Distinct from the SQLite-layer `BUSY_TIMEOUT`.
 /// Increased to tolerate pool exhaustion under high concurrency.
+///
+/// Chosen: aligned with busy_timeout for high-concurrency scenarios.
+/// Side effects: decreasing may cause connection acquire failures; increasing adds latency.
+/// External systems: sqlx.
 pub const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Idempotency cache entry TTL (moka TTL).
+///
+/// Chosen: 5 min covers the typical request retry window.
+/// Side effects: decreasing may break idempotency; increasing uses more memory.
+/// External systems: moka cache.
 pub const IDEMPOTENCY_TTL: Duration = Duration::from_secs(300);
 
 /// Idempotency cache max capacity (moka TinyLFU eviction).
+///
+/// Chosen: ~10k entries with controllable memory footprint.
+/// Side effects: decreasing causes frequent evictions; increasing uses more memory.
+/// External systems: moka cache.
 pub const IDEMPOTENCY_CAPACITY: u64 = 10_000;
 
 /// SQLite pool maximum connections.
 /// Sized for moderate concurrency; SQLite writers serialize anyway.
+///
+/// Chosen: SQLite writes serialize; more connections add no benefit.
+/// Side effects: decreasing limits concurrency; increasing wastes resources.
+/// External systems: SQLite.
 pub const DB_POOL_MAX: u32 = 50;
 
 /// SQLite pool minimum idle connections.
 /// Keeps a warm floor to avoid cold-start latency on low-traffic periods.
+///
+/// Chosen: warm pool floor avoids cold-start latency during low traffic.
+/// Side effects: decreasing increases cold-start latency; increasing wastes resources.
+/// External systems: SQLite.
 pub const DB_POOL_MIN: u32 = 4;

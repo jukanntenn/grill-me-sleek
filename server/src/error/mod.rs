@@ -79,6 +79,13 @@ impl From<sqlx::Error> for ApiError {
     }
 }
 
+/// Allow `?` on `serde_json::Error` → ApiError::Internal.
+impl From<serde_json::Error> for ApiError {
+    fn from(err: serde_json::Error) -> Self {
+        ApiError::Internal(Arc::new(err.into()))
+    }
+}
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status = self.status_code();
@@ -95,7 +102,7 @@ impl IntoResponse for ApiError {
                 .into_response(),
 
             ApiError::Gone { detail } => (
-                StatusCode::GONE,
+                status,
                 Json(serde_json::json!({
                     "status": "gone",
                     "detail": detail,
@@ -130,7 +137,7 @@ impl IntoResponse for ApiError {
             ApiError::Internal(err) => {
                 tracing::error!(error = %err, "internal error");
                 (
-                    StatusCode::INTERNAL_SERVER_ERROR,
+                    status,
                     Json(ErrorResponse {
                         message: self.to_string(),
                         status: status.as_u16() as i64,

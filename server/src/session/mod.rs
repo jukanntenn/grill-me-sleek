@@ -9,6 +9,22 @@ use crate::db;
 use crate::models::SessionStatus;
 use crate::sse::SseHub;
 
+/// Per-session SSE broadcast channel capacity.
+///
+/// A typical session produces at most ~4 events (round.created,
+/// response.created, and one terminal event). 8 provides 2× headroom for
+/// bursty reconnects where a client may receive multiple events at once.
+///
+/// Chosen: 2× typical event count; each channel costs ~256 bytes regardless
+/// of occupancy, so this is negligible per session.
+/// Side effects: decreasing causes more `Lagged` events (slow clients miss
+/// messages and must GET current on reconnect); increasing wastes memory
+/// (~256 bytes × capacity × active sessions).
+/// External systems: browser clients compensate via GET current on reconnect
+/// per DESIGN.md §801-806; Cloudflare proxy is unaffected (SSE keepalive
+/// is handled separately at 85s).
+const SSE_CHANNEL_CAPACITY: usize = 8;
+
 // Re-export the constants used by handlers, anchored in `config`.
 pub use config::{MAX_SESSIONS, SESSION_TTL, SWEEP_INTERVAL};
 
@@ -17,8 +33,6 @@ pub use config::{MAX_SESSIONS, SESSION_TTL, SWEEP_INTERVAL};
 /// Holds only runtime coordination primitives — no business data.
 /// Business data lives in SQLite; this handle is rebuilt on crash recovery.
 pub struct SessionHandle {
-    pub id: String,
-
     /// Long-poll wakeup signal. Pure notification, no payload.
     /// User submits response → agent_notify.notify_waiters() → blocked
     /// long-poll tasks wake up and re-query DB for the answer.
@@ -33,12 +47,17 @@ pub struct SessionHandle {
     pub cancel_token: CancellationToken,
 }
 
+impl Default for SessionHandle {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SessionHandle {
-    pub fn new(id: String) -> Self {
+    pub fn new() -> Self {
         Self {
-            id,
             agent_notify: Arc::new(Notify::new()),
-            sse_hub: Arc::new(SseHub::new(8)),
+            sse_hub: Arc::new(SseHub::new(SSE_CHANNEL_CAPACITY)),
             cancel_token: CancellationToken::new(),
         }
     }
@@ -58,15 +77,20 @@ pub fn register_session(map: &SessionMap, session_id: String) -> bool {
     if map.len() >= MAX_SESSIONS {
         return false;
     }
-    map.insert(session_id.clone(), Arc::new(SessionHandle::new(session_id)));
+    map.insert(session_id, Arc::new(SessionHandle::new()));
     true
 }
 
 /// Remove a session handle and signal its cancellation.
+///
+/// Also decrements the `ACTIVE_SESSIONS` gauge via
+/// [`observability::metrics::record_session_removed`] so the counter stays
+/// correct regardless of what the caller does with `archive_session`.
 pub fn remove_session(map: &SessionMap, session_id: &str) {
     if let Some((_, handle)) = map.remove(session_id) {
         handle.cancel_token.cancel();
         handle.agent_notify.notify_waiters();
+        crate::observability::metrics::record_session_removed();
     }
 }
 
@@ -117,21 +141,14 @@ pub async fn run_ttl_sweeper(pool: Pool<Sqlite>, map: SessionMap) {
                     remove_session(&map, &session_id);
 
                     // Archive in DB
-                    match db::archive_session(
-                        &pool,
-                        &session_id,
-                        SessionStatus::Expired as i64,
-                        now,
-                    )
-                    .await
+                    match db::archive_session(&pool, &session_id, SessionStatus::Expired, now).await
                     {
                         Ok(true) => {
+                            // Only increment the ttl_swept_total counter here;
+                            // the ACTIVE_SESSIONS gauge was already decremented
+                            // by remove_session earlier in this loop iteration.
                             if let Some(m) = crate::observability::metrics::metrics() {
                                 m.ttl_swept_total.add(1, &[]);
-                                let active = crate::observability::metrics::ACTIVE_SESSIONS
-                                    .fetch_sub(1, std::sync::atomic::Ordering::Relaxed)
-                                    - 1;
-                                m.sessions_active.record(active as u64, &[]);
                             }
                             tracing::info!(session_id = %session_id, "archived expired session");
                         }
@@ -159,7 +176,7 @@ pub async fn run_ttl_sweeper(pool: Pool<Sqlite>, map: SessionMap) {
 pub fn time_now() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .expect("system clock is before UNIX epoch; this is a deployment environment bug")
         .as_secs() as i64
 }
 
@@ -238,8 +255,7 @@ mod tests {
 
     #[test]
     fn session_handle_new() {
-        let handle = SessionHandle::new("test-id".to_string());
-        assert_eq!(handle.id, "test-id");
+        let handle = SessionHandle::new();
         assert!(!handle.cancel_token.is_cancelled());
     }
 

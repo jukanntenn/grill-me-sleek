@@ -4,7 +4,7 @@ use tokio::sync::broadcast;
 /// SSE event types that can be broadcast to clients.
 #[derive(Debug, Clone, Serialize)]
 pub struct SseEvent {
-    pub event: String,
+    pub event: &'static str,
     pub data: serde_json::Value,
 }
 
@@ -40,35 +40,35 @@ impl SseHub {
 impl SseEvent {
     pub fn round_created(round: i64) -> Self {
         Self {
-            event: "round.created".to_string(),
+            event: "round.created",
             data: serde_json::json!({ "round": round }),
         }
     }
 
     pub fn response_created(round: i64) -> Self {
         Self {
-            event: "response.created".to_string(),
+            event: "response.created",
             data: serde_json::json!({ "round": round }),
         }
     }
 
     pub fn session_completed(session_id: &str) -> Self {
         Self {
-            event: "session.completed".to_string(),
+            event: "session.completed",
             data: serde_json::json!({ "session_id": session_id }),
         }
     }
 
     pub fn session_cancelled(session_id: &str, reason: &str) -> Self {
         Self {
-            event: "session.cancelled".to_string(),
+            event: "session.cancelled",
             data: serde_json::json!({ "session_id": session_id, "reason": reason }),
         }
     }
 
     pub fn session_expired(session_id: &str) -> Self {
         Self {
-            event: "session.expired".to_string(),
+            event: "session.expired",
             data: serde_json::json!({ "session_id": session_id }),
         }
     }

@@ -15,6 +15,7 @@ use axum::extract::{DefaultBodyLimit, Request};
 use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::{get, post};
+use std::borrow::Cow;
 use std::time::Instant;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::trace::TraceLayer;
@@ -189,13 +190,10 @@ where
 /// each request. DESIGN.md §2306.
 pub async fn http_duration_middleware(request: Request, next: Next) -> Response {
     let start = Instant::now();
-    let method = request.method().to_string();
-    let path = request
-        .uri()
-        .path()
-        // Normalise variable segments so the cardinality stays bounded: collapse
-        // /v1/sessions/{id}/... to /v1/sessions/:id/... patterns by path index.
-        .to_string();
+    // `as_str()` on Method returns `&'static str` for known HTTP methods;
+    // `to_owned()` does a direct memcpy, skipping the `Display` formatting path.
+    let method = request.method().as_str().to_owned();
+    let path = request.uri().path().to_owned();
     let response = next.run(request).await;
     let elapsed = start.elapsed().as_secs_f64();
     if let Some(m) = observability::metrics::metrics() {
@@ -204,7 +202,7 @@ pub async fn http_duration_middleware(request: Request, next: Next) -> Response 
             elapsed,
             &[
                 opentelemetry::KeyValue::new("method", method),
-                opentelemetry::KeyValue::new("path", normalise_path(&path)),
+                opentelemetry::KeyValue::new("path", normalise_path(&path).into_owned()),
                 opentelemetry::KeyValue::new("status", status),
             ],
         );
@@ -214,7 +212,19 @@ pub async fn http_duration_middleware(request: Request, next: Next) -> Response 
 
 /// Collapse variable path segments so metric label cardinality is bounded.
 /// e.g. `/v1/sessions/abc123/rounds` → `/v1/sessions/:id/rounds`.
-fn normalise_path(path: &str) -> String {
+///
+/// Returns `Cow::Borrowed` when no replacement is needed (common fast path),
+/// avoiding a heap allocation for static paths like `/v1/healthz`.
+fn normalise_path(path: &str) -> Cow<'_, str> {
+    // Fast check: if no segment needs replacement, return borrowed.
+    let needs_replacement = path.split('/').enumerate().any(|(i, seg)| {
+        i > 0 && !seg.is_empty() && (seg.len() >= 20 || seg.chars().all(|c| c.is_ascii_digit()))
+    });
+
+    if !needs_replacement {
+        return Cow::Borrowed(path);
+    }
+
     let mut out = String::with_capacity(path.len());
     for (i, seg) in path.split('/').enumerate() {
         if i > 0 {
@@ -231,5 +241,5 @@ fn normalise_path(path: &str) -> String {
             out.push_str(seg);
         }
     }
-    out
+    Cow::Owned(out)
 }

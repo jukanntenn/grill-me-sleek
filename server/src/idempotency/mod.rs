@@ -16,7 +16,7 @@ use crate::error::ApiError;
 #[derive(Clone)]
 pub struct IdempotencyEntry {
     /// Serialized response body (JSON string).
-    pub response_body: String,
+    pub response_body: Box<str>,
     /// HTTP status code of the first response.
     pub status_code: u16,
     /// xxh3_64 hash of the request body, for detecting key+body mismatch.

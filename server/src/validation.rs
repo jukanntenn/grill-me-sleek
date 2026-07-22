@@ -54,25 +54,11 @@ pub fn validate_grilling_value(value: &serde_json::Value) -> Result<Grilling, Ap
     Ok(grilling)
 }
 
-/// Validate a Grilling payload against the JSON Schema + question-id uniqueness.
-/// (Convenience for already-deserialized payloads.)
-pub fn validate_grilling(grilling: &Grilling) -> Result<(), ApiError> {
-    let value = serde_json::to_value(grilling)
-        .map_err(|e| ApiError::BadRequest(format!("failed to serialize grilling: {e}")))?;
-    let validator = grilling_validator();
-    if let Err(e) = validator.validate(&value) {
-        return Err(ApiError::BadRequest(format!(
-            "grilling validation failed: {e}"
-        )));
-    }
-    validate_unique_question_ids(grilling)
-}
-
 /// Validate that all question IDs are unique within a Grilling round.
 /// JSON Schema `uniqueItems` only catches deep-equal duplicates; it misses
 /// "same id, different body". Here we dedupe on the `id` field directly.
 pub fn validate_unique_question_ids(grilling: &Grilling) -> Result<(), ApiError> {
-    let mut seen = std::collections::HashSet::new();
+    let mut seen = std::collections::HashSet::with_capacity(grilling.questions.len());
     for q in &grilling.questions {
         if !seen.insert(&q.id) {
             return Err(ApiError::BadRequest(format!(
@@ -104,83 +90,113 @@ pub fn validate_response_input(
     grilling: &Grilling,
 ) -> Result<(), garde::Error> {
     for q in &grilling.questions {
-        if let Some(answer) = input.answers.get(&q.id) {
-            // Validate selected type matches question type
-            match q.question_type {
-                QuestionType::Single | QuestionType::Text => {
-                    if !answer.selected.is_string() {
+        let Some(answer) = input.answers.get(&q.id) else {
+            if q.required {
+                return Err(garde::Error::new(format!(
+                    "question '{}': missing required answer",
+                    q.id
+                )));
+            }
+            continue;
+        };
+
+        validate_answer(q, answer)?;
+    }
+
+    validate_additional_notes(input, grilling)?;
+    Ok(())
+}
+
+/// Validate a single answer against its question definition.
+fn validate_answer(
+    q: &crate::models::Question,
+    answer: &crate::models::Answer,
+) -> Result<(), garde::Error> {
+    match q.question_type {
+        QuestionType::Single | QuestionType::Text => {
+            if !answer.selected.is_string() {
+                return Err(garde::Error::new(format!(
+                    "question '{}': selected must be a string for {:?} type",
+                    q.id, q.question_type
+                )));
+            }
+            if q.question_type == QuestionType::Text {
+                validate_text_length(q, answer)?;
+            }
+        }
+        QuestionType::Multi => {
+            if !answer.selected.is_array() {
+                return Err(garde::Error::new(format!(
+                    "question '{}': selected must be an array for multi type",
+                    q.id
+                )));
+            }
+            if q.required {
+                if let Some(arr) = answer.selected.as_array() {
+                    if arr.is_empty() {
                         return Err(garde::Error::new(format!(
-                            "question '{}': selected must be a string for {:?} type",
-                            q.id, q.question_type
-                        )));
-                    }
-                    // Max length check for text
-                    if q.question_type == QuestionType::Text {
-                        if let Some(max_len) = q.max_length {
-                            if let Some(s) = answer.selected.as_str() {
-                                if s.len() as i64 > max_len {
-                                    return Err(garde::Error::new(format!(
-                                        "question '{}': selected exceeds max_length {max_len}",
-                                        q.id
-                                    )));
-                                }
-                            }
-                        }
-                    }
-                }
-                QuestionType::Multi => {
-                    if !answer.selected.is_array() {
-                        return Err(garde::Error::new(format!(
-                            "question '{}': selected must be an array for multi type",
+                            "question '{}': at least one option must be selected",
                             q.id
                         )));
                     }
-                    if q.required {
-                        if let Some(arr) = answer.selected.as_array() {
-                            if arr.is_empty() {
-                                return Err(garde::Error::new(format!(
-                                    "question '{}': at least one option must be selected",
-                                    q.id
-                                )));
-                            }
-                        }
-                    }
-                }
-            }
-        } else if q.required {
-            return Err(garde::Error::new(format!(
-                "question '{}': missing required answer",
-                q.id
-            )));
-        }
-    }
-
-    // Validate additional_notes
-    if let Some(notes_config) = &grilling.additional_notes {
-        match &input.additional_notes {
-            None => {
-                if notes_config.required {
-                    return Err(garde::Error::new(
-                        "additional_notes is required".to_string(),
-                    ));
-                }
-            }
-            Some(notes) => {
-                if let Some(max_len) = notes_config.max_length {
-                    if notes.len() as i64 > max_len {
-                        return Err(garde::Error::new(format!(
-                            "additional_notes exceeds max_length {max_len}"
-                        )));
-                    }
-                }
-                if notes_config.required && notes.trim().is_empty() {
-                    return Err(garde::Error::new(
-                        "additional_notes is required".to_string(),
-                    ));
                 }
             }
         }
     }
+    Ok(())
+}
 
+/// Validate text answer length against `max_length`.
+fn validate_text_length(
+    q: &crate::models::Question,
+    answer: &crate::models::Answer,
+) -> Result<(), garde::Error> {
+    let Some(max_len) = q.max_length else {
+        return Ok(());
+    };
+    let Some(s) = answer.selected.as_str() else {
+        return Ok(());
+    };
+    if s.len() as i64 > max_len {
+        return Err(garde::Error::new(format!(
+            "question '{}': selected exceeds max_length {max_len}",
+            q.id
+        )));
+    }
+    Ok(())
+}
+
+/// Validate `additional_notes` against its config.
+fn validate_additional_notes(
+    input: &ResponseInput,
+    grilling: &Grilling,
+) -> Result<(), garde::Error> {
+    let Some(notes_config) = &grilling.additional_notes else {
+        return Ok(());
+    };
+
+    match &input.additional_notes {
+        None => {
+            if notes_config.required {
+                return Err(garde::Error::new(
+                    "additional_notes is required".to_string(),
+                ));
+            }
+        }
+        Some(notes) => {
+            if let Some(max_len) = notes_config.max_length {
+                if notes.len() as i64 > max_len {
+                    return Err(garde::Error::new(format!(
+                        "additional_notes exceeds max_length {max_len}"
+                    )));
+                }
+            }
+            if notes_config.required && notes.trim().is_empty() {
+                return Err(garde::Error::new(
+                    "additional_notes is required".to_string(),
+                ));
+            }
+        }
+    }
     Ok(())
 }

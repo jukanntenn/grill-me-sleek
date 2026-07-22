@@ -8,10 +8,33 @@ use std::time::Duration;
 use crate::AppState;
 use crate::db;
 use crate::error::ApiError;
-use crate::models::*;
+#[expect(
+    unused_imports,
+    reason = "GoneResponse is referenced by utoipa proc macro; compiler cannot detect proc-macro usage"
+)]
+use crate::models::{
+    ConflictResponse, ErrorResponse, GoneResponse, PendingResponse, Response, ResponseInput,
+    SessionStatus,
+};
 use crate::observability::metrics::metrics;
 use crate::session::{time_now, unix_to_rfc3339};
 use std::time::Instant;
+
+/// Try to resolve a session's terminal status from the archive table.
+/// Returns `Ok(Some(result))` if archived, `Ok(None)` if not found, `Err` on DB error.
+async fn try_terminal_from_archive(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    session_id: &str,
+) -> Result<Option<ResponseResult>, ApiError> {
+    if let Some((status_int, reason)) = db::get_archive_status(pool, session_id).await? {
+        Ok(Some(terminal_result_for_status(
+            status_int,
+            reason.unwrap_or_default(),
+        )))
+    } else {
+        Ok(None)
+    }
+}
 
 /// GET /v1/sessions/{session_id}/rounds/{seq}/response — Long-poll for user response.
 ///
@@ -47,26 +70,22 @@ pub async fn long_poll_response(
     // to distinguish "never existed" (404) from "existed but terminal" (410).
     let session_row = match db::get_session(&state.pool, &session_id).await? {
         Some(row) => row,
-        None => {
-            // Check archive for a prior terminal transition.
-            if let Some((status_int, reason)) =
-                db::get_archive_status(&state.pool, &session_id).await?
-            {
+        None => match try_terminal_from_archive(&state.pool, &session_id).await? {
+            Some(result) => {
                 record_poll_duration(poll_start);
-                return Ok(terminal_result_for_status(
-                    status_int,
-                    reason.unwrap_or_default(),
-                ));
+                return Ok(result);
             }
-            return Err(ApiError::NotFound);
-        }
+            None => return Err(ApiError::NotFound),
+        },
     };
 
     // DESIGN.md §481-493: the response endpoint distinguishes terminal state via
     // body shape {status:"cancelled",reason?} or {status:"expired"} — NOT the
     // {status:"gone",detail} shape used by GET /sessions/{id}. cancelled carries
     // the reason; expired has none.
-    if session_row.status != 0 {
+    let session_status =
+        SessionStatus::try_from(session_row.status).unwrap_or(SessionStatus::Expired);
+    if session_status.is_terminal() {
         record_poll_duration(poll_start);
         return Ok(terminal_result_for_status(
             session_row.status,
@@ -90,9 +109,7 @@ pub async fn long_poll_response(
     loop {
         // ① Check DB first
         if let Some(response_json) = db::get_response(&state.pool, &session_id, seq).await? {
-            let response: Response = serde_json::from_str(&response_json).map_err(|e| {
-                ApiError::internal(anyhow::anyhow!("failed to deserialize response: {e}"))
-            })?;
+            let response: Response = serde_json::from_str(&response_json)?;
             record_poll_duration(poll_start);
             return Ok(ResponseResult::Ok(response));
         }
@@ -117,19 +134,13 @@ pub async fn long_poll_response(
                 // and this re-check, so fall back to the archive table.
                 let session_row = match db::get_session(&state.pool, &session_id).await? {
                     Some(row) => Some(row),
-                    None => {
-                        // Check archive for a prior terminal transition.
-                        if let Some((status_int, reason)) =
-                            db::get_archive_status(&state.pool, &session_id).await?
-                        {
+                    None => match try_terminal_from_archive(&state.pool, &session_id).await? {
+                        Some(result) => {
                             record_poll_duration(poll_start);
-                            return Ok(terminal_result_for_status(
-                                status_int,
-                                reason.unwrap_or_default(),
-                            ));
+                            return Ok(result);
                         }
-                        None
-                    }
+                        None => None,
+                    },
                 };
 
                 let session_row = match session_row {
@@ -204,8 +215,7 @@ pub async fn submit_response(
         submitted_at,
     };
 
-    let response_json = serde_json::to_string(&response)
-        .map_err(|e| ApiError::internal(anyhow::anyhow!("failed to serialize response: {e}")))?;
+    let response_json = serde_json::to_string(&response)?;
 
     // Conditional UPDATE — only if response IS NULL
     let submitted = db::submit_response(&state.pool, &session_id, seq, &response_json).await?;
@@ -217,11 +227,7 @@ pub async fn submit_response(
             .ok_or(ApiError::internal(anyhow::anyhow!(
                 "response should exist after conflict"
             )))?;
-        let existing: Response = serde_json::from_str(&existing_json).map_err(|e| {
-            ApiError::internal(anyhow::anyhow!(
-                "failed to deserialize existing response: {e}"
-            ))
-        })?;
+        let existing: Response = serde_json::from_str(&existing_json)?;
         return Err(ApiError::RoundAlreadySubmitted {
             round: seq,
             response: existing,
@@ -252,6 +258,7 @@ pub struct WaitParam {
 }
 
 /// Result type for the long-poll endpoint.
+#[derive(Debug)]
 pub enum ResponseResult {
     /// 200: Response submitted
     Ok(Response),

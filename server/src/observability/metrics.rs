@@ -1,6 +1,6 @@
 use opentelemetry::metrics::{Counter, Gauge, Histogram};
 use std::sync::OnceLock;
-use std::sync::atomic::AtomicI64;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 /// Atomic counter for active sessions. Handlers update this and set the gauge.
 pub static ACTIVE_SESSIONS: AtomicI64 = AtomicI64::new(0);
@@ -86,4 +86,23 @@ pub fn init_metrics() {
 /// Get the global metrics instance.
 pub fn metrics() -> Option<&'static Metrics> {
     METRICS.get()
+}
+
+/// Record a session creation: increment the created counter and bump the
+/// active-sessions gauge.
+pub fn record_session_created() {
+    if let Some(m) = metrics() {
+        m.sessions_created_total.add(1, &[]);
+        let active = ACTIVE_SESSIONS.fetch_add(1, Ordering::Relaxed) + 1;
+        m.sessions_active.record(active as u64, &[]);
+    }
+}
+
+/// Record a session removal (archive / expiry): decrement the active-sessions
+/// gauge.
+pub fn record_session_removed() {
+    if let Some(m) = metrics() {
+        let active = ACTIVE_SESSIONS.fetch_sub(1, Ordering::Relaxed) - 1;
+        m.sessions_active.record(active as u64, &[]);
+    }
 }
