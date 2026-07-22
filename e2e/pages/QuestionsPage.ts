@@ -134,7 +134,7 @@ export class QuestionsPage extends BasePage {
     this.retryButton = page.getByRole('button', { name: /retry/i });
     this.waitingMessage = page.getByText(/waiting for next round/i);
     // 轮次显示
-    this.roundIndicator = page.locator('div').filter({ hasText: /round|轮次/ }).first();
+    this.roundIndicator = page.locator('div').filter({ hasText: /round|轮次/i }).first();
   }
 
   /**
@@ -232,9 +232,9 @@ export class QuestionsPage extends BasePage {
    */
   async expectRoundIndicator(roundNumber: number, roundName?: string) {
     if (roundName) {
-      await expect(this.page.getByText(new RegExp(`round ${roundNumber}.*${roundName}|第 ${roundNumber} 轮.*${roundName}`))).toBeVisible({ timeout: 10000 });
+      await expect(this.page.getByText(new RegExp(`round ${roundNumber}.*${roundName}|第 ${roundNumber} 轮.*${roundName}`, 'i'))).toBeVisible({ timeout: 10000 });
     } else {
-      await expect(this.page.getByText(new RegExp(`round ${roundNumber}|第 ${roundNumber} 轮`))).toBeVisible({ timeout: 10000 });
+      await expect(this.page.getByText(new RegExp(`round ${roundNumber}|第 ${roundNumber} 轮`, 'i'))).toBeVisible({ timeout: 10000 });
     }
   }
 
@@ -242,7 +242,7 @@ export class QuestionsPage extends BasePage {
    * 验证轮次显示在问卷标题上方
    */
   async expectRoundIndicatorAboveTitle() {
-    const roundIndicator = this.page.locator('div').filter({ hasText: /round|轮次/ }).first();
+    const roundIndicator = this.page.locator('div').filter({ hasText: /round|轮次/i }).first();
     const title = this.page.locator('h1').first();
 
     // 获取两个元素的位置

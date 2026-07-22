@@ -211,20 +211,15 @@ test.describe('用户交互', () => {
   test('缓存优先级 - 使用缓存值而不是推荐选项', async ({ page, basicSession, questionsPage }) => {
     const { session } = basicSession;
 
-    // 第一次访问，选择非推荐选项
     await page.goto(session.url);
     await questionsPage.waitForLoad();
 
+    // 推荐选项（JWT）应自动选中
     const singleQuestion = questionsPage.getQuestion('q_auth');
+    await singleQuestion.expectOptionSelected('JWT');
+
+    // 选择非推荐选项，应覆盖推荐默认值
     await singleQuestion.selectOption('Session Cookies');
-    await questionsPage.submit();
-    await questionsPage.waitForSubmitSuccess();
-
-    // 第二次访问（模拟缓存）
-    await page.goto(session.url);
-    await questionsPage.waitForLoad();
-
-    // 验证使用缓存值而不是推荐选项
     await singleQuestion.expectOptionSelected('Session Cookies');
   });
 

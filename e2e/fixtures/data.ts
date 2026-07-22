@@ -142,6 +142,7 @@ export const test = base.extend<DataFixtures>({
               { label: 'Feature B' },
               { label: 'Feature C' },
             ],
+            recommended: 1,
           },
           {
             id: 'q_text',
@@ -157,6 +158,7 @@ export const test = base.extend<DataFixtures>({
             text: 'Do you agree?',
             type: 'single',
             variant: 'yesno',
+            recommended: 1,
           },
           {
             id: 'q_rating',
@@ -165,6 +167,7 @@ export const test = base.extend<DataFixtures>({
             type: 'single',
             variant: 'rating',
             rating_max: 5,
+            recommended: 4,
           },
         ],
         additional_notes: {
