@@ -48,30 +48,6 @@ export function QuestionsPage({
     const cached = cachedValues?.[q.id];
     if (cached) {
       defaultValues[q.id] = cached;
-    } else if (q.recommended !== undefined) {
-      // Auto-select recommended option
-      if (q.type === "single") {
-        let recommendedValue = "";
-        if (q.variant === "yesno") {
-          recommendedValue = q.recommended === 0 ? "no" : "yes";
-        } else if (q.variant === "rating") {
-          recommendedValue = String(q.recommended);
-        } else if (q.options && q.recommended >= 0 && q.recommended < q.options.length) {
-          recommendedValue = q.options[q.recommended].label;
-        }
-        defaultValues[q.id] = { selected: recommendedValue, custom_text: "" };
-      } else if (q.type === "multi" && q.options && q.recommended >= 0 && q.recommended < q.options.length) {
-        const recommendedOption = q.options[q.recommended].label;
-        defaultValues[q.id] = {
-          selected: [recommendedOption],
-          custom_text: ""
-        };
-      } else {
-        defaultValues[q.id] = {
-          selected: q.type === "multi" ? [] : "",
-          custom_text: "",
-        };
-      }
     } else {
       defaultValues[q.id] = {
         selected: q.type === "multi" ? [] : "",
@@ -123,14 +99,6 @@ export function QuestionsPage({
 
   return (
     <div>
-      {/* Round indicator */}
-      <div className="mb-[var(--spacing-md)]">
-        <span className="text-sm text-mute">
-          {round.name
-            ? t("roundWithName", { n: round.round, name: round.name })
-            : t("round", { n: round.round })}
-        </span>
-      </div>
       {grilling.name && (
         <h1 className="display-lg text-ink mb-[var(--spacing-xs)]">{grilling.name}</h1>
       )}

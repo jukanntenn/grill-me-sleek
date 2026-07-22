@@ -100,4 +100,157 @@ test.describe('用户交互', () => {
     await questionsPage.submit();
     await questionsPage.waitForSubmitSuccess();
   });
+
+  test('轮次显示功能 - 显示轮次数字和名称', async ({ page, basicSession, questionsPage }) => {
+    const { session } = basicSession;
+
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    // 验证轮次显示
+    await questionsPage.expectRoundIndicator(1, 'Basic Test Session');
+  });
+
+  test('轮次显示功能 - 显示在问卷标题上方', async ({ page, basicSession, questionsPage }) => {
+    const { session } = basicSession;
+
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    // 验证轮次显示在问卷标题上方
+    await questionsPage.expectRoundIndicatorAboveTitle();
+  });
+
+  test('单选题"无"选项 - 渲染和选择', async ({ page, allQuestionTypesSession, questionsPage }) => {
+    const { session } = allQuestionTypesSession;
+
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    // 获取单选题控件
+    const singleQuestion = questionsPage.getQuestion('q_single');
+
+    // 验证"无"选项存在
+    await expect(page.getByText(/none of the above|以上选项都不符合/i)).toBeVisible();
+
+    // 选择"无"选项
+    await singleQuestion.selectNoneOption();
+
+    // 验证"无"选项被选中
+    await singleQuestion.expectNoneOptionSelected();
+  });
+
+  test('单选题"无"选项 - 不影响其他选项', async ({ page, allQuestionTypesSession, questionsPage }) => {
+    const { session } = allQuestionTypesSession;
+
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    // 获取单选题控件
+    const singleQuestion = questionsPage.getQuestion('q_single');
+
+    // 选择普通选项
+    await singleQuestion.selectOption('Option A');
+    await singleQuestion.expectOptionSelected('Option A');
+
+    // 选择"无"选项
+    await singleQuestion.selectNoneOption();
+    await singleQuestion.expectNoneOptionSelected();
+
+    // 再次选择普通选项
+    await singleQuestion.selectOption('Option B');
+    await singleQuestion.expectOptionSelected('Option B');
+  });
+
+  test('自动勾选推荐选项 - 单选题', async ({ page, basicSession, questionsPage }) => {
+    const { session } = basicSession;
+
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    // 验证推荐选项自动选中（第一个选项是推荐的）
+    const singleQuestion = questionsPage.getQuestion('q_auth');
+    await singleQuestion.expectOptionSelected('JWT');
+  });
+
+  test('自动勾选推荐选项 - 多选题', async ({ page, allQuestionTypesSession, questionsPage }) => {
+    const { session } = allQuestionTypesSession;
+
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    // 验证多选题推荐选项自动选中（第二个选项是推荐的）
+    const multiQuestion = questionsPage.getQuestion('q_multi');
+    await multiQuestion.expectOptionSelected('Feature B');
+  });
+
+  test('自动勾选推荐选项 - 是/否题', async ({ page, allQuestionTypesSession, questionsPage }) => {
+    const { session } = allQuestionTypesSession;
+
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    // 验证是/否题推荐选项自动选中（推荐"是"）
+    const yesnoQuestion = questionsPage.getQuestion('q_yesno');
+    const yesButton = page.getByRole('button', { name: /yes/i });
+    await expect(yesButton).toHaveAttribute('data-selected', 'true');
+  });
+
+  test('自动勾选推荐选项 - 评分题', async ({ page, allQuestionTypesSession, questionsPage }) => {
+    const { session } = allQuestionTypesSession;
+
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    // 验证评分题推荐选项自动选中（推荐评分4）
+    const ratingQuestion = questionsPage.getQuestion('q_rating');
+    const rating4Button = page.getByRole('button', { name: /^4/ });
+    await expect(rating4Button).toHaveAttribute('data-selected', 'true');
+  });
+
+  test('缓存优先级 - 使用缓存值而不是推荐选项', async ({ page, basicSession, questionsPage }) => {
+    const { session } = basicSession;
+
+    // 第一次访问，选择非推荐选项
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    const singleQuestion = questionsPage.getQuestion('q_auth');
+    await singleQuestion.selectOption('Session Cookies');
+    await questionsPage.submit();
+    await questionsPage.waitForSubmitSuccess();
+
+    // 第二次访问（模拟缓存）
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    // 验证使用缓存值而不是推荐选项
+    await singleQuestion.expectOptionSelected('Session Cookies');
+  });
+
+  test('完整流程 - 轮次显示 + 选择"无"选项 + 提交', async ({ page, allQuestionTypesSession, questionsPage }) => {
+    const { session } = allQuestionTypesSession;
+
+    await page.goto(session.url);
+    await questionsPage.waitForLoad();
+
+    // 1. 验证轮次显示
+    await questionsPage.expectRoundIndicator(1, 'All Question Types');
+
+    // 2. 选择单选题的"无"选项
+    await questionsPage.selectSingleNoneOption('q_single');
+
+    // 3. 保持多选题的推荐选项（自动选中）
+    // 4. 填写文本题
+    await questionsPage.fillText('q_text', 'I chose none of the above for single choice');
+
+    // 5. 填写额外备注
+    await questionsPage.fillAdditionalNotes('Testing the none option feature');
+
+    // 6. 提交
+    await questionsPage.submit();
+
+    // 7. 验证提交成功
+    await questionsPage.waitForSubmitSuccess();
+  });
 });

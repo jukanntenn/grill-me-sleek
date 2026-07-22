@@ -33,5 +33,8 @@
   "themeLight": "Light",
   "themeDark": "Dark",
   "themeSystem": "System",
-  "languageLabel": "Language"
+  "languageLabel": "Language",
+  "round": "Round",
+  "roundWithName": "Round {{n}} — {{name}}",
+  "noSelection": "None of the above"
 }

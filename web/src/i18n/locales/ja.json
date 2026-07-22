@@ -33,5 +33,8 @@
   "themeLight": "ライト",
   "themeDark": "ダーク",
   "themeSystem": "システム",
-  "languageLabel": "言語"
+  "languageLabel": "言語",
+  "round": "ラウンド",
+  "roundWithName": "ラウンド {{n}} — {{name}}",
+  "noSelection": "上記の選択肢に該当しない"
 }

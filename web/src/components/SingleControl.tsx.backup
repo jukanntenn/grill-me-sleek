@@ -108,21 +108,6 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
         onValueChange={(val) => handleSelect(val as string)}
         className="flex flex-col gap-2"
       >
-        {/* "None of the above" option — only for optional questions */}
-        {question.required === false && (
-          <label
-            data-selected={selected === ""}
-            className="flex items-center gap-2.5 min-h-10 rounded-[var(--radius-md)] border border-hairline bg-canvas px-[var(--spacing-sm)] cursor-pointer hover:border-hairline-strong data-[selected=true]:border-primary transition-colors"
-          >
-            <Radio.Root
-              value=""
-              className={`size-4 rounded-full border-2 flex items-center justify-center transition-colors ${selected === "" ? "border-primary bg-primary" : "border-hairline-strong"}`}
-            >
-              <Radio.Indicator className="size-2 rounded-full bg-on-primary" />
-            </Radio.Root>
-            <span className="text-sm text-ink">{t("noSelection")}</span>
-          </label>
-        )}
         {options.map((opt, i) => {
           const isRecommended = question.recommended === i;
           const isSelected = selected === opt.label;

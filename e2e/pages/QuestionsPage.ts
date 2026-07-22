@@ -28,6 +28,13 @@ class QuestionControl {
   }
 
   /**
+   * 选择"无"选项（单选题专用）
+   */
+  async selectNoneOption() {
+    await this.container.locator('label').filter({ hasText: /none of the above|以上选项都不符合/i }).click();
+  }
+
+  /**
    * 填写文本
    */
   async fillText(text: string) {
@@ -67,6 +74,29 @@ class QuestionControl {
   getContainer(): Locator {
     return this.container;
   }
+
+  /**
+   * 验证选项是否被选中
+   */
+  async expectOptionSelected(optionLabel: string) {
+    const option = this.container.locator('label').filter({ hasText: optionLabel });
+    await expect(option).toHaveAttribute('data-selected', 'true');
+  }
+
+  /**
+   * 验证"无"选项是否被选中
+   */
+  async expectNoneOptionSelected() {
+    const noneOption = this.container.locator('label').filter({ hasText: /none of the above|以上选项都不符合/i });
+    await expect(noneOption).toHaveAttribute('data-selected', 'true');
+  }
+
+  /**
+   * 验证推荐标记是否显示
+   */
+  async expectRecommendedMark() {
+    await expect(this.container.getByText(/recommended|推荐/)).toBeVisible();
+  }
 }
 
 /**
@@ -91,6 +121,9 @@ export class QuestionsPage extends BasePage {
   // 等待提示
   readonly waitingMessage: Locator;
 
+  // 轮次显示
+  readonly roundIndicator: Locator;
+
   constructor(page: Page) {
     super(page);
     // QuestionCard 使用 question-${id} 作为 testid
@@ -100,6 +133,8 @@ export class QuestionsPage extends BasePage {
     this.errorBanner = page.getByRole('alert');
     this.retryButton = page.getByRole('button', { name: /retry/i });
     this.waitingMessage = page.getByText(/waiting for next round/i);
+    // 轮次显示
+    this.roundIndicator = page.locator('div').filter({ hasText: /round|轮次/ }).first();
   }
 
   /**
@@ -115,6 +150,14 @@ export class QuestionsPage extends BasePage {
   async selectSingleOption(questionId: string, optionLabel: string) {
     const question = this.getQuestion(questionId);
     await question.selectOption(optionLabel);
+  }
+
+  /**
+   * 选择单选题的"无"选项
+   */
+  async selectSingleNoneOption(questionId: string) {
+    const question = this.getQuestion(questionId);
+    await question.selectNoneOption();
   }
 
   /**
@@ -182,5 +225,40 @@ export class QuestionsPage extends BasePage {
    */
   async expectQuestionText(text: string) {
     await expect(this.page.getByText(text)).toBeVisible({ timeout: 10000 });
+  }
+
+  /**
+   * 验证轮次显示
+   */
+  async expectRoundIndicator(roundNumber: number, roundName?: string) {
+    if (roundName) {
+      await expect(this.page.getByText(new RegExp(`round ${roundNumber}.*${roundName}|第 ${roundNumber} 轮.*${roundName}`))).toBeVisible({ timeout: 10000 });
+    } else {
+      await expect(this.page.getByText(new RegExp(`round ${roundNumber}|第 ${roundNumber} 轮`))).toBeVisible({ timeout: 10000 });
+    }
+  }
+
+  /**
+   * 验证轮次显示在问卷标题上方
+   */
+  async expectRoundIndicatorAboveTitle() {
+    const roundIndicator = this.page.locator('div').filter({ hasText: /round|轮次/ }).first();
+    const title = this.page.locator('h1').first();
+
+    // 获取两个元素的位置
+    const roundBox = await roundIndicator.boundingBox();
+    const titleBox = await title.boundingBox();
+
+    if (roundBox && titleBox) {
+      expect(roundBox.y).toBeLessThan(titleBox.y);
+    }
+  }
+
+  /**
+   * 验证推荐选项是否自动选中
+   */
+  async expectRecommendedOptionSelected(questionId: string) {
+    const question = this.getQuestion(questionId);
+    await question.expectRecommendedMark();
   }
 }

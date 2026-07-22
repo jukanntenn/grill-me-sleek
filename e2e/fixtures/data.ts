@@ -124,6 +124,7 @@ export const test = base.extend<DataFixtures>({
             header: 'Single Choice',
             text: 'Choose one option',
             type: 'single',
+            required: false,
             options: [
               { label: 'Option A', description: 'First option' },
               { label: 'Option B', description: 'Second option' },

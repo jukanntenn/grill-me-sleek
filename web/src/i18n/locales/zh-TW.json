@@ -33,5 +33,8 @@
   "themeLight": "淺色",
   "themeDark": "深色",
   "themeSystem": "跟隨系統",
-  "languageLabel": "語言"
+  "languageLabel": "語言",
+  "round": "輪次",
+  "roundWithName": "第 {{n}} 輪 — {{name}}",
+  "noSelection": "以上選項都不符合"
 }
