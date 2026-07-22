@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { QuestionsPage } from "../../src/pages/QuestionsPage";
-import type { RoundData, Question } from "../../src/types";
+import type { RoundData } from "../../src/types";
 import { z } from "zod";
 
 // Mock react-i18next
