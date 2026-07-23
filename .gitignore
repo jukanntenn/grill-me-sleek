@@ -1,19 +1,9 @@
-# Python
+# Python (scripts still present: sync-version.py, build.py, publish-local.py)
 __pycache__/
 *.py[cod]
-*.so
-
-# Ruff
-.ruff_cache/
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
 
 # Environments
 .env
-.venv
 
 # OS
 .DS_Store

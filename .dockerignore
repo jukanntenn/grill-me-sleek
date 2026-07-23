@@ -31,13 +31,9 @@ web/dist/
 *.md
 LICENSE
 
-# Python
+# Python (scripts still present: sync-version.py, build.py, publish-local.py)
 __pycache__/
 *.py[cod]
-.pytest_cache/
-.ruff_cache/
-uv.lock
-pyproject.toml
 
 # Dev artifacts
 .env
