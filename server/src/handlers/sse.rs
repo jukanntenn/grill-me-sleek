@@ -53,6 +53,9 @@ impl SseConnGuard {
             SSE_ACTIVE.fetch_sub(1, Ordering::Relaxed);
             None
         } else {
+            if let Some(m) = metrics() {
+                m.sse_connections_active.record(prev + 1, &[]);
+            }
             Some(SseConnGuard {
                 counter: &SSE_ACTIVE,
             })
@@ -113,11 +116,8 @@ pub async fn sse_handler(
     let _row = crate::db::get_session_or_gone(&state.pool, &session_id).await?;
 
     // Acquire a connection slot; refuse with 503 if the global limit is hit.
+    // Gauge is recorded inside SseConnGuard::acquire().
     let guard = SseConnGuard::acquire().ok_or(ApiError::MaxSessions)?;
-    if let Some(m) = metrics() {
-        m.sse_connections_active
-            .record(SSE_ACTIVE.load(Ordering::Relaxed), &[]);
-    }
 
     // Subscribe to the per-session broadcast hub.
     let handle = state

@@ -83,14 +83,9 @@ pub async fn long_poll_response(
     // body shape {status:"cancelled",reason?} or {status:"expired"} — NOT the
     // {status:"gone",detail} shape used by GET /sessions/{id}. cancelled carries
     // the reason; expired has none.
-    let session_status =
-        SessionStatus::try_from(session_row.status).unwrap_or(SessionStatus::Expired);
-    if session_status.is_terminal() {
+    if let Some(result) = session_terminal_result(&session_row) {
         record_poll_duration(poll_start);
-        return Ok(terminal_result_for_status(
-            session_row.status,
-            session_row.cancel_reason.unwrap_or_default(),
-        ));
+        return Ok(result);
     }
 
     // Verify round exists
@@ -148,20 +143,12 @@ pub async fn long_poll_response(
                     None => return Err(ApiError::NotFound),
                 };
 
-                match SessionStatus::try_from(session_row.status).ok() {
-                    Some(SessionStatus::Active) => continue, // still active, loop again
-                    Some(SessionStatus::Cancelled) => {
-                        let reason = session_row.cancel_reason.unwrap_or_default();
-                        record_poll_duration(poll_start);
-                        return Ok(ResponseResult::Cancelled { reason });
-                    }
-                    // completed (1), expired (3), or any other terminal: surface as
-                    // expired-style per response-endpoint body contract.
-                    _ => {
-                        record_poll_duration(poll_start);
-                        return Ok(ResponseResult::Expired);
-                    }
+                if let Some(result) = session_terminal_result(&session_row) {
+                    record_poll_duration(poll_start);
+                    return Ok(result);
                 }
+                // Still active after cancel signal — loop again
+                continue;
             }
         }
     }
@@ -298,6 +285,20 @@ fn record_poll_duration(start: Instant) {
     if let Some(m) = metrics() {
         let elapsed = start.elapsed().as_secs_f64();
         m.longpoll_wait_seconds.record(elapsed, &[]);
+    }
+}
+
+/// Check if a session is in terminal state and return the appropriate
+/// `ResponseResult`. Returns `None` if the session is still active.
+fn session_terminal_result(session_row: &db::SessionRow) -> Option<ResponseResult> {
+    let status = SessionStatus::try_from(session_row.status).unwrap_or(SessionStatus::Expired);
+    if status.is_terminal() {
+        Some(terminal_result_for_status(
+            session_row.status,
+            session_row.cancel_reason.clone().unwrap_or_default(),
+        ))
+    } else {
+        None
     }
 }
 

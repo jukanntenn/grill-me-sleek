@@ -26,7 +26,7 @@ pub(crate) fn extract_client_ip(headers: &HeaderMap, peer: &SocketAddr) -> IpAdd
 ///
 /// Thin wrapper over [`db::deserialize_grilling`] that maps to [`ApiError`].
 pub(crate) fn deserialize_grilling(json: &str) -> Result<Grilling, ApiError> {
-    crate::db::deserialize_grilling(json).map_err(ApiError::internal)
+    Ok(crate::db::deserialize_grilling(json)?)
 }
 
 /// Extract the `Idempotency-Key` header value and compute the body hash.

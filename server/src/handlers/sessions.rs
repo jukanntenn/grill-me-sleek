@@ -247,39 +247,25 @@ pub async fn update_session(
     // state instead of 409.
     let desired_status: SessionStatus = body.status.into();
 
-    let row = match db::get_session(&state.pool, &session_id).await? {
-        Some(row) => row,
-        None => {
-            // Active row gone — check archive: if present, it's terminal.
-            if let Some((status_int, _reason)) =
-                db::get_archive_status(&state.pool, &session_id).await?
-            {
-                // Idempotent: already in the desired terminal state → return success.
-                if SessionStatus::try_from(status_int).ok() == Some(desired_status) {
-                    return Ok(Json(terminal_session_state(
-                        session_id,
-                        &desired_status,
-                        None,
-                    )));
-                }
-                return Err(ApiError::TerminalState);
-            }
-            return Err(ApiError::NotFound);
-        }
+    let (current_status, row) = match resolve_session_status(&state.pool, &session_id).await? {
+        Some((status, row)) => (status, row),
+        None => return Err(ApiError::NotFound),
     };
 
-    let current_status = SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired);
     if current_status.is_terminal() {
         // Idempotent: already in the desired terminal state → return success.
         if current_status == desired_status {
             return Ok(Json(terminal_session_state(
                 session_id,
                 &desired_status,
-                Some(&row),
+                row.as_ref(),
             )));
         }
         return Err(ApiError::TerminalState);
     }
+
+    // Active session — row must be Some
+    let row = row.expect("active session must have a row in the active table");
 
     // DESIGN.md §653 — server-authoritative: reason/reason_detail/actor are only
     // adopted when status=cancelled; for status=completed they are ignored
@@ -311,26 +297,17 @@ pub async fn update_session(
 
     if affected == 0 {
         // Concurrent update — re-check if already in the desired state.
-        if let Some(row) = db::get_session(&state.pool, &session_id).await? {
-            if SessionStatus::try_from(row.status).ok() == Some(desired_status) {
+        match resolve_session_status(&state.pool, &session_id).await? {
+            Some((status, row)) if status == desired_status => {
                 return Ok(Json(terminal_session_state(
                     session_id,
                     &desired_status,
-                    Some(&row),
+                    row.as_ref(),
                 )));
             }
-        } else if let Some((status_int, _)) =
-            db::get_archive_status(&state.pool, &session_id).await?
-        {
-            if SessionStatus::try_from(status_int).ok() == Some(desired_status) {
-                return Ok(Json(terminal_session_state(
-                    session_id,
-                    &desired_status,
-                    None,
-                )));
-            }
+            Some(_) => return Err(ApiError::TerminalState),
+            None => return Err(ApiError::NotFound),
         }
-        return Err(ApiError::TerminalState);
     }
 
     // Archive the session (must happen before cancel_token.cancel() so the
@@ -361,6 +338,25 @@ pub async fn update_session(
         &desired_status,
         Some(&row),
     )))
+}
+
+/// Try to find a session's current status from either the active table or
+/// the archive table. Returns `Ok(Some((status, Some(row))))` if found in
+/// the active table, `Ok(Some((status, None)))` if found in the archive,
+/// `Ok(None)` if not found in either table, `Err` on DB error.
+async fn resolve_session_status(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+    session_id: &str,
+) -> Result<Option<(SessionStatus, Option<db::SessionRow>)>, ApiError> {
+    if let Some(row) = db::get_session(pool, session_id).await? {
+        let status = SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired);
+        return Ok(Some((status, Some(row))));
+    }
+    if let Some((status_int, _)) = db::get_archive_status(pool, session_id).await? {
+        let status = SessionStatus::try_from(status_int).unwrap_or(SessionStatus::Expired);
+        return Ok(Some((status, None)));
+    }
+    Ok(None)
 }
 
 /// Build a `SessionState` for a terminal (completed/cancelled) response.

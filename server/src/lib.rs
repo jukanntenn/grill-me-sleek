@@ -210,6 +210,13 @@ pub async fn http_duration_middleware(request: Request, next: Next) -> Response 
     response
 }
 
+/// Heuristic: base64url session ids are ≥20 chars; round seqs are pure
+/// digits. Replace both with `:id` placeholders so metric label
+/// cardinality stays bounded.
+fn is_dynamic_segment(seg: &str) -> bool {
+    seg.len() >= 20 || seg.chars().all(|c| c.is_ascii_digit())
+}
+
 /// Collapse variable path segments so metric label cardinality is bounded.
 /// e.g. `/v1/sessions/abc123/rounds` → `/v1/sessions/:id/rounds`.
 ///
@@ -217,9 +224,10 @@ pub async fn http_duration_middleware(request: Request, next: Next) -> Response 
 /// avoiding a heap allocation for static paths like `/v1/healthz`.
 fn normalise_path(path: &str) -> Cow<'_, str> {
     // Fast check: if no segment needs replacement, return borrowed.
-    let needs_replacement = path.split('/').enumerate().any(|(i, seg)| {
-        i > 0 && !seg.is_empty() && (seg.len() >= 20 || seg.chars().all(|c| c.is_ascii_digit()))
-    });
+    let needs_replacement = path
+        .split('/')
+        .enumerate()
+        .any(|(i, seg)| i > 0 && !seg.is_empty() && is_dynamic_segment(seg));
 
     if !needs_replacement {
         return Cow::Borrowed(path);
@@ -233,9 +241,7 @@ fn normalise_path(path: &str) -> Cow<'_, str> {
         if seg.is_empty() {
             continue;
         }
-        // Heuristic: base64url session ids are ≥20 chars; round seqs are pure
-        // digits. Replace both with placeholders.
-        if seg.len() >= 20 || seg.chars().all(|c| c.is_ascii_digit()) {
+        if is_dynamic_segment(seg) {
             out.push_str(":id");
         } else {
             out.push_str(seg);
