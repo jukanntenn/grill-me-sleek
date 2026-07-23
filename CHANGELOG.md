@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.2.0-rc.2] - 2026-07-23
+
+### Added
+- Round indicator shows which question batch you're on and how many remain.
+- "None of the above" option on questions — pick it when none of the predefined answers fit.
+- Auto-recommended answers are pre-selected when opening a question page.
+- Self-hosting support — deploy your own instance with Docker and Caddy reverse proxy.
+- API documentation available at /docs with Swagger UI.
+- CLI structured logging — logs rotate automatically and go to `~/.local/state/grilling-sleek/logs/`.
+- CLI persistent configuration — set server, timeouts, and other options via `grilling-sleek config`.
+
+### Changed
+- CLI renamed from `grill` to `grilling-sleek` — update your scripts and PATH references.
+- CLI is now installed via npm (`npm install -g @grilling-sleek/cli`) instead of bundled in the skill directory.
+- Environment variables renamed from `GS_*` to `GRILLING_SLEEK_*` — update your shell configs.
+- Server listens on port 8000 instead of 8080 — update your reverse proxy or firewall rules.
+- Questions load faster under heavy traffic — SQLite connection pool tuned for high concurrency.
+
 ## [0.2.0-rc.1] - 2026-07-15
 
 ### Added

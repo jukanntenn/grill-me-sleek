@@ -1,6 +1,6 @@
 {
   "name": "@grilling-sleek/cli",
-  "version": "0.2.0-rc.1",
+  "version": "0.2.0-rc.2",
   "description": "CLI tool for grilling-sleek - Stress-test your plan before vibe coding",
   "bin": {
     "grilling-sleek": "./dist/grilling-sleek.js"
