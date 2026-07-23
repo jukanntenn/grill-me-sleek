@@ -4,7 +4,7 @@
   "private": true,
   "description": "Stress-test your plan before vibe coding",
   "scripts": {
-    "version": "bash scripts/sync-version.sh && git add cli/package.json web/package.json server/Cargo.toml pyproject.toml skills/grilling-sleek/grilling-sleek.js",
+    "version": "python3 scripts/sync-version.py && git add cli/package.json web/package.json server/Cargo.toml",
     "postversion": "git push && git push --tags"
   }
 }

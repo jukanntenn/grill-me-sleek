@@ -1,2 +1,2 @@
 - .claude/ 不属于项目源码文件，而是 Claude Code 的配置文件，开发时不要搞错地方了
-- 不要同步修改到 .claude/skills/grill-me-sleek/ 目录，除非用户明确要求这么做
+- 不要同步修改到 .claude/skills/grilling-sleek/ 目录，除非用户明确要求这么做

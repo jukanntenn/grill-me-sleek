@@ -39,7 +39,7 @@ docker compose -f docker-compose.e2e.yml up -d --build
 sleep 15
 
 # 持续检查健康状态，直到服务就绪
-until curl -sf http://localhost:8443/v1/healthz; do
+until curl -sfk https://localhost:8443/v1/healthz; do
     echo 'Waiting for service...'
     sleep 2
 done
@@ -51,10 +51,10 @@ echo "✓ 服务已就绪"
 
 ```bash
 # 检查加载的 CSS 文件
-curl -s http://localhost:8443 | grep -o "style-[^\"]*\.css"
+curl -sk https://localhost:8443 | grep -o "style-[^\"]*\.css"
 
 # 验证样式变量是否正确应用
-curl -s http://localhost:8443/assets/style-*.css | grep -o "\-\-spacing-[a-z0-9]*" | sort -u
+curl -sk https://localhost:8443/assets/style-*.css | grep -o "\-\-spacing-[a-z0-9]*" | sort -u
 ```
 
 **预期结果**：
@@ -65,13 +65,13 @@ curl -s http://localhost:8443/assets/style-*.css | grep -o "\-\-spacing-[a-z0-9]
 
 ```bash
 # 设置 CLI 服务地址
-export GS_SERVER=http://localhost:8443
-export GS_HTTP_TIMEOUT=30
-export GS_LONGPOLL_HTTP_TIMEOUT=65
+export GRILLING_SLEEK_SERVER=https://localhost:8443
+export GRILLING_SLEEK_HTTP_TIMEOUT=30
+export GRILLING_SLEEK_LONGPOLL_HTTP_TIMEOUT=65
 
 # 验证 CLI 可用性
 cd /home/alice/Workspace/grill-me-sleek/cli
-node dist/grill.js --help
+grilling-sleek --help
 ```
 
 ### 5. 准备测试数据文件
@@ -128,14 +128,14 @@ EOF
 ```bash
 # 创建新会话
 cd /home/alice/Workspace/grill-me-sleek/cli
-SESSION_ID=$(GS_SERVER=http://localhost:8443 node dist/grill.js create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
+SESSION_ID=$(GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
 
 # 验证会话创建成功
 echo "Session ID: $SESSION_ID"
 
 # 保存会话 ID 到环境变量
 export TEST_SESSION_ID=$SESSION_ID
-export TEST_URL="http://localhost:8443/#$SESSION_ID"
+export TEST_URL="https://localhost:8443/#$SESSION_ID"
 ```
 
 **预期结果**：
@@ -146,10 +146,10 @@ export TEST_URL="http://localhost:8443/#$SESSION_ID"
 
 ```bash
 # 查询会话状态
-GS_SERVER=http://localhost:8443 node dist/grill.js status $TEST_SESSION_ID --json=session_id,status,current_round,name
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $TEST_SESSION_ID --json=session_id,status,current_round,name
 
 # 查询完整状态
-GS_SERVER=http://localhost:8443 node dist/grill.js status $TEST_SESSION_ID
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $TEST_SESSION_ID
 ```
 
 **预期结果**：
@@ -161,10 +161,10 @@ GS_SERVER=http://localhost:8443 node dist/grill.js status $TEST_SESSION_ID
 
 ```bash
 # 推送第二轮问题
-GS_SERVER=http://localhost:8443 node dist/grill.js push $TEST_SESSION_ID --json=round < /tmp/round2-grilling.json
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek push $TEST_SESSION_ID --json=round < /tmp/round2-grilling.json
 
 # 验证轮次推送成功
-GS_SERVER=http://localhost:8443 node dist/grill.js status $TEST_SESSION_ID --json=current_round
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $TEST_SESSION_ID --json=current_round
 ```
 
 **预期结果**：
@@ -175,7 +175,7 @@ GS_SERVER=http://localhost:8443 node dist/grill.js status $TEST_SESSION_ID --jso
 
 ```bash
 # 等待用户响应（10 秒超时）
-GS_SERVER=http://localhost:8443 node dist/grill.js poll $TEST_SESSION_ID --wait 10
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek poll $TEST_SESSION_ID --wait 10
 
 # 检查退出码
 echo "Exit code: $?"
@@ -189,10 +189,10 @@ echo "Exit code: $?"
 
 ```bash
 # 完成会话
-GS_SERVER=http://localhost:8443 node dist/grill.js complete $TEST_SESSION_ID
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek complete $TEST_SESSION_ID
 
 # 验证会话完成
-GS_SERVER=http://localhost:8443 node dist/grill.js status $TEST_SESSION_ID --json=status
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $TEST_SESSION_ID --json=status
 ```
 
 **预期结果**：
@@ -203,13 +203,13 @@ GS_SERVER=http://localhost:8443 node dist/grill.js status $TEST_SESSION_ID --jso
 
 ```bash
 # 创建新会话用于取消测试
-CANCEL_SESSION_ID=$(GS_SERVER=http://localhost:8443 node dist/grill.js create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
+CANCEL_SESSION_ID=$(GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
 
 # 取消会话
-GS_SERVER=http://localhost:8443 node dist/grill.js cancel $CANCEL_SESSION_ID --reason user_cancelled
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek cancel $CANCEL_SESSION_ID --reason user_cancelled
 
 # 验证会话取消
-GS_SERVER=http://localhost:8443 node dist/grill.js status $CANCEL_SESSION_ID --json=status,detail
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $CANCEL_SESSION_ID --json=status,detail
 ```
 
 **预期结果**：
@@ -220,7 +220,7 @@ GS_SERVER=http://localhost:8443 node dist/grill.js status $CANCEL_SESSION_ID --j
 
 ```bash
 # 尝试创建无效 JSON 的会话
-echo "invalid json" | GS_SERVER=http://localhost:8443 node dist/grill.js create --json=session_id
+echo "invalid json" | GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek create --json=session_id
 
 # 检查退出码
 echo "Exit code: $?"
@@ -234,7 +234,7 @@ echo "Exit code: $?"
 
 ```bash
 # 尝试创建无效 Schema 的会话
-echo '{"invalid": "schema"}' | GS_SERVER=http://localhost:8443 node dist/grill.js create --json=session_id
+echo '{"invalid": "schema"}' | GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek create --json=session_id
 
 # 检查退出码
 echo "Exit code: $?"
@@ -248,7 +248,7 @@ echo "Exit code: $?"
 
 ```bash
 # 尝试查询不存在的会话
-GS_SERVER=http://localhost:8443 node dist/grill.js status "non-existent-session-id"
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status "non-existent-session-id"
 
 # 检查退出码
 echo "Exit code: $?"
@@ -262,7 +262,7 @@ echo "Exit code: $?"
 
 ```bash
 # 尝试使用无效原因取消会话
-GS_SERVER=http://localhost:8443 node dist/grill.js cancel $CANCEL_SESSION_ID --reason invalid_reason
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek cancel $CANCEL_SESSION_ID --reason invalid_reason
 
 # 检查退出码
 echo "Exit code: $?"
@@ -327,15 +327,15 @@ curl -s $TEST_URL | grep -o "<form"
 
 ```bash
 # 创建新会话用于多轮测试
-MULTI_SESSION_ID=$(GS_SERVER=http://localhost:8443 node dist/grill.js create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
+MULTI_SESSION_ID=$(GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
 export MULTI_SESSION_ID
-export MULTI_URL="http://localhost:8443/#$MULTI_SESSION_ID"
+export MULTI_URL="https://localhost:8443/#$MULTI_SESSION_ID"
 
 # 推送第二轮问题
-GS_SERVER=http://localhost:8443 node dist/grill.js push $MULTI_SESSION_ID --json=round < /tmp/round2-grilling.json
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek push $MULTI_SESSION_ID --json=round < /tmp/round2-grilling.json
 
 # 验证轮次变化
-GS_SERVER=http://localhost:8443 node dist/grill.js status $MULTI_SESSION_ID --json=current_round
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $MULTI_SESSION_ID --json=current_round
 ```
 
 **预期结果**：
@@ -360,10 +360,10 @@ curl -s $MULTI_URL | grep -o "q_db"
 
 ```bash
 # 完成会话
-GS_SERVER=http://localhost:8443 node dist/grill.js complete $MULTI_SESSION_ID
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek complete $MULTI_SESSION_ID
 
 # 验证会话完成
-GS_SERVER=http://localhost:8443 node dist/grill.js status $MULTI_SESSION_ID --json=status,detail
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $MULTI_SESSION_ID --json=status,detail
 ```
 
 **预期结果**：
@@ -374,13 +374,13 @@ GS_SERVER=http://localhost:8443 node dist/grill.js status $MULTI_SESSION_ID --js
 
 ```bash
 # 创建新会话用于取消测试
-CANCEL_MULTI_SESSION_ID=$(GS_SERVER=http://localhost:8443 node dist/grill.js create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
+CANCEL_MULTI_SESSION_ID=$(GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
 
 # 取消会话
-GS_SERVER=http://localhost:8443 node dist/grill.js cancel $CANCEL_MULTI_SESSION_ID --reason user_cancelled
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek cancel $CANCEL_MULTI_SESSION_ID --reason user_cancelled
 
 # 验证会话取消
-GS_SERVER=http://localhost:8443 node dist/grill.js status $CANCEL_MULTI_SESSION_ID --json=status,detail
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $CANCEL_MULTI_SESSION_ID --json=status,detail
 ```
 
 **预期结果**：
@@ -395,15 +395,15 @@ GS_SERVER=http://localhost:8443 node dist/grill.js status $CANCEL_MULTI_SESSION_
 
 ```bash
 # 创建新会话用于 SSE 测试
-SSE_SESSION_ID=$(GS_SERVER=http://localhost:8443 node dist/grill.js create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
+SSE_SESSION_ID=$(GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
 
 # 监听 SSE 事件（后台运行）
-GS_SERVER=http://localhost:8443 node dist/grill.js poll $SSE_SESSION_ID --wait 30 &
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek poll $SSE_SESSION_ID --wait 30 &
 POLL_PID=$!
 
 # 推送新轮次
 sleep 2
-GS_SERVER=http://localhost:8443 node dist/grill.js push $SSE_SESSION_ID --json=round < /tmp/round2-grilling.json
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek push $SSE_SESSION_ID --json=round < /tmp/round2-grilling.json
 
 # 等待事件
 wait $POLL_PID
@@ -418,15 +418,15 @@ echo "Exit code: $?"
 
 ```bash
 # 创建新会话用于完成事件测试
-COMPLETE_SESSION_ID=$(GS_SERVER=http://localhost:8443 node dist/grill.js create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
+COMPLETE_SESSION_ID=$(GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
 
 # 监听 SSE 事件（后台运行）
-GS_SERVER=http://localhost:8443 node dist/grill.js poll $COMPLETE_SESSION_ID --wait 30 &
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek poll $COMPLETE_SESSION_ID --wait 30 &
 POLL_PID=$!
 
 # 完成会话
 sleep 2
-GS_SERVER=http://localhost:8443 node dist/grill.js complete $COMPLETE_SESSION_ID
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek complete $COMPLETE_SESSION_ID
 
 # 等待事件
 wait $POLL_PID
@@ -441,15 +441,15 @@ echo "Exit code: $?"
 
 ```bash
 # 创建新会话用于取消事件测试
-CANCEL_SSE_SESSION_ID=$(GS_SERVER=http://localhost:8443 node dist/grill.js create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
+CANCEL_SSE_SESSION_ID=$(GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek create --json=session_id < /tmp/basic-grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
 
 # 监听 SSE 事件（后台运行）
-GS_SERVER=http://localhost:8443 node dist/grill.js poll $CANCEL_SSE_SESSION_ID --wait 30 &
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek poll $CANCEL_SSE_SESSION_ID --wait 30 &
 POLL_PID=$!
 
 # 取消会话
 sleep 2
-GS_SERVER=http://localhost:8443 node dist/grill.js cancel $CANCEL_SSE_SESSION_ID --reason user_cancelled
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek cancel $CANCEL_SSE_SESSION_ID --reason user_cancelled
 
 # 等待事件
 wait $POLL_PID
@@ -468,7 +468,7 @@ echo "Exit code: $?"
 
 ```bash
 # 尝试查询无效会话 ID
-GS_SERVER=http://localhost:8443 node dist/grill.js status "invalid-session-id"
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status "invalid-session-id"
 
 # 检查退出码
 echo "Exit code: $?"
@@ -482,7 +482,7 @@ echo "Exit code: $?"
 
 ```bash
 # 尝试查询不存在的会话
-GS_SERVER=http://localhost:8443 node dist/grill.js status "00000000-0000-0000-0000-000000000000"
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status "00000000-0000-0000-0000-000000000000"
 
 # 检查退出码
 echo "Exit code: $?"
@@ -609,25 +609,25 @@ echo "✓ 环境已清理"
 
 ```bash
 # 设置环境变量
-export GS_SERVER=http://localhost:8443
+export GRILLING_SLEEK_SERVER=https://localhost:8443
 
 # 创建会话并保存 ID
-export SESSION_ID=$(GS_SERVER=http://localhost:8443 node dist/grill.js create --json=session_id < grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
+export SESSION_ID=$(GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek create --json=session_id < grilling.json | grep -o '"session_id": *"[^"]*"' | sed 's/.*"session_id": *"//' | sed 's/"$//')
 
 # 查询状态
-GS_SERVER=http://localhost:8443 node dist/grill.js status $SESSION_ID --json=session_id,status,current_round,name
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $SESSION_ID --json=session_id,status,current_round,name
 
 # 推送轮次
-GS_SERVER=http://localhost:8443 node dist/grill.js push $SESSION_ID --json=round < grilling.json
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek push $SESSION_ID --json=round < grilling.json
 
 # 等待响应
-GS_SERVER=http://localhost:8443 node dist/grill.js poll $SESSION_ID --wait 60
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek poll $SESSION_ID --wait 60
 
 # 完成会话
-GS_SERVER=http://localhost:8443 node dist/grill.js complete $SESSION_ID
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek complete $SESSION_ID
 
 # 取消会话
-GS_SERVER=http://localhost:8443 node dist/grill.js cancel $SESSION_ID --reason user_cancelled
+GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek cancel $SESSION_ID --reason user_cancelled
 ```
 
 ## 退出码说明
@@ -703,14 +703,14 @@ services:
       - "8443:8443"
       - "8080:8080"
     environment:
-      - GSLEEK_BASE_URL=http://localhost:8443
+      - GSLEEK_BASE_URL=https://localhost:8443
       - GSLEEK_DB_PATH=/app/data/e2e-test.db
       - RUST_LOG=info
     volumes:
       - e2e-data:/app/data
       - ./Caddyfile:/app/Caddyfile:ro
     healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:8443/v1/healthz"]
+      test: ["CMD", "curl", "-fsk", "https://localhost:8443/v1/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -738,7 +738,7 @@ vim web/src/styles/globals.css
 cd e2e && docker compose -f docker-compose.e2e.yml up -d --build
 
 # 3. 验证样式
-curl -s http://localhost:8443 | grep style
+curl -sk https://localhost:8443 | grep style
 ```
 
 #### 2. 修改 Rust 代码后
@@ -750,7 +750,7 @@ vim server/src/main.rs
 cd e2e && docker compose -f docker-compose.e2e.yml up -d --build
 
 # 3. 验证功能
-curl -s http://localhost:8443/v1/healthz
+curl -sk https://localhost:8443/v1/healthz
 ```
 
 #### 3. 修改前端代码后
@@ -762,7 +762,7 @@ vim web/src/components/QuestionCard.tsx
 cd e2e && docker compose -f docker-compose.e2e.yml up -d --build
 
 # 3. 验证功能
-curl -s http://localhost:8443 | grep QuestionCard
+curl -sk https://localhost:8443 | grep QuestionCard
 ```
 
 ### 验证规范
@@ -780,10 +780,10 @@ docker compose -f docker-compose.e2e.yml ps
 #### 2. 验证样式加载
 ```bash
 # 检查加载的 CSS 文件
-curl -s http://localhost:8443 | grep -o "style-[^\"]*\.css"
+curl -sk https://localhost:8443 | grep -o "style-[^\"]*\.css"
 
 # 验证样式变量是否正确应用
-curl -s http://localhost:8443/assets/style-*.css | grep -o "\-\-spacing-[a-z0-9]*" | sort -u
+curl -sk https://localhost:8443/assets/style-*.css | grep -o "\-\-spacing-[a-z0-9]*" | sort -u
 
 # 预期结果：
 # --spacing-xxs
@@ -803,7 +803,7 @@ curl -s http://localhost:8443/assets/style-*.css | grep -o "\-\-spacing-[a-z0-9]
 #### 3. 验证健康检查
 ```bash
 # 检查健康状态
-curl -s http://localhost:8443/v1/healthz
+curl -sk https://localhost:8443/v1/healthz
 
 # 预期结果：
 # ok
@@ -842,7 +842,7 @@ docker compose -f docker-compose.e2e.yml build --no-cache
 docker compose -f docker-compose.e2e.yml up -d --build
 
 # 验证样式
-curl -s http://localhost:8443 | grep style
+curl -sk https://localhost:8443 | grep style
 ```
 
 ---

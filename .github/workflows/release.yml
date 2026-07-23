@@ -56,13 +56,16 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Version: $VERSION"
 
+      - name: Enable corepack
+        run: corepack enable
+
       - name: Build and publish
         run: |
           cd cli
-          npm ci
-          npm version ${{ steps.version.outputs.version }} --no-git-tag-version
-          NODE_ENV=production npm run build:prod
-          npm publish --access public --provenance
+          pnpm install --frozen-lockfile
+          pnpm version ${{ steps.version.outputs.version }} --no-git-tag-version
+          NODE_ENV=production pnpm run build:prod
+          pnpm publish --access public --provenance --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

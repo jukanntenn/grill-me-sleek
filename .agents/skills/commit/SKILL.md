@@ -13,16 +13,16 @@ One big commit is a black box — you can't bisect, can't cherry-pick, and can't
 ## Design principles
 
 - **Split granularity — group by logical change unit**
-  A logical change unit is a set of file edits that together accomplish one coherent purpose. We do this instead of per-file splitting because this project's files are tightly coupled (server.py ↔ template.html ↔ SKILL.md form one skill). Per-file would create meaningless fragments; per-TDD-stage is overkill for a small project.
+  A logical change unit is a set of file edits that together accomplish one coherent purpose. We do this instead of per-file splitting because this project's files are tightly coupled (server ↔ web ↔ cli form one product). Per-file would create meaningless fragments; per-TDD-stage is overkill.
 
 - **Who decides grouping — AI drafts plan, human confirms**
   The AI inspects dirty state and proposes a commit plan, but the human has final say. This balances automation speed with human oversight over their own git history.
 
 - **Commit message format — Conventional Commits, match existing history**
-  Our history already uses `feat(grill-me-sleek):`, `fix(...)`, `ci(...)`, `chore:`, `docs:`. Staying consistent makes `git log` readable and predictable.
+  Our history already uses `feat(server):`, `feat(web):`, `feat(cli):`, `fix(...)`, `ci(...)`, `chore:`, `docs:`. Staying consistent makes `git log` readable and predictable.
 
 - **Verification gate — lint + test must pass before each commit**
-  We have `ruff check` + `ruff format` + `pytest` in CI. Running them before commit catches issues early and saves CI round-trips.
+  We have `cargo fmt` + `cargo clippy` + `cargo test` (server) and `pnpm lint` + `pnpm test` (web/cli) in CI. Running them before commit catches issues early and saves CI round-trips.
 
 - **Push policy — never auto-push**
   Pushing is an irreversible outward-facing action. The user always decides when to push.
@@ -35,10 +35,10 @@ A "logical change unit" is a set of file edits that together accomplish one cohe
 
 | Logical change                  | Files                                | Rationale                                              |
 | ------------------------------- | ------------------------------------ | ------------------------------------------------------ |
-| Add multi-select support        | server.py + template.html + SKILL.md | Feature spans backend, frontend, and docs — one commit |
-| Fix a CSS padding bug           | template.html only                   | Isolated fix — one commit                              |
-| Update CI to add Python 3.13    | ci.yml only                          | CI change — one commit                                 |
-| Bump version + update CHANGELOG | pyproject.toml + CHANGELOG.md        | Release housekeeping — always together                 |
+| Add multi-select support        | server/src/ + web/src/ + SKILL.md    | Feature spans backend, frontend, and docs — one commit |
+| Fix a CSS padding bug           | web/src/styles/ only                 | Isolated fix — one commit                              |
+| Update CI to add Node 22        | ci.yml only                          | CI change — one commit                                 |
+| Bump version + update CHANGELOG | package.json + CHANGELOG.md          | Release housekeeping — always together                 |
 
 ### 2. Ordering: infrastructure → feature → fix → docs → chore
 
@@ -64,7 +64,7 @@ Rationale: infrastructure changes first (they're prerequisites), features and fi
 
 **Types:** `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf`
 
-**Scopes:** `grill-me-sleek` (skill code), `ui` (template/CSS), `github` (CI/release), or omit scope for root-level changes.
+**Scopes:** `server` (Rust backend), `web` (React frontend), `cli` (Node.js CLI), `github` (CI/release), or omit scope for root-level changes.
 
 **Rules:**
 
@@ -75,18 +75,23 @@ Rationale: infrastructure changes first (they're prerequisites), features and fi
 **Examples from our history:**
 
 ```
-feat(ui): optimize web UI for natural, soft, and efficient review
-fix(grill-me-sleek): avoid session collisions across different Claude instances
+feat(web): add round indicator and auto-recommended select
+fix(server): avoid session collisions across different instances
 ci(github): add changelog check and set latest release flag
-chore: release v0.1.1
+chore: release v0.2.0-rc.1
 ```
 
 ### 4. Verification gate — lint & test before commit
 
-Before every commit, run:
+Before every commit, run relevant checks:
 
 ```bash
-uv run ruff check . && uv run ruff format --check . && uv run pytest
+# Server (Rust)
+cd server && cargo fmt --check && cargo clippy -- -D warnings && cargo test && cd ..
+# CLI (TypeScript)
+cd cli && pnpm install --frozen-lockfile && pnpm lint && pnpm test && cd ..
+# Web (TypeScript)
+cd web && pnpm install --frozen-lockfile && pnpm lint && pnpm test && cd ..
 ```
 
 If anything fails → fix first, then commit. Never commit failing code.
@@ -105,11 +110,13 @@ When multiple files are dirty, the AI **must**:
 
 ```
 Proposed commits (in order):
-  1. feat(grill-me-sleek): add multi-select question support
-     - skills/grill-me-sleek/server.py
-     - skills/grill-me-sleek/template.html
-     - skills/grill-me-sleek/SKILL.md
-  2. docs: update README with multi-select example
+  1. feat(server): add multi-select question support
+     - server/src/handlers/rounds.rs
+     - server/src/models/mod.rs
+  2. feat(web): add multi-select UI control
+     - web/src/components/MultiControl.tsx
+     - web/src/pages/QuestionsPage.tsx
+  3. docs: update README with multi-select example
      - README.md
      - README_zh.md
 
@@ -127,15 +134,15 @@ Reply 'ok' / '行' to execute. Reply with edits, or '我自己来' / 'manual' to
 | Case                                                      | Rule                                                                                                 |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | **Only one file changed**                                 | Skip the plan protocol — commit directly with a descriptive message                                  |
-| **Release commit**                                        | Version bump in `pyproject.toml` + CHANGELOG entry = always one commit, type `chore: release vX.Y.Z` |
-| **Generated/trivial changes** (ruff auto-fix, .gitignore) | Bundle with the commit that caused them, or a single `chore` commit if standalone                    |
+| **Release commit**                                        | Version bump in `package.json` + CHANGELOG entry = always one commit, type `chore: release vX.Y.Z` |
+| **Generated/trivial changes** (lint auto-fix, .gitignore) | Bundle with the commit that caused them, or a single `chore` commit if standalone                    |
 | **Mixed language edits** (e.g., README.md + README_zh.md) | Keep in one commit if they describe the same change                                                  |
-| **Scope-only change** (SKILL.md prompt wording)           | One commit with scope `grill-me-sleek`                                                               |
+| **Scope-only change** (SKILL.md prompt wording)           | One commit with scope `server` or `cli`                                                              |
 
 ### 7. What NOT to do
 
 - ❌ **One giant commit** for everything — defeats the purpose
-- ❌ **Per-file commits** when files are logically coupled (server.py + template.html = one feature)
+- ❌ **Per-file commits** when files are logically coupled (server handler + web component = one feature)
 - ❌ **Commit with failing tests** — always verify first
 - ❌ **`git commit --amend`** — never rewrite history
 - ❌ **`git push`** without explicit user request
@@ -149,7 +156,7 @@ Reply 'ok' / '行' to execute. Reply with edits, or '我自己来' / 'manual' to
 2. git log --oneline -5            → what style?
 3. Group by logical change          → plan commits
 4. Present plan → human confirms   → one shot
-5. ruff check + format + pytest    → verify BEFORE each commit
+5. cargo/pnpm checks               → verify BEFORE each commit
 6. git add + git commit            → execute in order
 7. Never push, never amend
 ```

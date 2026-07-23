@@ -28,14 +28,16 @@ If `NO_TAGS` — this is the first release. Use the initial commit (`git rev-lis
 
 ### Step 1: Quality Checks
 
-Run ruff on all Python files in the project:
+Verify that CI is green on the latest commit. The project has multi-language CI (Rust server, TypeScript web/CLI):
 
 ```bash
-ruff check --select F,E,W,I --line-length 120 skills/grill-me-sleek/server.py
-ruff format --check skills/grill-me-sleek/server.py
+# Quick local checks (if toolchains are available)
+cd server && cargo fmt --check && cargo clippy -- -D warnings && cargo test && cd ..
+cd cli && pnpm install --frozen-lockfile && pnpm lint && pnpm test && cd ..
+cd web && pnpm install --frozen-lockfile && pnpm lint && pnpm test && cd ..
 ```
 
-Fail → report which check failed (lint/format) + the specific violations, STOP.
+If any check fails → report which check failed + the specific violations, STOP.
 
 ### Step 2: Version Bump
 
