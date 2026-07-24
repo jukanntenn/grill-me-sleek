@@ -7,7 +7,6 @@ use crate::db;
 use crate::error::ApiError;
 use crate::idempotency::{self, IdempotencyEntry};
 use crate::models::{ErrorResponse, GoneResponse, Grilling, RoundResponse, RoundSummary};
-use crate::observability::metrics::metrics;
 use crate::session::time_now;
 use crate::validation;
 
@@ -31,7 +30,7 @@ pub async fn list_rounds(
     // Verify session exists (any state)
     db::get_session(&state.pool, &session_id)
         .await?
-        .ok_or(ApiError::NotFound)?;
+        .ok_or_else(ApiError::not_found)?;
 
     let rows = db::list_rounds(&state.pool, &session_id).await?;
     let summaries = rows
@@ -105,9 +104,7 @@ pub async fn create_round(
                 .broadcast(crate::sse::SseEvent::round_created(new_seq));
         }
 
-        if let Some(m) = metrics() {
-            m.rounds_created_total.add(1, &[]);
-        }
+        crate::observability::metrics::record_round_created();
 
         tracing::info!(
             session_id = %session_id_for_create,
@@ -154,7 +151,7 @@ pub async fn get_current_round(
 
     let round = db::get_current_round(&state.pool, &session_id)
         .await?
-        .ok_or(ApiError::NotFound)?;
+        .ok_or_else(ApiError::not_found)?;
 
     Ok(Json(super::build_round_response(&round)?))
 }
@@ -182,7 +179,7 @@ pub async fn get_round(
 ) -> Result<axum::response::Response, ApiError> {
     let round = db::get_round(&state.pool, &session_id, seq)
         .await?
-        .ok_or(ApiError::NotFound)?;
+        .ok_or_else(ApiError::not_found)?;
 
     // ETag check
     let etag = compute_etag(&round.grilling);

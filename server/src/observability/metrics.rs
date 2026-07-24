@@ -88,6 +88,29 @@ pub fn metrics() -> Option<&'static Metrics> {
     METRICS.get()
 }
 
+// ---------------------------------------------------------------------------
+// Low-level helpers (Option-aware)
+// ---------------------------------------------------------------------------
+
+/// Record a counter increment. No-op if metrics not initialized.
+pub fn record_counter(counter: &Counter<u64>, value: u64) {
+    counter.add(value, &[]);
+}
+
+/// Record a gauge value. No-op if metrics not initialized.
+pub fn record_gauge(gauge: &Gauge<u64>, value: u64) {
+    gauge.record(value, &[]);
+}
+
+/// Record a histogram value. No-op if metrics not initialized.
+pub fn record_histogram(histogram: &Histogram<f64>, value: f64) {
+    histogram.record(value, &[]);
+}
+
+// ---------------------------------------------------------------------------
+// Domain-specific helpers
+// ---------------------------------------------------------------------------
+
 /// Record a session creation: increment the created counter and bump the
 /// active-sessions gauge.
 pub fn record_session_created() {
@@ -104,5 +127,54 @@ pub fn record_session_removed() {
     if let Some(m) = metrics() {
         let active = ACTIVE_SESSIONS.fetch_sub(1, Ordering::Relaxed) - 1;
         m.sessions_active.record(active as u64, &[]);
+    }
+}
+
+/// Record a round creation.
+pub fn record_round_created() {
+    if let Some(m) = metrics() {
+        m.rounds_created_total.add(1, &[]);
+    }
+}
+
+/// Record a response submission.
+pub fn record_response_received() {
+    if let Some(m) = metrics() {
+        m.responses_received_total.add(1, &[]);
+    }
+}
+
+/// Record long-poll wait duration.
+pub fn record_longpoll_duration(elapsed: f64) {
+    if let Some(m) = metrics() {
+        m.longpoll_wait_seconds.record(elapsed, &[]);
+    }
+}
+
+/// Record SSE connection count.
+pub fn record_sse_connections(count: u64) {
+    if let Some(m) = metrics() {
+        m.sse_connections_active.record(count, &[]);
+    }
+}
+
+/// Record TTL swept sessions.
+pub fn record_ttl_swept() {
+    if let Some(m) = metrics() {
+        m.ttl_swept_total.add(1, &[]);
+    }
+}
+
+/// Record HTTP request duration.
+pub fn record_http_duration(elapsed: f64, method: &str, path: &str, status: &str) {
+    if let Some(m) = metrics() {
+        m.http_request_duration_seconds.record(
+            elapsed,
+            &[
+                opentelemetry::KeyValue::new("method", method.to_string()),
+                opentelemetry::KeyValue::new("path", path.to_string()),
+                opentelemetry::KeyValue::new("status", status.to_string()),
+            ],
+        );
     }
 }

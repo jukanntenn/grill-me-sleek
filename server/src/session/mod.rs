@@ -107,9 +107,12 @@ pub async fn recover_sessions(map: &SessionMap, pool: &Pool<Sqlite>) -> anyhow::
     // Initialize the active sessions gauge
     crate::observability::metrics::ACTIVE_SESSIONS
         .store(count as i64, std::sync::atomic::Ordering::Relaxed);
-    if let Some(m) = crate::observability::metrics::metrics() {
-        m.sessions_active.record(count as u64, &[]);
-    }
+    crate::observability::metrics::record_gauge(
+        &crate::observability::metrics::metrics()
+            .unwrap()
+            .sessions_active,
+        count as u64,
+    );
 
     tracing::info!(count, "recovered active sessions");
     Ok(count)
@@ -147,9 +150,7 @@ pub async fn run_ttl_sweeper(pool: Pool<Sqlite>, map: SessionMap) {
                             // Only increment the ttl_swept_total counter here;
                             // the ACTIVE_SESSIONS gauge was already decremented
                             // by remove_session earlier in this loop iteration.
-                            if let Some(m) = crate::observability::metrics::metrics() {
-                                m.ttl_swept_total.add(1, &[]);
-                            }
+                            crate::observability::metrics::record_ttl_swept();
                             tracing::info!(session_id = %session_id, "archived expired session");
                         }
                         Ok(false) => {

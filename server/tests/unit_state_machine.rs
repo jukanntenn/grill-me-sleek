@@ -82,59 +82,57 @@ fn session_update_unknown_rejected_by_serde() {
 
 #[test]
 fn api_error_bad_request_is_400() {
-    let err = ApiError::BadRequest("test".to_string());
+    let err = ApiError::bad_request("test");
     let resp = err.into_response();
     assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 }
 
 #[test]
 fn api_error_not_found_is_404() {
-    let err = ApiError::NotFound;
+    let err = ApiError::not_found();
     let resp = err.into_response();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }
 
 #[test]
 fn api_error_gone_is_410() {
-    let err = ApiError::Gone {
-        detail: "expired".to_string(),
-    };
+    let err = ApiError::gone("expired");
     let resp = err.into_response();
     assert_eq!(resp.status(), StatusCode::GONE);
 }
 
 #[test]
 fn api_error_terminal_state_is_409() {
-    let err = ApiError::TerminalState;
+    let err = ApiError::terminal_state();
     let resp = err.into_response();
     assert_eq!(resp.status(), StatusCode::CONFLICT);
 }
 
 #[test]
 fn api_error_round_already_submitted_is_409() {
-    let err = ApiError::RoundAlreadySubmitted {
-        round: 1,
-        response: Response {
+    let err = ApiError::round_already_submitted(
+        1,
+        Response {
             round: 1,
             answers: Default::default(),
             additional_notes: None,
             submitted_at: "2026-07-12T00:00:00Z".to_string(),
         },
-    };
+    );
     let resp = err.into_response();
     assert_eq!(resp.status(), StatusCode::CONFLICT);
 }
 
 #[test]
 fn api_error_idempotency_mismatch_is_422() {
-    let err = ApiError::IdempotencyMismatch;
+    let err = ApiError::idempotency_mismatch();
     let resp = err.into_response();
     assert_eq!(resp.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[test]
 fn api_error_max_sessions_is_503() {
-    let err = ApiError::MaxSessions;
+    let err = ApiError::max_sessions();
     let resp = err.into_response();
     assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
 }
@@ -152,7 +150,7 @@ fn api_error_internal_is_500() {
 
 #[test]
 fn terminal_state_body_has_no_round_response() {
-    let err = ApiError::TerminalState;
+    let err = ApiError::terminal_state();
     let resp = err.into_response();
     // body 应该是 {message, status}，不含 round/response
     // 这里只验证状态码，body 格式在集成测试中验证
@@ -161,15 +159,15 @@ fn terminal_state_body_has_no_round_response() {
 
 #[test]
 fn round_already_submitted_body_has_round_response() {
-    let err = ApiError::RoundAlreadySubmitted {
-        round: 2,
-        response: Response {
+    let err = ApiError::round_already_submitted(
+        2,
+        Response {
             round: 2,
             answers: Default::default(),
             additional_notes: None,
             submitted_at: "2026-07-12T00:00:00Z".to_string(),
         },
-    };
+    );
     let resp = err.into_response();
     assert_eq!(resp.status(), StatusCode::CONFLICT);
 }

@@ -196,17 +196,9 @@ pub async fn http_duration_middleware(request: Request, next: Next) -> Response 
     let path = request.uri().path().to_owned();
     let response = next.run(request).await;
     let elapsed = start.elapsed().as_secs_f64();
-    if let Some(m) = observability::metrics::metrics() {
-        let status = response.status().as_u16().to_string();
-        m.http_request_duration_seconds.record(
-            elapsed,
-            &[
-                opentelemetry::KeyValue::new("method", method),
-                opentelemetry::KeyValue::new("path", normalise_path(&path).into_owned()),
-                opentelemetry::KeyValue::new("status", status),
-            ],
-        );
-    }
+    let status = response.status().as_u16().to_string();
+    let normalised = normalise_path(&path).into_owned();
+    observability::metrics::record_http_duration(elapsed, &method, &normalised, &status);
     response
 }
 

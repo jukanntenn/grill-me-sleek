@@ -32,14 +32,14 @@ where
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let bytes = Bytes::from_request(req, state)
             .await
-            .map_err(|_| ApiError::BadRequest("invalid request body".to_string()))?;
+            .map_err(|_| ApiError::bad_request("invalid request body"))?;
 
         let value: T = serde_json::from_slice(&bytes)
-            .map_err(|e| ApiError::BadRequest(format!("invalid JSON: {e}")))?;
+            .map_err(|e| ApiError::bad_request(format!("invalid JSON: {e}")))?;
 
         value
             .validate()
-            .map_err(|e| ApiError::BadRequest(format!("validation failed: {e}")))?;
+            .map_err(|e| ApiError::bad_request(format!("validation failed: {e}")))?;
 
         Ok(ValidatedJson(value))
     }

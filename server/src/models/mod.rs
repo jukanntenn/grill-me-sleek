@@ -70,6 +70,11 @@ impl SessionStatus {
         !self.is_active()
     }
 
+    /// Whether this status requires a Gone response (410).
+    pub fn is_gone(self) -> bool {
+        matches!(self, Self::Cancelled | Self::Expired)
+    }
+
     /// Terminal state detail string for `Gone` responses.
     /// Returns `"unknown"` for `Active` (should not appear in terminal paths).
     pub fn terminal_detail(&self) -> &'static str {
@@ -78,6 +83,41 @@ impl SessionStatus {
             Self::Cancelled => "cancelled",
             Self::Expired => "expired",
             Self::Active => "unknown",
+        }
+    }
+
+    /// Map to HTTP status code for terminal responses.
+    pub fn to_http_status(self) -> axum::http::StatusCode {
+        use axum::http::StatusCode;
+        match self {
+            Self::Active => StatusCode::OK,
+            Self::Completed => StatusCode::OK,
+            Self::Cancelled => StatusCode::GONE,
+            Self::Expired => StatusCode::GONE,
+        }
+    }
+
+    /// Create a `SessionState` for a terminal response.
+    pub fn to_terminal_state(
+        self,
+        session_id: String,
+        row: Option<&crate::db::SessionRow>,
+    ) -> SessionState {
+        let (created_at, expires_at) = match row {
+            Some(r) => (
+                super::session::unix_to_rfc3339(r.created_at),
+                super::session::unix_to_rfc3339(r.expires_at),
+            ),
+            None => (String::new(), String::new()),
+        };
+        SessionState {
+            session_id,
+            status: self,
+            current_round: 0,
+            name: None,
+            description: None,
+            created_at,
+            expires_at,
         }
     }
 }

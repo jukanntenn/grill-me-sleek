@@ -16,7 +16,6 @@ use crate::models::{
     ConflictResponse, ErrorResponse, GoneResponse, PendingResponse, Response, ResponseInput,
     SessionStatus,
 };
-use crate::observability::metrics::metrics;
 use crate::session::{time_now, unix_to_rfc3339};
 use std::time::Instant;
 
@@ -75,7 +74,7 @@ pub async fn long_poll_response(
                 record_poll_duration(poll_start);
                 return Ok(result);
             }
-            None => return Err(ApiError::NotFound),
+            None => return Err(ApiError::not_found()),
         },
     };
 
@@ -90,14 +89,14 @@ pub async fn long_poll_response(
 
     // Verify round exists
     if !db::round_exists(&state.pool, &session_id, seq).await? {
-        return Err(ApiError::NotFound);
+        return Err(ApiError::not_found());
     }
 
     // Get the SessionHandle for this session
     let handle = state
         .handles
         .get(&session_id)
-        .ok_or(ApiError::NotFound)?
+        .ok_or_else(ApiError::not_found)?
         .clone();
 
     // Check-then-wait loop
@@ -140,7 +139,7 @@ pub async fn long_poll_response(
 
                 let session_row = match session_row {
                     Some(row) => row,
-                    None => return Err(ApiError::NotFound),
+                    None => return Err(ApiError::not_found()),
                 };
 
                 if let Some(result) = session_terminal_result(&session_row) {
@@ -183,13 +182,13 @@ pub async fn submit_response(
     // Verify round exists
     let round = db::get_round(&state.pool, &session_id, seq)
         .await?
-        .ok_or(ApiError::NotFound)?;
+        .ok_or_else(ApiError::not_found)?;
 
     // Validate response against the grilling schema (garde struct-level
     // custom: cross-field rules driven by the persisted Grilling as context).
     let grilling = super::deserialize_grilling(&round.grilling)?;
     body.validate_with(&grilling)
-        .map_err(|e| ApiError::BadRequest(format!("validation failed: {e}")))?;
+        .map_err(|e| ApiError::bad_request(format!("validation failed: {e}")))?;
 
     let now = time_now();
     let submitted_at = unix_to_rfc3339(now);
@@ -215,10 +214,7 @@ pub async fn submit_response(
                 "response should exist after conflict"
             )))?;
         let existing: Response = serde_json::from_str(&existing_json)?;
-        return Err(ApiError::RoundAlreadySubmitted {
-            round: seq,
-            response: existing,
-        });
+        return Err(ApiError::round_already_submitted(seq, existing));
     }
 
     // Wake up long-poll waiters
@@ -230,9 +226,7 @@ pub async fn submit_response(
     }
 
     // Record metrics
-    if let Some(m) = metrics() {
-        m.responses_received_total.add(1, &[]);
-    }
+    crate::observability::metrics::record_response_received();
 
     tracing::info!(session_id = %session_id, round = seq, "response submitted");
     Ok((StatusCode::CREATED, Json(response)))
@@ -282,10 +276,8 @@ impl axum::response::IntoResponse for ResponseResult {
 
 /// Record the long-poll wait duration metric.
 fn record_poll_duration(start: Instant) {
-    if let Some(m) = metrics() {
-        let elapsed = start.elapsed().as_secs_f64();
-        m.longpoll_wait_seconds.record(elapsed, &[]);
-    }
+    let elapsed = start.elapsed().as_secs_f64();
+    crate::observability::metrics::record_longpoll_duration(elapsed);
 }
 
 /// Check if a session is in terminal state and return the appropriate

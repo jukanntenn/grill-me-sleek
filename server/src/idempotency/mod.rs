@@ -67,7 +67,7 @@ where
         if entry.body_hash == body_hash {
             return Ok(entry); // replay
         } else {
-            return Err(ApiError::IdempotencyMismatch);
+            return Err(ApiError::idempotency_mismatch());
         }
     }
 
@@ -92,7 +92,7 @@ where
             if entry.body_hash == body_hash {
                 Ok(entry)
             } else {
-                Err(ApiError::IdempotencyMismatch)
+                Err(ApiError::idempotency_mismatch())
             }
         }
         Err(arc_err) => {

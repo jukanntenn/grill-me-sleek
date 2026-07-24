@@ -161,9 +161,7 @@ pub async fn get_session_or_gone(
     if let Some(row) = get_session(pool, session_id).await? {
         let status = SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired);
         if status.is_terminal() {
-            return Err(crate::error::ApiError::Gone {
-                detail: status.terminal_detail().to_string(),
-            });
+            return Err(crate::error::ApiError::gone(status.terminal_detail()));
         }
         return Ok(row);
     }
@@ -171,12 +169,10 @@ pub async fn get_session_or_gone(
     // Fall back to archive.
     if let Some((status_int, _reason)) = get_archive_status(pool, session_id).await? {
         let status = SessionStatus::try_from(status_int).unwrap_or(SessionStatus::Expired);
-        return Err(crate::error::ApiError::Gone {
-            detail: status.terminal_detail().to_string(),
-        });
+        return Err(crate::error::ApiError::gone(status.terminal_detail()));
     }
 
-    Err(crate::error::ApiError::NotFound)
+    Err(crate::error::ApiError::not_found())
 }
 
 /// Update session status (completed or cancelled). Returns rows affected.
@@ -403,12 +399,12 @@ pub async fn archive_session(
     let total_rounds = rounds.len() as i64;
     let snapshot = ArchiveSnapshot {
         rounds: rounds
-            .iter()
+            .into_iter()
             .map(|r| ArchiveRound {
                 seq: r.seq,
-                name: r.name.clone(),
-                grilling: r.grilling.clone(),
-                response: r.response.clone(),
+                name: r.name,
+                grilling: r.grilling,
+                response: r.response,
                 created_at: r.created_at,
             })
             .collect(),

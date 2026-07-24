@@ -86,7 +86,7 @@ pub async fn create_session(
                     )],
                 );
             }
-            return Err(ApiError::MaxSessions);
+            return Err(ApiError::max_sessions());
         }
 
         // Generate session ID (retry on collision, max 3 times)
@@ -109,7 +109,7 @@ pub async fn create_session(
                                 )],
                             );
                         }
-                        return Err(ApiError::MaxSessions);
+                        return Err(ApiError::max_sessions());
                     }
 
                     let url = format!("{}/#{session_id}", state_for_create.base_url);
@@ -249,7 +249,7 @@ pub async fn update_session(
 
     let (current_status, row) = match resolve_session_status(&state.pool, &session_id).await? {
         Some((status, row)) => (status, row),
-        None => return Err(ApiError::NotFound),
+        None => return Err(ApiError::not_found()),
     };
 
     if current_status.is_terminal() {
@@ -261,7 +261,7 @@ pub async fn update_session(
                 row.as_ref(),
             )));
         }
-        return Err(ApiError::TerminalState);
+        return Err(ApiError::terminal_state());
     }
 
     // Active session — row must be Some
@@ -305,8 +305,8 @@ pub async fn update_session(
                     row.as_ref(),
                 )));
             }
-            Some(_) => return Err(ApiError::TerminalState),
-            None => return Err(ApiError::NotFound),
+            Some(_) => return Err(ApiError::terminal_state()),
+            None => return Err(ApiError::not_found()),
         }
     }
 
@@ -366,19 +366,7 @@ fn terminal_session_state(
     status: &SessionStatus,
     row: Option<&db::SessionRow>,
 ) -> SessionState {
-    let (created_at, expires_at) = match row {
-        Some(r) => (unix_to_rfc3339(r.created_at), unix_to_rfc3339(r.expires_at)),
-        None => (String::new(), String::new()),
-    };
-    SessionState {
-        session_id,
-        status: *status,
-        current_round: 0,
-        name: None,
-        description: None,
-        created_at,
-        expires_at,
-    }
+    status.to_terminal_state(session_id, row)
 }
 
 /// Health probe (no DB check).

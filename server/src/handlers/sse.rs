@@ -23,7 +23,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 
 use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use axum::response::Json;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::Stream;
 use tokio_stream::StreamExt;
@@ -33,10 +35,17 @@ use crate::AppState;
 use crate::config;
 use crate::error::ApiError;
 use crate::models::{ErrorResponse, GoneResponse};
-use crate::observability::metrics::metrics;
 
 /// Global SSE connection counter for the soft limit.
 static SSE_ACTIVE: AtomicU64 = AtomicU64::new(0);
+
+/// SSE connection acquisition result.
+enum SseConnectionResult {
+    /// Connection acquired successfully.
+    Acquired(SseConnGuard),
+    /// Connection limit reached (503 Service Unavailable).
+    LimitReached,
+}
 
 /// RAII guard: increments on creation, decrements on drop.
 struct SseConnGuard {
@@ -44,19 +53,17 @@ struct SseConnGuard {
 }
 
 impl SseConnGuard {
-    fn acquire() -> Option<Self> {
+    fn try_acquire() -> SseConnectionResult {
         // fetch_add then check; if over the limit, roll back and refuse.
         // TOCTOU here is acceptable — DESIGN.md §755 explicitly tolerates a
         // best-effort soft limit (a couple of connections over is harmless).
         let prev = SSE_ACTIVE.fetch_add(1, Ordering::Relaxed);
         if prev >= config::MAX_SSE_CONNECTIONS {
             SSE_ACTIVE.fetch_sub(1, Ordering::Relaxed);
-            None
+            SseConnectionResult::LimitReached
         } else {
-            if let Some(m) = metrics() {
-                m.sse_connections_active.record(prev + 1, &[]);
-            }
-            Some(SseConnGuard {
+            crate::observability::metrics::record_sse_connections(prev + 1);
+            SseConnectionResult::Acquired(SseConnGuard {
                 counter: &SSE_ACTIVE,
             })
         }
@@ -67,9 +74,7 @@ impl Drop for SseConnGuard {
     fn drop(&mut self) {
         let prev = self.counter.fetch_sub(1, Ordering::Relaxed);
         // Record the updated gauge (connections still active).
-        if let Some(m) = metrics() {
-            m.sse_connections_active.record(prev - 1, &[]);
-        }
+        crate::observability::metrics::record_sse_connections(prev - 1);
     }
 }
 
@@ -116,14 +121,23 @@ pub async fn sse_handler(
     let _row = crate::db::get_session_or_gone(&state.pool, &session_id).await?;
 
     // Acquire a connection slot; refuse with 503 if the global limit is hit.
-    // Gauge is recorded inside SseConnGuard::acquire().
-    let guard = SseConnGuard::acquire().ok_or(ApiError::MaxSessions)?;
+    // Gauge is recorded inside SseConnGuard::try_acquire().
+    let guard = match SseConnGuard::try_acquire() {
+        SseConnectionResult::Acquired(guard) => guard,
+        SseConnectionResult::LimitReached => {
+            return Ok((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({"message": "max SSE connections reached", "status": 503})),
+            )
+                .into_response());
+        }
+    };
 
     // Subscribe to the per-session broadcast hub.
     let handle = state
         .handles
         .get(&session_id)
-        .ok_or(ApiError::NotFound)?
+        .ok_or_else(ApiError::not_found)?
         .clone();
     let rx = handle.sse_hub.subscribe();
 

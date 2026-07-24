@@ -42,13 +42,13 @@ pub fn validate_grilling_value(value: &serde_json::Value) -> Result<Grilling, Ap
     let validator = grilling_validator();
 
     if let Err(e) = validator.validate(value) {
-        return Err(ApiError::BadRequest(format!(
+        return Err(ApiError::bad_request(format!(
             "grilling validation failed: {e}"
         )));
     }
 
     let grilling: Grilling = serde_json::from_value(value.clone())
-        .map_err(|e| ApiError::BadRequest(format!("failed to deserialize grilling: {e}")))?;
+        .map_err(|e| ApiError::bad_request(format!("failed to deserialize grilling: {e}")))?;
 
     validate_unique_question_ids(&grilling)?;
     Ok(grilling)
@@ -61,7 +61,7 @@ pub fn validate_unique_question_ids(grilling: &Grilling) -> Result<(), ApiError>
     let mut seen = std::collections::HashSet::with_capacity(grilling.questions.len());
     for q in &grilling.questions {
         if !seen.insert(&q.id) {
-            return Err(ApiError::BadRequest(format!(
+            return Err(ApiError::bad_request(format!(
                 "duplicate question id: {}",
                 q.id
             )));
