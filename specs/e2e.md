@@ -63,7 +63,7 @@
 
 ```
 e2e/
-├── docker-compose.e2e.yml        # Docker 环境配置
+├── docker-compose.local.yml        # Docker 环境配置
 ├── Caddyfile                      # Caddy 配置（无 TLS）
 ├── package.json                   # 测试依赖和脚本
 ├── playwright.config.ts           # Playwright 配置
@@ -178,10 +178,9 @@ pnpm test -- --timeout=60000
 ```bash
 # 检查端口占用
 lsof -i :8443
-lsof -i :8080
 
 # 强制清理
-docker compose -f docker-compose.e2e.yml down -v --remove-orphans
+docker compose -f docker-compose.local.yml down -v --remove-orphans
 ```
 
 ## 4. 核心组件设计
@@ -279,38 +278,43 @@ export const test = base.extend<DataFixtures>({
 
 ## 6. Docker 配置
 
-### 6.1 docker-compose.e2e.yml
+### 6.1 docker-compose.local.yml
 
 ```yaml
 services:
-  app:
+  grilling-sleek:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
       - "8443:8443"
-      - "8080:8080"
     environment:
-      - GSLEEK_BASE_URL=http://localhost:8443
-      - GSLEEK_DB_PATH=/app/data/e2e-test.db
+      - GSLEEK_BASE_URL=https://localhost:8443
+      - GSLEEK_DB_PATH=/app/data/grilling-sleek.db
+      - GSLEEK_DISABLE_RATE_LIMIT=true
       - RUST_LOG=info
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     volumes:
-      - e2e-data:/app/data
-      - ./Caddyfile:/app/Caddyfile:ro
+      - ./Caddyfile.local:/app/Caddyfile:ro
 ```
 
-### 6.2 Caddyfile（E2E 专用）
+### 6.2 Caddyfile.local（E2E/本地验收专用）
 
 ```
 {
-    auto_https off
+    local_certs
 }
 
-:8443 {
+localhost:8443 {
+    tls internal
+
     root * /app/web/dist
     file_server
 
-    reverse_proxy /v1/* 127.0.0.1:8080 {
+    reverse_proxy /v1/* 127.0.0.1:8000 {
         transport http {
             versions h2c
         }

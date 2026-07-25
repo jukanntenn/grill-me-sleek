@@ -1,16 +1,15 @@
 # grilling-sleek self-hosted deployment
 #
 # Quick Start:
-#   docker compose -f docker/docker-compose.selfhost.yml up -d
+#   docker compose up -d
 #   open http://localhost:8080
 #
 # Environment variables (optional):
 #   GSLEEK_PORT       - Host port (default: 8080)
 #   GSLEEK_BASE_URL   - Public URL for session links (default: http://localhost:8080)
 #
-# Custom Caddyfile (optional):
-#   Mount your Caddyfile to /app/Caddyfile:ro
-#   docker compose -f docker/docker-compose.selfhost.yml -f docker/docker-compose.selfhost.caddy.yml up -d
+# Custom environment:
+#   cp .env.example .env  # then edit .env
 
 services:
   grilling-sleek:
@@ -20,9 +19,9 @@ services:
     ports:
       - "${GSLEEK_PORT:-8080}:8080"
     volumes:
-      - ../data:/app/data
-      - ../log:/app/log
-      - ./Caddyfile.http:/app/Caddyfile:ro
+      - ./data:/app/data
+      - ./log:/app/log
+      - ./Caddyfile:/app/Caddyfile:ro
     environment:
       - GSLEEK_BASE_URL=${GSLEEK_BASE_URL:-http://localhost:8080}
       - GSLEEK_DB_PATH=/app/data/grilling-sleek.db

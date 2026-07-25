@@ -4,17 +4,17 @@
   "version": "0.2.0-rc.2",
   "type": "module",
   "scripts": {
-    "pretest": "docker compose -f docker-compose.e2e.yml up -d --build && sleep 15 && until curl -sfk https://localhost:8443/v1/healthz; do echo 'Waiting for service...'; sleep 2; done",
+    "pretest": "docker compose -f ../docker/docker-compose.local.yml up -d --build && sleep 15 && until curl -sfk https://localhost:8443/v1/healthz; do echo 'Waiting for service...'; sleep 2; done",
     "test": "npx playwright test",
-    "posttest": "docker compose -f docker-compose.e2e.yml down -v",
+    "posttest": "docker compose -f ../docker/docker-compose.local.yml down -v",
     "test:cli": "npx playwright test specs/cli-behavior.spec.ts",
     "test:lifecycle": "npx playwright test specs/session-lifecycle.spec.ts",
     "test:debug": "npx playwright test --debug",
     "test:headed": "npx playwright test --headed",
     "report": "npx playwright show-report",
-    "docker:up": "docker compose -f docker-compose.e2e.yml up -d --build",
-    "docker:down": "docker compose -f docker-compose.e2e.yml down -v",
-    "docker:logs": "docker compose -f docker-compose.e2e.yml logs"
+    "docker:up": "docker compose -f ../docker/docker-compose.local.yml up -d --build",
+    "docker:down": "docker compose -f ../docker/docker-compose.local.yml down -v",
+    "docker:logs": "docker compose -f ../docker/docker-compose.local.yml logs"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",

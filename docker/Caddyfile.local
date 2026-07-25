@@ -1,35 +1,35 @@
-# grilling-sleek Caddy configuration (HTTP mode for self-hosting)
-# Serves static files + reverse proxies to Rust backend
-#
-# This is the HTTP-only version for self-hosting without TLS.
-# For production with TLS, use the main Caddyfile.
+# e2e 和本地验收环境 Caddy 配置（自签名 TLS）
+# 使用 Caddy tls internal 自动生成自签名证书，模拟生产环境的 HTTPS
 
 {
-    auto_https off
+    local_certs
 }
 
-:8080 {
+localhost:8443 {
+    # 自动生成自签名证书
+    tls internal
+
     # Security headers
     header {
         Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'"
         X-Content-Type-Options "nosniff"
     }
 
-    # Compression (exclude SSE path to preserve real-time flush)
+    # Compression（排除 SSE 路径）
     @compressable {
         not path /v1/sessions/*/events
     }
     encode @compressable zstd gzip
 
-    # Static files (served by Caddy, not Rust)
+    # Static files（由 Caddy 服务，不经过 Rust）
     root * /app/web/dist
     file_server
 
-    # Cache-Control for Entry HTML (5min)
+    # Cache-Control for Entry HTML
     @html path /
     header @html Cache-Control "public, max-age=300"
 
-    # Cache-Control for assets (immutable, 1 year)
+    # Cache-Control for assets
     @assets path /assets/*
     header @assets Cache-Control "public, max-age=31536000, immutable"
 

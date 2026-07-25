@@ -20,11 +20,11 @@
 ### 1. 启动测试环境
 
 ```bash
-# 进入 e2e 测试目录
-cd /home/alice/Workspace/grill-me-sleek/e2e
+# 进入项目根目录
+cd /home/alice/Workspace/grill-me-sleek
 
 # 一条命令完成构建和启动
-docker compose -f docker-compose.e2e.yml up -d --build
+docker compose -f docker/docker-compose.local.yml up -d --build
 ```
 
 **说明**：
@@ -540,11 +540,8 @@ echo "请打开浏览器访问: $TEST_URL"
 
 ```bash
 # 停止并删除容器
-cd /home/alice/Workspace/grill-me-sleek/e2e
-docker compose -f docker-compose.e2e.yml down
-
-# 删除数据卷（可选）
-docker volume rm e2e_e2e-data 2>/dev/null || true
+cd /home/alice/Workspace/grill-me-sleek
+docker compose -f docker/docker-compose.local.yml down
 ```
 
 ### 2. 清理临时文件
@@ -661,7 +658,7 @@ GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek cancel $SESSION_ID -
 #### 1. 构建命令
 ```bash
 # 一条命令完成构建和启动
-docker compose -f docker-compose.e2e.yml up -d --build
+docker compose -f ../docker/docker-compose.local.yml up -d --build
 ```
 
 #### 2. 构建流程
@@ -689,42 +686,43 @@ web/dist/
 - 确保 Docker 在容器内部构建前端
 - 避免本地环境差异导致的问题
 
-#### 2. `docker-compose.e2e.yml` 文件
+#### 2. `docker/docker-compose.local.yml` 文件
 ```yaml
-# E2E 测试环境配置
-# 从最新代码构建 Docker 镜像
+# e2e 和本地验收环境配置
+# 自签名 HTTPS，端口 8443，不需要数据持久化
 
 services:
-  app:
+  grilling-sleek:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
       - "8443:8443"
-      - "8080:8080"
     environment:
       - GSLEEK_BASE_URL=https://localhost:8443
-      - GSLEEK_DB_PATH=/app/data/e2e-test.db
+      - GSLEEK_DB_PATH=/app/data/grilling-sleek.db
+      - GSLEEK_DISABLE_RATE_LIMIT=true
       - RUST_LOG=info
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     volumes:
-      - e2e-data:/app/data
-      - ./Caddyfile:/app/Caddyfile:ro
+      - ./Caddyfile.local:/app/Caddyfile:ro
     healthcheck:
       test: ["CMD", "curl", "-fsk", "https://localhost:8443/v1/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 10s
-
-volumes:
-  e2e-data:
 ```
 
 **说明**：
 - 使用 `context: ..` 指向项目根目录
 - 使用 `dockerfile: docker/Dockerfile` 指向 Dockerfile
-- 映射端口 8443（HTTPS）和 8080（HTTP）
-- 挂载数据卷和 Caddy 配置文件
+- 映射端口 8443（HTTPS）
+- 不需要数据持久化（数据存储在容器临时目录）
+- 挂载 Caddy 配置文件
 - 配置健康检查
 
 ### 开发流程规范
@@ -735,7 +733,7 @@ volumes:
 vim web/src/styles/globals.css
 
 # 2. 一条命令完成构建和启动
-cd e2e && docker compose -f docker-compose.e2e.yml up -d --build
+cd /home/alice/Workspace/grill-me-sleek && docker compose -f docker/docker-compose.local.yml up -d --build
 
 # 3. 验证样式
 curl -sk https://localhost:8443 | grep style
@@ -747,7 +745,7 @@ curl -sk https://localhost:8443 | grep style
 vim server/src/main.rs
 
 # 2. 一条命令完成构建和启动
-cd e2e && docker compose -f docker-compose.e2e.yml up -d --build
+cd /home/alice/Workspace/grill-me-sleek && docker compose -f docker/docker-compose.local.yml up -d --build
 
 # 3. 验证功能
 curl -sk https://localhost:8443/v1/healthz
@@ -759,7 +757,7 @@ curl -sk https://localhost:8443/v1/healthz
 vim web/src/components/QuestionCard.tsx
 
 # 2. 一条命令完成构建和启动
-cd e2e && docker compose -f docker-compose.e2e.yml up -d --build
+cd /home/alice/Workspace/grill-me-sleek && docker compose -f docker/docker-compose.local.yml up -d --build
 
 # 3. 验证功能
 curl -sk https://localhost:8443 | grep QuestionCard
@@ -770,11 +768,11 @@ curl -sk https://localhost:8443 | grep QuestionCard
 #### 1. 验证容器状态
 ```bash
 # 查看容器状态
-docker compose -f docker-compose.e2e.yml ps
+docker compose -f ../docker/docker-compose.local.yml ps
 
 # 预期结果：
 # NAME        IMAGE     COMMAND   SERVICE   CREATED          STATUS                    PORTS
-# e2e-app-1   e2e-app   "/init"   app       16 seconds ago   Up 15 seconds (healthy)   0.0.0.0:8080->8080/tcp, [::]:8080->8080/tcp, 0.0.0.0:8443->8443/tcp, [::]:8443->8443/tcp
+# grilling-sleek   grilling-sleek   "/init"   grilling-sleek   16 seconds ago   Up 15 seconds (healthy)   0.0.0.0:8443->8443/tcp, [::]:8443->8443/tcp
 ```
 
 #### 2. 验证样式加载
@@ -814,32 +812,31 @@ curl -sk https://localhost:8443/v1/healthz
 #### 1. 构建失败
 ```bash
 # 查看构建日志
-docker compose -f docker-compose.e2e.yml build --no-cache
+docker compose -f ../docker/docker-compose.local.yml build --no-cache
 
 # 查看容器日志
-docker compose -f docker-compose.e2e.yml logs -f
+docker compose -f ../docker/docker-compose.local.yml logs -f
 ```
 
 #### 2. 容器无法启动
 ```bash
 # 检查容器状态
-docker compose -f docker-compose.e2e.yml ps
+docker compose -f ../docker/docker-compose.local.yml ps
 
 # 查看容器日志
-docker compose -f docker-compose.e2e.yml logs -f
+docker compose -f ../docker/docker-compose.local.yml logs -f
 
 # 检查端口占用
 lsof -i :8443
-lsof -i :8080
 ```
 
 #### 3. 样式未更新
 ```bash
 # 强制重新构建
-docker compose -f docker-compose.e2e.yml build --no-cache
+docker compose -f ../docker/docker-compose.local.yml build --no-cache
 
 # 重启容器
-docker compose -f docker-compose.e2e.yml up -d --build
+docker compose -f ../docker/docker-compose.local.yml up -d --build
 
 # 验证样式
 curl -sk https://localhost:8443 | grep style

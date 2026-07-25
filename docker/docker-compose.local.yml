@@ -1,8 +1,12 @@
-# E2E 测试环境配置
-# 从最新代码构建 Docker 镜像
+# e2e 和本地验收环境配置
+# 自签名 HTTPS，端口 8443，不需要数据持久化
+#
+# 用法：
+#   docker compose -f docker/docker-compose.local.yml up -d
+#   open https://localhost:8443
 
 services:
-  app:
+  grilling-sleek:
     build:
       context: ..
       dockerfile: docker/Dockerfile
@@ -10,7 +14,7 @@ services:
       - "8443:8443"
     environment:
       - GSLEEK_BASE_URL=https://localhost:8443
-      - GSLEEK_DB_PATH=/app/data/e2e-test.db
+      - GSLEEK_DB_PATH=/app/data/grilling-sleek.db
       - GSLEEK_DISABLE_RATE_LIMIT=true
       - RUST_LOG=info
     ulimits:
@@ -18,14 +22,10 @@ services:
         soft: 65536
         hard: 65536
     volumes:
-      - e2e-data:/app/data
-      - ./Caddyfile:/app/Caddyfile:ro
+      - ./Caddyfile.local:/app/Caddyfile:ro
     healthcheck:
       test: ["CMD", "curl", "-fsk", "https://localhost:8443/v1/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10
       start_period: 10s
-
-volumes:
-  e2e-data:

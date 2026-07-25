@@ -114,6 +114,3 @@ EXPOSE 8443
 
 WORKDIR /app
 ENTRYPOINT ["/init"]
-
-# HTTP mode Caddyfile for self-hosting
-COPY docker/Caddyfile.http /app/Caddyfile.http

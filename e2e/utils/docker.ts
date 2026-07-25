@@ -6,7 +6,7 @@
 
 import { execSync } from 'node:child_process';
 
-const COMPOSE_FILE = 'docker-compose.e2e.yml';
+const COMPOSE_FILE = '../docker/docker-compose.local.yml';
 const PROJECT_NAME = 'grill-sleek-e2e';
 
 /**

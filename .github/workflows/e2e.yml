@@ -86,8 +86,7 @@ jobs:
 
       - name: Start Docker environment
         run: |
-          cd e2e
-          docker compose -f docker-compose.e2e.yml up -d
+          docker compose -f docker/docker-compose.local.yml up -d
 
       - name: Wait for service
         run: |
@@ -101,7 +100,7 @@ jobs:
           done
           echo "Service failed to start"
           echo "=== Docker logs ==="
-          docker compose -f e2e/docker-compose.e2e.yml logs
+          docker compose -f docker/docker-compose.local.yml logs
           exit 1
 
       - name: Run E2E tests
@@ -128,5 +127,4 @@ jobs:
       - name: Stop Docker environment
         if: always()
         run: |
-          cd e2e
-          docker compose -f docker-compose.e2e.yml down
+          docker compose -f docker/docker-compose.local.yml down
