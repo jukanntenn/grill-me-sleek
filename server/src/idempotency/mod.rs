@@ -13,7 +13,7 @@ use std::time::Duration;
 use crate::error::ApiError;
 
 /// Idempotency cache entry: stores the first response for a given key.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct IdempotencyEntry {
     /// Serialized response body (JSON string).
     pub response_body: Box<str>,
@@ -54,7 +54,7 @@ pub async fn run_idempotent<F, Fut>(
     create: F,
 ) -> Result<IdempotencyEntry, ApiError>
 where
-    F: FnOnce() -> Fut + Clone + Send + 'static,
+    F: FnOnce() -> Fut + Send + 'static,
     Fut: std::future::Future<Output = Result<IdempotencyEntry, ApiError>> + Send,
 {
     let Some(key) = idempotency_key else {
@@ -72,15 +72,12 @@ where
     }
 
     // Slow path: try_get_with coalesces concurrent calls on the same key into
-    // one `create` evaluation. The init future must return Result<V, E> with
-    // E: Send + Sync + 'static; we use ApiError.
-    let body_hash_for_init = body_hash;
-    let create_for_init = create.clone();
+    // one `create` evaluation. `create` is consumed here — no Clone needed.
+    // `body_hash` is Copy; captured by move without issue.
     match cache
-        .try_get_with(key.clone(), async move {
-            create_for_init().await.inspect(|entry| {
-                // Sanity: the entry's body_hash must match the request's.
-                debug_assert_eq!(entry.body_hash, body_hash_for_init);
+        .try_get_with(key, async move {
+            create().await.inspect(|entry| {
+                debug_assert_eq!(entry.body_hash, body_hash);
             })
         })
         .await

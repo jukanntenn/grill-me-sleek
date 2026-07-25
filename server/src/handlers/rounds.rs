@@ -5,10 +5,10 @@ use axum::response::{IntoResponse, Json};
 use crate::AppState;
 use crate::db;
 use crate::error::ApiError;
+use crate::extractors::RawJsonBody;
 use crate::idempotency::{self, IdempotencyEntry};
-use crate::models::{ErrorResponse, GoneResponse, Grilling, RoundResponse, RoundSummary};
+use crate::models::{ErrorResponse, GoneResponse, RoundResponse, RoundSummary};
 use crate::session::time_now;
-use crate::validation;
 
 /// GET /v1/sessions/{session_id}/rounds — List all rounds (summary).
 #[utoipa::path(
@@ -61,21 +61,21 @@ pub async fn list_rounds(
         (status = 410, description = "Session gone", body = GoneResponse)
     )
 )]
-#[tracing::instrument(skip(state, raw, headers), fields(session_id = %session_id))]
+#[tracing::instrument(skip(state, body, headers), fields(session_id = %session_id))]
 pub async fn create_round(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
     headers: HeaderMap,
-    Json(raw): Json<serde_json::Value>,
+    body: RawJsonBody,
 ) -> Result<(StatusCode, Json<RoundResponse>), ApiError> {
-    // Validate Grilling (JSON Schema + question-id uniqueness). Receiving a raw
-    // Value ensures schema violations return 400, not axum's 422 serde rejection.
-    let body: Grilling = validation::validate_grilling_value(&raw)?;
+    // Validate Grilling and extract idempotency metadata in one pass —
+    // hash is computed from the original bytes, avoiding a redundant
+    // re-serialization.
+    let (grilling, idempotency_key, body_hash) =
+        super::validate_and_extract(&body.bytes, &body.value, &headers)?;
 
     // Verify session is active
     let _row = db::get_session_or_gone(&state.pool, &session_id).await?;
-
-    let (idempotency_key, body_hash) = super::extract_idempotency(&headers, &raw);
 
     // Idempotency key is scoped per-session: DESIGN.md §1479 — key dimension is
     // (session_id, key). We namespace it by prefixing with the session id.
@@ -85,15 +85,20 @@ pub async fn create_round(
     let session_id_for_create = session_id.clone();
     let create = move || async move {
         let now = time_now();
-        let (new_seq, _round_id) =
-            db::create_round(&state_for_create.pool, &session_id_for_create, &body, now).await?;
+        let (new_seq, _round_id) = db::create_round(
+            &state_for_create.pool,
+            &session_id_for_create,
+            &grilling,
+            now,
+        )
+        .await?;
 
-        // Clone only the name String; move body into grilling (avoids deep clone).
-        let name = Some(body.name.clone());
+        // Clone only the name String; move grilling into response (avoids deep clone).
+        let name = Some(grilling.name.clone());
         let response = RoundResponse {
             round: new_seq,
             name,
-            grilling: body,
+            grilling,
             response: None,
         };
 
@@ -122,11 +127,7 @@ pub async fn create_round(
         idempotency::run_idempotent(&state.idempotency_rounds, cache_key, body_hash, create)
             .await?;
 
-    let response: RoundResponse = serde_json::from_str(&entry.response_body)?;
-    Ok((
-        StatusCode::from_u16(entry.status_code).unwrap_or(StatusCode::CREATED),
-        Json(response),
-    ))
+    super::deserialize_idempotent_response(&entry)
 }
 
 /// GET /v1/sessions/{session_id}/rounds/current — Get current round.

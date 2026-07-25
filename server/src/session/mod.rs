@@ -32,6 +32,7 @@ pub use config::{MAX_SESSIONS, SESSION_TTL, SWEEP_INTERVAL};
 ///
 /// Holds only runtime coordination primitives — no business data.
 /// Business data lives in SQLite; this handle is rebuilt on crash recovery.
+#[derive(Debug)]
 pub struct SessionHandle {
     /// Long-poll wakeup signal. Pure notification, no payload.
     /// User submits response → agent_notify.notify_waiters() → blocked
@@ -104,15 +105,12 @@ pub async fn recover_sessions(map: &SessionMap, pool: &Pool<Sqlite>) -> anyhow::
         register_session(map, id);
     }
 
-    // Initialize the active sessions gauge
+    // Initialize the active sessions gauge.
     crate::observability::metrics::ACTIVE_SESSIONS
         .store(count as i64, std::sync::atomic::Ordering::Relaxed);
-    crate::observability::metrics::record_gauge(
-        &crate::observability::metrics::metrics()
-            .unwrap()
-            .sessions_active,
-        count as u64,
-    );
+    if let Some(m) = crate::observability::metrics::metrics() {
+        m.sessions_active.record(count as u64, &[]);
+    }
 
     tracing::info!(count, "recovered active sessions");
     Ok(count)

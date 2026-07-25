@@ -23,9 +23,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::task::{Context, Poll};
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::response::Json;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use futures::Stream;
 use tokio_stream::StreamExt;
@@ -39,31 +37,25 @@ use crate::models::{ErrorResponse, GoneResponse};
 /// Global SSE connection counter for the soft limit.
 static SSE_ACTIVE: AtomicU64 = AtomicU64::new(0);
 
-/// SSE connection acquisition result.
-enum SseConnectionResult {
-    /// Connection acquired successfully.
-    Acquired(SseConnGuard),
-    /// Connection limit reached (503 Service Unavailable).
-    LimitReached,
-}
-
 /// RAII guard: increments on creation, decrements on drop.
 struct SseConnGuard {
     counter: &'static AtomicU64,
 }
 
 impl SseConnGuard {
-    fn try_acquire() -> SseConnectionResult {
+    /// Try to acquire a connection slot. Returns `Err(())` if the global limit
+    /// is reached.
+    fn try_acquire() -> Result<SseConnGuard, ()> {
         // fetch_add then check; if over the limit, roll back and refuse.
         // TOCTOU here is acceptable — DESIGN.md §755 explicitly tolerates a
         // best-effort soft limit (a couple of connections over is harmless).
         let prev = SSE_ACTIVE.fetch_add(1, Ordering::Relaxed);
         if prev >= config::MAX_SSE_CONNECTIONS {
             SSE_ACTIVE.fetch_sub(1, Ordering::Relaxed);
-            SseConnectionResult::LimitReached
+            Err(())
         } else {
             crate::observability::metrics::record_sse_connections(prev + 1);
-            SseConnectionResult::Acquired(SseConnGuard {
+            Ok(SseConnGuard {
                 counter: &SSE_ACTIVE,
             })
         }
@@ -122,16 +114,7 @@ pub async fn sse_handler(
 
     // Acquire a connection slot; refuse with 503 if the global limit is hit.
     // Gauge is recorded inside SseConnGuard::try_acquire().
-    let guard = match SseConnGuard::try_acquire() {
-        SseConnectionResult::Acquired(guard) => guard,
-        SseConnectionResult::LimitReached => {
-            return Ok((
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(serde_json::json!({"message": "max SSE connections reached", "status": 503})),
-            )
-                .into_response());
-        }
-    };
+    let guard = SseConnGuard::try_acquire().map_err(|()| ApiError::max_sessions())?;
 
     // Subscribe to the per-session broadcast hub.
     let handle = state
@@ -144,12 +127,11 @@ pub async fn sse_handler(
     // Convert the broadcast receiver into a stream of SSE Events. Lagged
     // receivers (slow Tab) skip the missed event — they'll GET current on
     // reconnect to compensate (DESIGN.md §801-806, §810-818).
+    // `SseEvent.data` is pre-serialized JSON — use `Event::data()` directly
+    // to avoid re-serialization on the broadcast path.
     let inner = BroadcastStream::new(rx).filter_map(|result| match result {
         Ok(sse_event) => {
-            let event = Event::default()
-                .event(sse_event.event)
-                .json_data(&sse_event.data)
-                .expect("SseEvent.data is always valid JSON");
+            let event = Event::default().event(sse_event.event).data(sse_event.data);
             Some(Ok::<_, Infallible>(event))
         }
         Err(_) => None, // Lagged — skip

@@ -1,17 +1,22 @@
-use serde::Serialize;
 use tokio::sync::broadcast;
 
 /// SSE event types that can be broadcast to clients.
-#[derive(Debug, Clone, Serialize)]
+///
+/// `data` is a pre-serialized JSON string — the constructors serialize once at
+/// creation time, so the broadcast path (which fans out to N subscribers) never
+/// re-serializes. This avoids the double-serialization cost of the previous
+/// `serde_json::Value` + `Event::json_data()` pattern.
+#[derive(Debug, Clone)]
 pub struct SseEvent {
     pub event: &'static str,
-    pub data: serde_json::Value,
+    pub data: String,
 }
 
 /// Per-session SSE hub backed by a tokio broadcast channel.
 ///
 /// Each subscriber gets their own `broadcast::Receiver`. Slow consumers
 /// receive `RecvError::Lagged` and can compensate via GET current.
+#[derive(Debug)]
 pub struct SseHub {
     tx: broadcast::Sender<SseEvent>,
 }
@@ -37,39 +42,41 @@ impl SseHub {
 }
 
 /// Convenience constructors for common SSE events.
+///
+/// Each constructor serializes the payload to JSON once at creation time.
 impl SseEvent {
     pub fn round_created(round: i64) -> Self {
         Self {
             event: "round.created",
-            data: serde_json::json!({ "round": round }),
+            data: serde_json::json!({ "round": round }).to_string(),
         }
     }
 
     pub fn response_created(round: i64) -> Self {
         Self {
             event: "response.created",
-            data: serde_json::json!({ "round": round }),
+            data: serde_json::json!({ "round": round }).to_string(),
         }
     }
 
     pub fn session_completed(session_id: &str) -> Self {
         Self {
             event: "session.completed",
-            data: serde_json::json!({ "session_id": session_id }),
+            data: serde_json::json!({ "session_id": session_id }).to_string(),
         }
     }
 
     pub fn session_cancelled(session_id: &str, reason: &str) -> Self {
         Self {
             event: "session.cancelled",
-            data: serde_json::json!({ "session_id": session_id, "reason": reason }),
+            data: serde_json::json!({ "session_id": session_id, "reason": reason }).to_string(),
         }
     }
 
     pub fn session_expired(session_id: &str) -> Self {
         Self {
             event: "session.expired",
-            data: serde_json::json!({ "session_id": session_id }),
+            data: serde_json::json!({ "session_id": session_id }).to_string(),
         }
     }
 }

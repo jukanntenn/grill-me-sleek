@@ -64,7 +64,7 @@ impl TestApp {
                 grilling_sleek::config::IDEMPOTENCY_TTL,
                 grilling_sleek::config::IDEMPOTENCY_CAPACITY,
             ),
-            base_url: "https://test.example".to_string(),
+            base_url: std::sync::Arc::from("https://test.example"),
         };
 
         let router = build_app(state);

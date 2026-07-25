@@ -6,15 +6,25 @@ use std::net::SocketAddr;
 use crate::AppState;
 use crate::db;
 use crate::error::ApiError;
-use crate::extractors::ValidatedJson;
+use crate::extractors::{RawJsonBody, ValidatedJson};
 use crate::idempotency::{self, IdempotencyEntry};
 use crate::models::{
-    CreateSessionResponse, ErrorResponse, GoneResponse, Grilling, SessionState, SessionStatus,
-    SessionUpdate, SessionUpdateStatus,
+    CreateSessionResponse, ErrorResponse, GoneResponse, SessionState, SessionStatus, SessionUpdate,
+    SessionUpdateStatus,
 };
 use crate::observability::metrics::{metrics, record_session_created};
 use crate::session::{self, SESSION_TTL, time_now, unix_to_rfc3339};
-use crate::validation;
+
+/// Record a session rejection metric and return the corresponding error.
+fn reject_session(reason: &'static str) -> ApiError {
+    if let Some(m) = metrics() {
+        m.sessions_rejected_total.add(
+            1,
+            &[opentelemetry::KeyValue::new("reason", reason.to_string())],
+        );
+    }
+    ApiError::max_sessions()
+}
 
 /// Custom extractor for ConnectInfo that falls back to a default SocketAddr
 /// when not available (e.g., in integration tests using oneshot).
@@ -52,22 +62,21 @@ where
         (status = 503, description = "Max sessions reached", body = ErrorResponse)
     )
 )]
-#[tracing::instrument(skip(state, raw), fields(session_id))]
+#[tracing::instrument(skip(state, body), fields(session_id))]
 pub async fn create_session(
     State(state): State<AppState>,
     OptionalConnectInfo(peer): OptionalConnectInfo,
     headers: HeaderMap,
-    Json(raw): Json<serde_json::Value>,
+    body: RawJsonBody,
 ) -> Result<(StatusCode, Json<CreateSessionResponse>), ApiError> {
     // Extract client IP for logging
     let client_ip = super::extract_client_ip(&headers, &peer);
 
-    // Validate Grilling (JSON Schema + question-id uniqueness). Receiving a raw
-    // Value (not Json<Grilling>) ensures schema violations return 400 from our
-    // authoritative jsonschema check, rather than axum's 422 serde rejection.
-    let body: Grilling = validation::validate_grilling_value(&raw)?;
-
-    let (idempotency_key, body_hash) = super::extract_idempotency(&headers, &raw);
+    // Validate Grilling and extract idempotency metadata in one pass —
+    // hash is computed from the original bytes, avoiding a redundant
+    // re-serialization.
+    let (grilling, idempotency_key, body_hash) =
+        super::validate_and_extract(&body.bytes, &body.value, &headers)?;
 
     // The creation closure: generates an ID, writes the session+first round,
     // registers the SessionHandle, and builds the response entry. Under an
@@ -77,16 +86,7 @@ pub async fn create_session(
     let create = move || async move {
         // Check session capacity
         if state_for_create.handles.len() >= session::MAX_SESSIONS {
-            if let Some(m) = metrics() {
-                m.sessions_rejected_total.add(
-                    1,
-                    &[opentelemetry::KeyValue::new(
-                        "reason",
-                        "max_sessions".to_string(),
-                    )],
-                );
-            }
-            return Err(ApiError::max_sessions());
+            return Err(reject_session("max_sessions"));
         }
 
         // Generate session ID (retry on collision, max 3 times)
@@ -95,27 +95,24 @@ pub async fn create_session(
             let now = time_now();
             let expires_at = now + SESSION_TTL;
 
-            match db::create_session(&state_for_create.pool, &session_id, &body, now, expires_at)
-                .await
+            match db::create_session(
+                &state_for_create.pool,
+                &session_id,
+                &grilling,
+                now,
+                expires_at,
+            )
+            .await
             {
                 Ok(_round_id) => {
                     if !session::register_session(&state_for_create.handles, session_id.clone()) {
-                        if let Some(m) = metrics() {
-                            m.sessions_rejected_total.add(
-                                1,
-                                &[opentelemetry::KeyValue::new(
-                                    "reason",
-                                    "max_sessions".to_string(),
-                                )],
-                            );
-                        }
-                        return Err(ApiError::max_sessions());
+                        return Err(reject_session("max_sessions"));
                     }
 
                     let url = format!("{}/#{session_id}", state_for_create.base_url);
                     // Extract fields before they are consumed by the response
-                    let name = body.name;
-                    let description = body.description;
+                    let name = grilling.name;
+                    let description = grilling.description;
 
                     let response = CreateSessionResponse {
                         session_id: session_id.clone(),
@@ -166,11 +163,7 @@ pub async fn create_session(
     )
     .await?;
 
-    let response: CreateSessionResponse = serde_json::from_str(&entry.response_body)?;
-    Ok((
-        StatusCode::from_u16(entry.status_code).unwrap_or(StatusCode::CREATED),
-        Json(response),
-    ))
+    super::deserialize_idempotent_response(&entry)
 }
 
 /// GET /v1/sessions/{session_id} — Get session state.
@@ -197,7 +190,7 @@ pub async fn get_session(
     let (current_round, description) = if let Some(round_id) = row.curr_round {
         match db::get_round_by_id(&state.pool, round_id).await? {
             Some(r) => {
-                let desc = super::deserialize_grilling(&r.grilling)
+                let desc = crate::db::deserialize_grilling(&r.grilling)
                     .ok()
                     .and_then(|g| g.description);
                 (r.seq, desc)
@@ -247,25 +240,37 @@ pub async fn update_session(
     // state instead of 409.
     let desired_status: SessionStatus = body.status.into();
 
-    let (current_status, row) = match resolve_session_status(&state.pool, &session_id).await? {
-        Some((status, row)) => (status, row),
-        None => return Err(ApiError::not_found()),
+    let lookup = db::lookup_session(&state.pool, &session_id).await?;
+
+    let current_status = match &lookup {
+        db::SessionLookup::NotFound => return Err(ApiError::not_found()),
+        db::SessionLookup::Terminal { status, .. } => *status,
+        db::SessionLookup::Active(row) => {
+            SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired)
+        }
     };
 
     if current_status.is_terminal() {
         // Idempotent: already in the desired terminal state → return success.
         if current_status == desired_status {
+            let row = match &lookup {
+                db::SessionLookup::Terminal { row, .. } => row.as_ref(),
+                _ => None,
+            };
             return Ok(Json(terminal_session_state(
                 session_id,
                 &desired_status,
-                row.as_ref(),
+                row,
             )));
         }
         return Err(ApiError::terminal_state());
     }
 
-    // Active session — row must be Some
-    let row = row.expect("active session must have a row in the active table");
+    // Active session — extract the row
+    let row = match lookup {
+        db::SessionLookup::Active(row) => row,
+        _ => unreachable!("checked above that session is active"),
+    };
 
     // DESIGN.md §653 — server-authoritative: reason/reason_detail/actor are only
     // adopted when status=cancelled; for status=completed they are ignored
@@ -297,16 +302,17 @@ pub async fn update_session(
 
     if affected == 0 {
         // Concurrent update — re-check if already in the desired state.
-        match resolve_session_status(&state.pool, &session_id).await? {
-            Some((status, row)) if status == desired_status => {
+        match db::lookup_session(&state.pool, &session_id).await? {
+            db::SessionLookup::Terminal { status, row, .. } if status == desired_status => {
                 return Ok(Json(terminal_session_state(
                     session_id,
                     &desired_status,
                     row.as_ref(),
                 )));
             }
-            Some(_) => return Err(ApiError::terminal_state()),
-            None => return Err(ApiError::not_found()),
+            db::SessionLookup::Terminal { .. } => return Err(ApiError::terminal_state()),
+            db::SessionLookup::Active(_) => return Err(ApiError::terminal_state()),
+            db::SessionLookup::NotFound => return Err(ApiError::not_found()),
         }
     }
 
@@ -340,25 +346,6 @@ pub async fn update_session(
     )))
 }
 
-/// Try to find a session's current status from either the active table or
-/// the archive table. Returns `Ok(Some((status, Some(row))))` if found in
-/// the active table, `Ok(Some((status, None)))` if found in the archive,
-/// `Ok(None)` if not found in either table, `Err` on DB error.
-async fn resolve_session_status(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    session_id: &str,
-) -> Result<Option<(SessionStatus, Option<db::SessionRow>)>, ApiError> {
-    if let Some(row) = db::get_session(pool, session_id).await? {
-        let status = SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired);
-        return Ok(Some((status, Some(row))));
-    }
-    if let Some((status_int, _)) = db::get_archive_status(pool, session_id).await? {
-        let status = SessionStatus::try_from(status_int).unwrap_or(SessionStatus::Expired);
-        return Ok(Some((status, None)));
-    }
-    Ok(None)
-}
-
 /// Build a `SessionState` for a terminal (completed/cancelled) response.
 /// `row` is `None` when the session was already archived (timestamps unavailable).
 fn terminal_session_state(
@@ -366,7 +353,19 @@ fn terminal_session_state(
     status: &SessionStatus,
     row: Option<&db::SessionRow>,
 ) -> SessionState {
-    status.to_terminal_state(session_id, row)
+    let (created_at, expires_at) = match row {
+        Some(r) => (unix_to_rfc3339(r.created_at), unix_to_rfc3339(r.expires_at)),
+        None => (String::new(), String::new()),
+    };
+    SessionState {
+        session_id,
+        status: *status,
+        current_round: 0,
+        name: None,
+        description: None,
+        created_at,
+        expires_at,
+    }
 }
 
 /// Health probe (no DB check).

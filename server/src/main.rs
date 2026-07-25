@@ -72,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
             config::IDEMPOTENCY_TTL,
             config::IDEMPOTENCY_CAPACITY,
         ),
-        base_url: config::settings().base_url.clone(),
+        base_url: std::sync::Arc::from(config::settings().base_url.as_str()),
     };
 
     // Build router — rate limiter attached only to POST /v1/sessions

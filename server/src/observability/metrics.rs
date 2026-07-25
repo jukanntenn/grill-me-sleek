@@ -89,25 +89,6 @@ pub fn metrics() -> Option<&'static Metrics> {
 }
 
 // ---------------------------------------------------------------------------
-// Low-level helpers (Option-aware)
-// ---------------------------------------------------------------------------
-
-/// Record a counter increment. No-op if metrics not initialized.
-pub fn record_counter(counter: &Counter<u64>, value: u64) {
-    counter.add(value, &[]);
-}
-
-/// Record a gauge value. No-op if metrics not initialized.
-pub fn record_gauge(gauge: &Gauge<u64>, value: u64) {
-    gauge.record(value, &[]);
-}
-
-/// Record a histogram value. No-op if metrics not initialized.
-pub fn record_histogram(histogram: &Histogram<f64>, value: f64) {
-    histogram.record(value, &[]);
-}
-
-// ---------------------------------------------------------------------------
 // Domain-specific helpers
 // ---------------------------------------------------------------------------
 
@@ -166,7 +147,10 @@ pub fn record_ttl_swept() {
 }
 
 /// Record HTTP request duration.
-pub fn record_http_duration(elapsed: f64, method: &str, path: &str, status: &str) {
+///
+/// Accepts `status: u16` to avoid allocating a `String` in the hot-path
+/// middleware; formatting is deferred to this function.
+pub fn record_http_duration(elapsed: f64, method: &str, path: &str, status: u16) {
     if let Some(m) = metrics() {
         m.http_request_duration_seconds.record(
             elapsed,

@@ -148,31 +148,76 @@ pub async fn get_session(pool: &Pool<Sqlite>, session_id: &str) -> Result<Option
     Ok(row)
 }
 
+/// Session lookup result: distinguishes "not found", "active", and
+/// "terminal (archived or still in active table)" states.
+///
+/// This is the single source of truth for "does this session exist and what
+/// state is it in?" — handlers match on the variant to decide the HTTP
+/// response (404, 410, 409, etc.).
+pub enum SessionLookup {
+    /// Session not found in either active or archive table.
+    NotFound,
+    /// Session is active and has a row in the active table.
+    Active(SessionRow),
+    /// Session reached a terminal state (completed/cancelled/expired).
+    /// Contains the status and, if the row is still in the active table,
+    /// the row (for building the response body). `cancel_reason` is
+    /// populated from whichever table holds the session.
+    Terminal {
+        status: SessionStatus,
+        row: Option<SessionRow>,
+        cancel_reason: Option<String>,
+    },
+}
+
+/// Look up a session by ID, resolving its current status from either the
+/// active or archive table.
+///
+/// Replaces the scattered logic previously in `get_session_or_gone`,
+/// `resolve_session_status`, `try_terminal_from_archive`, and
+/// `session_terminal_result`.
+pub async fn lookup_session(pool: &Pool<Sqlite>, session_id: &str) -> Result<SessionLookup> {
+    // 1. Check active table first.
+    if let Some(row) = get_session(pool, session_id).await? {
+        let status = SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired);
+        if status.is_terminal() {
+            return Ok(SessionLookup::Terminal {
+                status,
+                cancel_reason: row.cancel_reason.clone(),
+                row: Some(row),
+            });
+        }
+        return Ok(SessionLookup::Active(row));
+    }
+
+    // 2. Fall back to archive table.
+    if let Some((status_int, cancel_reason)) = get_archive_status(pool, session_id).await? {
+        let status = SessionStatus::try_from(status_int).unwrap_or(SessionStatus::Expired);
+        return Ok(SessionLookup::Terminal {
+            status,
+            row: None,
+            cancel_reason,
+        });
+    }
+
+    Ok(SessionLookup::NotFound)
+}
+
 /// Get session by ID, returning Gone if in terminal state.
 ///
-/// DESIGN.md §319-333: GET /sessions/{id} distinguishes "never existed" (404)
-/// from "existed but archived" (410). After a terminal transition the session
-/// row is moved to `session_archive`, so a 410 requires falling back to the
-/// archive table to recover the terminal status.
+/// Convenience wrapper over [`lookup_session`] for handlers that return
+/// 410 Gone on terminal state (GET /sessions, POST /rounds, etc.).
 pub async fn get_session_or_gone(
     pool: &Pool<Sqlite>,
     session_id: &str,
 ) -> Result<SessionRow, crate::error::ApiError> {
-    if let Some(row) = get_session(pool, session_id).await? {
-        let status = SessionStatus::try_from(row.status).unwrap_or(SessionStatus::Expired);
-        if status.is_terminal() {
-            return Err(crate::error::ApiError::gone(status.terminal_detail()));
+    match lookup_session(pool, session_id).await? {
+        SessionLookup::Active(row) => Ok(row),
+        SessionLookup::Terminal { status, .. } => {
+            Err(crate::error::ApiError::gone(status.terminal_detail()))
         }
-        return Ok(row);
+        SessionLookup::NotFound => Err(crate::error::ApiError::not_found()),
     }
-
-    // Fall back to archive.
-    if let Some((status_int, _reason)) = get_archive_status(pool, session_id).await? {
-        let status = SessionStatus::try_from(status_int).unwrap_or(SessionStatus::Expired);
-        return Err(crate::error::ApiError::gone(status.terminal_detail()));
-    }
-
-    Err(crate::error::ApiError::not_found())
 }
 
 /// Update session status (completed or cancelled). Returns rows affected.

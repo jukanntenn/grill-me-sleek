@@ -19,22 +19,6 @@ use crate::models::{
 use crate::session::{time_now, unix_to_rfc3339};
 use std::time::Instant;
 
-/// Try to resolve a session's terminal status from the archive table.
-/// Returns `Ok(Some(result))` if archived, `Ok(None)` if not found, `Err` on DB error.
-async fn try_terminal_from_archive(
-    pool: &sqlx::Pool<sqlx::Sqlite>,
-    session_id: &str,
-) -> Result<Option<ResponseResult>, ApiError> {
-    if let Some((status_int, reason)) = db::get_archive_status(pool, session_id).await? {
-        Ok(Some(terminal_result_for_status(
-            status_int,
-            reason.unwrap_or_default(),
-        )))
-    } else {
-        Ok(None)
-    }
-}
-
 /// GET /v1/sessions/{session_id}/rounds/{seq}/response — Long-poll for user response.
 ///
 /// Blocks up to `wait` seconds for the user to submit a response.
@@ -65,26 +49,23 @@ pub async fn long_poll_response(
     let poll_start = Instant::now();
 
     // Verify session exists (any state — we need to detect terminal).
-    // After archival the active row is gone, so fall back to the archive table
-    // to distinguish "never existed" (404) from "existed but terminal" (410).
-    let session_row = match db::get_session(&state.pool, &session_id).await? {
-        Some(row) => row,
-        None => match try_terminal_from_archive(&state.pool, &session_id).await? {
-            Some(result) => {
-                record_poll_duration(poll_start);
-                return Ok(result);
-            }
-            None => return Err(ApiError::not_found()),
-        },
-    };
-
     // DESIGN.md §481-493: the response endpoint distinguishes terminal state via
     // body shape {status:"cancelled",reason?} or {status:"expired"} — NOT the
-    // {status:"gone",detail} shape used by GET /sessions/{id}. cancelled carries
-    // the reason; expired has none.
-    if let Some(result) = session_terminal_result(&session_row) {
-        record_poll_duration(poll_start);
-        return Ok(result);
+    // {status:"gone",detail} shape used by GET /sessions/{id}.
+    match db::lookup_session(&state.pool, &session_id).await? {
+        db::SessionLookup::Active(_) => {}
+        db::SessionLookup::Terminal {
+            status,
+            cancel_reason,
+            ..
+        } => {
+            record_poll_duration(poll_start);
+            return Ok(terminal_response_result(
+                status,
+                cancel_reason.unwrap_or_default(),
+            ));
+        }
+        db::SessionLookup::NotFound => return Err(ApiError::not_found()),
     }
 
     // Verify round exists
@@ -123,31 +104,19 @@ pub async fn long_poll_response(
                 return Ok(ResponseResult::Pending);
             }
             _ = handle.cancel_token.cancelled() => {
-                // Session entered terminal state — re-check DB.
-                // The session may have been archived between the cancel_token firing
-                // and this re-check, so fall back to the archive table.
-                let session_row = match db::get_session(&state.pool, &session_id).await? {
-                    Some(row) => Some(row),
-                    None => match try_terminal_from_archive(&state.pool, &session_id).await? {
-                        Some(result) => {
-                            record_poll_duration(poll_start);
-                            return Ok(result);
-                        }
-                        None => None,
-                    },
-                };
-
-                let session_row = match session_row {
-                    Some(row) => row,
-                    None => return Err(ApiError::not_found()),
-                };
-
-                if let Some(result) = session_terminal_result(&session_row) {
-                    record_poll_duration(poll_start);
-                    return Ok(result);
+                // Session entered terminal state — re-check via lookup_session
+                // which handles both active-table and archive-table lookups.
+                match db::lookup_session(&state.pool, &session_id).await? {
+                    db::SessionLookup::Terminal { status, cancel_reason, .. } => {
+                        record_poll_duration(poll_start);
+                        return Ok(terminal_response_result(status, cancel_reason.unwrap_or_default()));
+                    }
+                    db::SessionLookup::Active(_) => {
+                        // Still active after cancel signal — loop again
+                        continue;
+                    }
+                    db::SessionLookup::NotFound => return Err(ApiError::not_found()),
                 }
-                // Still active after cancel signal — loop again
-                continue;
             }
         }
     }
@@ -186,7 +155,7 @@ pub async fn submit_response(
 
     // Validate response against the grilling schema (garde struct-level
     // custom: cross-field rules driven by the persisted Grilling as context).
-    let grilling = super::deserialize_grilling(&round.grilling)?;
+    let grilling = crate::db::deserialize_grilling(&round.grilling)?;
     body.validate_with(&grilling)
         .map_err(|e| ApiError::bad_request(format!("validation failed: {e}")))?;
 
@@ -280,32 +249,13 @@ fn record_poll_duration(start: Instant) {
     crate::observability::metrics::record_longpoll_duration(elapsed);
 }
 
-/// Check if a session is in terminal state and return the appropriate
-/// `ResponseResult`. Returns `None` if the session is still active.
-fn session_terminal_result(session_row: &db::SessionRow) -> Option<ResponseResult> {
-    let status = SessionStatus::try_from(session_row.status).unwrap_or(SessionStatus::Expired);
-    if status.is_terminal() {
-        Some(terminal_result_for_status(
-            session_row.status,
-            session_row.cancel_reason.clone().unwrap_or_default(),
-        ))
-    } else {
-        None
-    }
-}
-
-/// Map a DB status int to the response-endpoint terminal result variant.
+/// Map a `SessionStatus` to the response-endpoint terminal result variant.
 ///
 /// DESIGN.md §481-493: this endpoint uses `{status:"cancelled",reason?}` and
 /// `{status:"expired"}` — distinct from GET /sessions/{id}'s `{status:"gone",detail}`.
-/// `reason` is only meaningful for cancelled (status=2); callers pass the raw
-/// cancel_reason (possibly empty when sourced from the archive, which doesn't
-/// carry it back into the active row path).
-fn terminal_result_for_status(status: i64, reason: String) -> ResponseResult {
-    match SessionStatus::try_from(status).ok() {
-        Some(SessionStatus::Cancelled) => ResponseResult::Cancelled { reason },
-        // completed (1), expired (3), or any other terminal: surface as expired-
-        // style per response-endpoint body contract.
+fn terminal_response_result(status: SessionStatus, reason: String) -> ResponseResult {
+    match status {
+        SessionStatus::Cancelled => ResponseResult::Cancelled { reason },
         _ => ResponseResult::Expired,
     }
 }

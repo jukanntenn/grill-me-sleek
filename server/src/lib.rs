@@ -16,6 +16,7 @@ use axum::middleware::{self, Next};
 use axum::response::Response;
 use axum::routing::{get, post};
 use std::borrow::Cow;
+use std::sync::Arc;
 use std::time::Instant;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::trace::TraceLayer;
@@ -92,13 +93,13 @@ pub fn build_docs_router() -> Router {
 }
 
 /// Shared application state.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AppState {
     pub pool: Pool<Sqlite>,
     pub handles: SessionMap,
     pub idempotency_sessions: idempotency::IdempotencyCache,
     pub idempotency_rounds: idempotency::IdempotencyCache,
-    pub base_url: String,
+    pub base_url: Arc<str>,
 }
 
 /// 组装全部业务路由；`sessions_post` 由调用方注入，使生产环境可挂 governor
@@ -190,15 +191,16 @@ where
 /// each request. DESIGN.md §2306.
 pub async fn http_duration_middleware(request: Request, next: Next) -> Response {
     let start = Instant::now();
-    // `as_str()` on Method returns `&'static str` for known HTTP methods;
-    // `to_owned()` does a direct memcpy, skipping the `Display` formatting path.
+    // `as_str()` on Method borrows `request`; `to_owned()` breaks the borrow
+    // so `request` can be moved into `next.run()`. `status` is a `u16` —
+    // formatted inside `record_http_duration`, saving one String allocation.
     let method = request.method().as_str().to_owned();
     let path = request.uri().path().to_owned();
     let response = next.run(request).await;
     let elapsed = start.elapsed().as_secs_f64();
-    let status = response.status().as_u16().to_string();
-    let normalised = normalise_path(&path).into_owned();
-    observability::metrics::record_http_duration(elapsed, &method, &normalised, &status);
+    let status = response.status().as_u16();
+    let normalised = normalise_path(&path);
+    observability::metrics::record_http_duration(elapsed, &method, &normalised, status);
     response
 }
 

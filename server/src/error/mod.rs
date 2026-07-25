@@ -73,18 +73,7 @@ impl std::fmt::Debug for ApiError {
 
 impl std::fmt::Display for ApiError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::BadRequest(msg, _) => write!(f, "{msg}"),
-            Self::NotFound(_) => write!(f, "session not found"),
-            Self::Gone { detail, .. } => write!(f, "session gone: {detail}"),
-            Self::TerminalState(_) => write!(f, "session is in terminal state"),
-            Self::RoundAlreadySubmitted(inner) => {
-                write!(f, "round {} already submitted", inner.round)
-            }
-            Self::IdempotencyMismatch(_) => write!(f, "idempotency key reused with different body"),
-            Self::MaxSessions(_) => write!(f, "max sessions reached"),
-            Self::Internal(err) => write!(f, "{err}"),
-        }
+        f.write_str(&self.message())
     }
 }
 
@@ -119,6 +108,28 @@ impl Clone for ApiError {
 }
 
 impl ApiError {
+    /// User-facing error message.
+    ///
+    /// Returns `Cow::Borrowed` for variants with static messages, avoiding
+    /// heap allocation on the error response path. Used by both `Display`
+    /// and `IntoResponse`.
+    fn message(&self) -> std::borrow::Cow<'_, str> {
+        match self {
+            Self::BadRequest(msg, _) => std::borrow::Cow::Borrowed(msg),
+            Self::NotFound(_) => std::borrow::Cow::Borrowed("session not found"),
+            Self::Gone { detail, .. } => std::borrow::Cow::Owned(format!("session gone: {detail}")),
+            Self::TerminalState(_) => std::borrow::Cow::Borrowed("session is in terminal state"),
+            Self::RoundAlreadySubmitted(inner) => {
+                std::borrow::Cow::Owned(format!("round {} already submitted", inner.round))
+            }
+            Self::IdempotencyMismatch(_) => {
+                std::borrow::Cow::Borrowed("idempotency key reused with different body")
+            }
+            Self::MaxSessions(_) => std::borrow::Cow::Borrowed("max sessions reached"),
+            Self::Internal(err) => std::borrow::Cow::Owned(format!("{err}")),
+        }
+    }
+
     /// Convenience constructor wrapping an `anyhow::Error` in the Internal variant.
     pub fn internal(err: anyhow::Error) -> Self {
         ApiError::Internal(Arc::new(err))
@@ -257,14 +268,15 @@ impl IntoResponse for ApiError {
             )
                 .into_response(),
 
-            // Variants using standard ErrorResponse — delegate to Display.
+            // Variants using standard ErrorResponse — use message() directly
+            // to avoid Display::to_string() dispatch overhead for static strings.
             ApiError::NotFound(_)
             | ApiError::TerminalState(_)
             | ApiError::IdempotencyMismatch(_)
             | ApiError::MaxSessions(_) => (
                 status,
                 Json(ErrorResponse {
-                    message: self.to_string(),
+                    message: self.message().into_owned(),
                     status: status.as_u16() as i64,
                 }),
             )
@@ -275,7 +287,7 @@ impl IntoResponse for ApiError {
                 (
                     status,
                     Json(ErrorResponse {
-                        message: self.to_string(),
+                        message: self.message().into_owned(),
                         status: status.as_u16() as i64,
                     }),
                 )
