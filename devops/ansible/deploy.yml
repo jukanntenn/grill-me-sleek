@@ -1,0 +1,91 @@
+---
+# grilling-sleek 统一部署 playbook。
+#
+# 单个 playbook 服务 staging / production。环境用 -e target=<env> 选择
+# （默认 staging），环境差异全部在 group_vars/<env>/（vars.yml + vault.yml，
+# 自动加载）。从仓库根目录运行 —— 根目录 ansible.cfg 提供 inventory 和
+# avpm vault identities：
+#
+#   ansible-playbook devops/ansible/deploy.yml                    # staging (fn)
+#   ansible-playbook devops/ansible/deploy.yml -e target=production
+
+- name: Validate target environment
+  # Runs before the deploy play so a misspelled target fails loudly — a bare
+  # hosts pattern that matches nothing would otherwise exit 0 without
+  # deploying anywhere.
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    tgt: "{{ target | default('staging') }}"
+  tasks:
+    - name: Require target to be a non-empty known environment
+      ansible.builtin.assert:
+        that: tgt in ['staging', 'production'] and groups.get(tgt, []) | length > 0
+        fail_msg: >-
+          Unknown or empty target '{{ tgt }}'. Use staging (the default) or
+          production.
+
+- name: Deploy grilling-sleek
+  hosts: "{{ target | default('staging') }}"
+  user: "{{ user }}"
+  gather_facts: false
+
+  tasks:
+    - name: Ensure application directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: "{{ app_dirs }}"
+
+    - name: Template docker-compose.yml
+      ansible.builtin.template:
+        src: templates/docker-compose.yml.j2
+        dest: "{{ compose_file }}"
+        mode: "0644"
+
+    - name: Template Caddyfile
+      ansible.builtin.template:
+        src: "templates/{{ caddyfile_template }}"
+        dest: "{{ caddyfile }}"
+        mode: "0644"
+
+    # SQLite 迁移由后端启动时自行执行（sqlx::migrate!），单容器无需
+    # markpost 式的「先 DB、再迁移、后应用」分步编排。
+    - name: Pull image and recreate containers on change
+      community.docker.docker_compose_v2:
+        project_src: "{{ app_path }}"
+        pull: always
+        state: present
+        wait: true
+        wait_timeout: 120
+
+    # Post-deploy verification from the controller, through the URL real
+    # visitors use (LAN IP / Cloudflare edge). Compose's wait only proves the
+    # container healthcheck passes inside the container; this also catches a
+    # broken published port, Caddy config, or edge path — and the version
+    # check catches a healthy container still running the previous image.
+    - name: Expected version comes from server/Cargo.toml of this checkout (staging)
+      # staging 部署的是本工作区构建的 main 镜像，二进制版本即 Cargo.toml
+      # 版本（root package.json 经 scripts/sync-version.py 同步）。
+      ansible.builtin.set_fact:
+        deploy_expected_version: >-
+          {{ lookup('ansible.builtin.file', playbook_dir ~ '/../../server/Cargo.toml')
+          | regex_findall('(?m)^version\s*=\s*"([^"]+)"') | first }}
+      when: env == 'staging'
+
+    - name: Expected version is the pinned image tag (production)
+      ansible.builtin.set_fact:
+        deploy_expected_version: "{{ expected_version }}"
+      when: env == 'production'
+
+    - name: Verify deployment health and version
+      ansible.builtin.command:
+        cmd: >
+          python3 {{ playbook_dir }}/../../scripts/check_deploy.py
+          --base-url {{ public_url }}
+          --version {{ deploy_expected_version }}
+      delegate_to: localhost
+      run_once: true
+      changed_when: false

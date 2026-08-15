@@ -1,8 +1,14 @@
 # {{ ansible_managed }}
-# grilling-sleek Caddy configuration (production)
+# grilling-sleek Caddyfile (production — ttyo, behind Cloudflare).
 #
-# TLS with Cloudflare Origin CA certificate (Full Strict mode).
-# Cloudflare terminates public TLS; this handles origin-side TLS.
+# TLS with Cloudflare Origin CA certificate (Full Strict mode). Cloudflare
+# terminates visitor-side TLS at the edge; Caddy terminates the edge→origin
+# leg. The cert is mounted at /app/certs/ from the host certs/ directory.
+#
+# 仅 Cloudflare 回源：非 CF 网段的直接连接一律 403（@not_cf）。trusted_proxies
+# 使只有 Cloudflare（可信对端）可以前置 X-Forwarded-For，直连的 XFF 被 Caddy
+# 覆写，堵住伪造缺口。CIDR 来源 https://www.cloudflare.com/ips/（由
+# group_vars/production/vars.yml 的 cloudflare_cidrs 渲染）。
 
 {
     auto_https off
@@ -12,10 +18,17 @@
     # TLS: Cloudflare Origin CA certificate
     tls /app/certs/origin.pem /app/certs/origin.key
 
+    # 仅接受 Cloudflare 回源连接，其余直接 IP 访问一律 403
+    @not_cf {
+        not remote_ip {{ cloudflare_cidrs }}
+    }
+    respond @not_cf "Forbidden" 403
+
     # Security headers
     header {
         Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'"
         X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
     }
 
     # Compression (exclude SSE path to preserve real-time flush)
@@ -38,6 +51,7 @@
 
     # Reverse proxy to Rust backend
     reverse_proxy /v1/* 127.0.0.1:8000 {
+        trusted_proxies {{ cloudflare_cidrs }}
         transport http {
             versions h2c
         }

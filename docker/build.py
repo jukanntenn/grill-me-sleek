@@ -4,8 +4,18 @@
 Builds a single unified image containing Rust backend, Caddy reverse proxy,
 and s6-overlay process manager.
 
-Supports load (local, single platform) and push (multi-platform to registry) modes.
-Always applies a 'dev' tag; additional tags can be specified via --tags.
+Supports load (local, single platform) and push (multi-platform to registry)
+modes. Push targets the internal private registry by default. The 'main' tag
+(rolling, tracks the current workspace checkout) is always applied and deduped
+against --tags. Version tags for Docker Hub releases come from CI
+(docker-publish.yml on git tags), never from here.
+
+Registry cache is deliberately not used: builds against the internal registry
+gain nothing from cross-machine cache layers and the cache blobs would just
+consume registry disk. The local buildx builder cache still applies.
+
+Default platform is the host platform (load mode can only load a single
+platform anyway); use --platform/--all-platforms for cross-arch builds.
 
 Environment requirements (not auto-resolved):
   - Docker daemon running
@@ -27,7 +37,9 @@ import platform
 import subprocess
 import sys
 
-IMAGE_NAME = "jukanntenn/grilling-sleek"
+IMAGE_NAME = "grilling-sleek"
+DEFAULT_REGISTRY = "192.168.5.50:5000"
+DEFAULT_TAG = "main"
 ALL_PLATFORMS = ("linux/amd64", "linux/arm64")
 
 PLATFORM_ALIASES = {
@@ -66,20 +78,30 @@ def parse_args():
     parser.add_argument(
         "--push",
         action="store_true",
-        help="Push image to registry (default: load locally)",
+        help="Push image to the registry (default: load locally)",
+    )
+    parser.add_argument(
+        "--registry",
+        default=DEFAULT_REGISTRY,
+        help=f"Registry to push to (default: {DEFAULT_REGISTRY}, the internal private registry)",
     )
     parser.add_argument(
         "--tags",
         nargs="+",
         action="extend",
         default=[],
-        help="Additional image tags (dev tag is always applied)",
+        help="Additional image tags (the 'main' tag is always applied and deduped)",
     )
     parser.add_argument(
         "--platform",
         action="append",
         default=[],
-        help="Target platform (amd64 or arm64). Repeatable. Defaults to all platforms.",
+        help="Target platform (amd64 or arm64). Repeatable. Defaults to the host platform.",
+    )
+    parser.add_argument(
+        "--all-platforms",
+        action="store_true",
+        help=f"Build all known platforms: {', '.join(ALL_PLATFORMS)}",
     )
     parser.add_argument(
         "--no-cache",
@@ -104,7 +126,9 @@ def env_error(msg, hint=None):
     sys.exit(2)
 
 
-def resolve_platforms(platform_args):
+def resolve_platforms(platform_args, all_platforms=False):
+    if all_platforms and platform_args:
+        env_error("--all-platforms and --platform are mutually exclusive")
     resolved = []
     for p in platform_args:
         if p in PLATFORM_ALIASES:
@@ -117,7 +141,13 @@ def resolve_platforms(platform_args):
                 f"Supported platforms: {', '.join(PLATFORM_ALIASES.keys())}",
             )
     resolved = list(dict.fromkeys(resolved))
-    return resolved if resolved else list(ALL_PLATFORMS)
+    if resolved:
+        return resolved
+    if all_platforms:
+        return list(ALL_PLATFORMS)
+    # Default: only the host platform — load mode can only load a single
+    # platform, and pushing the host arch is the common fast-iteration case.
+    return [detect_host_platform()]
 
 
 def detect_host_platform():
@@ -241,7 +271,7 @@ def main():
     args = parse_args()
     setup_logging(verbose=args.verbose)
 
-    target_platforms = resolve_platforms(args.platform)
+    target_platforms = resolve_platforms(args.platform, args.all_platforms)
 
     if args.push:
         platforms_to_build = target_platforms
@@ -251,6 +281,12 @@ def main():
             platforms_to_build = [host_platform]
         else:
             platforms_to_build = [target_platforms[0]]
+            dropped = [p for p in target_platforms if p != host_platform]
+            logger.warning(
+                "Non-push mode builds only a single platform (%s); multi-platform targets dropped: %s. Use --push for a true multi-arch build.",
+                platforms_to_build[0],
+                ", ".join(dropped),
+            )
 
     builder_name = check_environment(platforms_to_build)
 
@@ -258,22 +294,22 @@ def main():
     dockerfile_path = os.path.join(project_root, DOCKERFILE)
     context_path = os.path.join(project_root, BUILD_CONTEXT)
 
-    all_tags = ["dev"] + args.tags
+    # 'main' is always applied (and always first); user tags deduped against it.
+    all_tags = list(dict.fromkeys([DEFAULT_TAG, *args.tags]))
+    image_prefix = f"{args.registry}/{IMAGE_NAME}" if args.push else IMAGE_NAME
     full_image_names = []
     cmd = ["docker", "buildx", "build"]
     for tag in all_tags:
-        full_tag = f"{IMAGE_NAME}:{tag}"
+        full_tag = f"{image_prefix}:{tag}"
         full_image_names.append(full_tag)
         cmd.extend(["--tag", full_tag])
 
     cmd.extend(["--platform", ",".join(platforms_to_build)])
 
+    # No registry cache by design: zero gain for single-machine internal
+    # builds, and the cache blobs would eat registry disk (see module docstring).
     if args.push:
         cmd.append("--push")
-        cache_tag = f"{IMAGE_NAME}:cache"
-        if not args.no_cache:
-            cmd.extend(["--cache-from", f"type=registry,ref={cache_tag}"])
-            cmd.extend(["--cache-to", f"type=registry,ref={cache_tag},mode=max"])
     else:
         cmd.append("--load")
 

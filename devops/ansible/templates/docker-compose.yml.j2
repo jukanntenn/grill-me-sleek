@@ -1,0 +1,30 @@
+# {{ ansible_managed }}
+# grilling-sleek docker-compose — rendered by deploy.yml for {{ env }}.
+# tls_profile: http (staging) → 容器内 Caddy 走 HTTP；origin (production) →
+# Cloudflare Origin CA 证书 + certs/ 只读挂载，healthcheck 用 https -k。
+
+services:
+  grilling-sleek:
+    image: {{ image }}
+    container_name: grilling-sleek
+    restart: always
+    ports:
+      - "{{ host_port }}:{{ app_port }}"
+    volumes:
+      - ./Caddyfile:/app/Caddyfile:ro
+{% if tls_profile == 'origin' %}
+      - ./certs:/app/certs:ro
+{% endif %}
+      - ./data:/app/data
+      - ./log:/app/log
+    environment:
+      - GSLEEK_BASE_URL={{ public_url }}
+      - GSLEEK_DB_PATH=/app/data/grilling-sleek.db
+      - GSLEEK_LOG_DIR=/app/log
+      - RUST_LOG={{ rust_log | default('info') }}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs{{ 'k' if tls_profile == 'origin' else '' }} {{ 'https' if tls_profile == 'origin' else 'http' }}://127.0.0.1:{{ app_port }}/v1/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

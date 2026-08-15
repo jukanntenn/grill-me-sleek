@@ -1,0 +1,9 @@
+# Ansible Vault — staging secrets for grilling-sleek.
+#
+# 当前无需任何应用密钥（SQLite 无密码、无 JWT、无 API key）。需要时用
+# 单变量加密追加（密码存放在 avpm keyring 的 grilling-sleek-staging）：
+#   printf '%s' '<the-secret>' | ansible-vault encrypt_string \
+#     --vault-id grilling-sleek-staging@~/.local/bin/avpm-client \
+#     --stdin-name <name> >> devops/ansible/group_vars/staging/vault.yml
+#
+# 首次使用前把密码注册进 avpm：avpm set grilling-sleek-staging

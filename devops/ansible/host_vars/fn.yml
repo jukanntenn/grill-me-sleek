@@ -1,0 +1,4 @@
+user: fn
+home: /vol1/1000
+# NAS 上的 Python 路径与默认发现不一致，显式指定（docker_compose_v2 需要）。
+ansible_python_interpreter: /usr/bin/python3.11

@@ -1,0 +1,26 @@
+---
+# Shared variables for every grilling-sleek environment. Per-environment
+# overrides live in group_vars/<env>/ (vars.yml + vault.yml, auto-loaded);
+# per-host facts (user, home) in host_vars/. Note: a group_vars/<env>/
+# directory shadows a sibling group_vars/<env>.yml in ansible-core >= 2.20,
+# so the two layouts must not be mixed.
+
+app_name: grilling-sleek
+apps_path: "{{ home }}/docker"
+app_path: "{{ apps_path }}/{{ app_name }}"
+compose_file: "{{ app_path }}/docker-compose.yml"
+caddyfile: "{{ app_path }}/Caddyfile"
+
+# Container internals are identical in every environment: Caddy listens on
+# 8443 (the only published port) and reverse-proxies /v1/* to the Rust
+# backend on 127.0.0.1:8000. The host-side port is per-environment
+# (host_port).
+app_port: 8443
+
+# Directories to create on the host (production app_dirs adds certs/ in its
+# own vars). Without pre-created dirs Docker would create them as root and
+# the container could not write data/logs.
+app_dirs:
+  - "{{ app_path }}"
+  - "{{ app_path }}/data"
+  - "{{ app_path }}/log"

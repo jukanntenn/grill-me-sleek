@@ -1,0 +1,23 @@
+---
+# staging (fn @ 192.168.5.200) — 内网快速迭代环境。自建，尽量贴近生产拓扑
+# 但没有 Cloudflare、没有 HTTPS（Caddy 走纯 HTTP）。弄坏可接受：重新
+# `python3 docker/build.py --push` 再部署即可。
+
+env: staging
+
+# 滚动 tag：跟踪本机 build.py --push 最近一次推送的当前工作区代码
+# （build.py 的默认 tag，不绑定 git main 分支）。
+image_tag: main
+registry: "192.168.5.50:5000"
+image: "{{ registry }}/grilling-sleek:{{ image_tag }}"
+
+# fn 上已占用端口避开 markpost（8089）；grilling-sleek 用 8090。
+host_port: 8090
+public_url: "http://192.168.5.200:8090"
+
+# TLS profile for the rendered Caddyfile / compose healthcheck:
+# http = plain HTTP, auto_https off.
+tls_profile: http
+caddyfile_template: Caddyfile.staging
+
+rust_log: "info"
