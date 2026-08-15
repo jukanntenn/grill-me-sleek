@@ -13,22 +13,22 @@
 
 借鉴知名开源项目的测试策略：
 
-| 项目 | 策略 | 我们的应用 |
-|------|------|-----------|
-| obsidian-livesync | CLI 驱动 + Docker 容器 + 临时目录隔离 | cli/ 驱动数据交互，Docker Compose 启动完整环境 |
-| airflow | 真实 API + Page Object Model + Fixtures 管理 | cli/ 命令准备数据，Playwright 验证 UI |
+| 项目              | 策略                                         | 我们的应用                                     |
+| ----------------- | -------------------------------------------- | ---------------------------------------------- |
+| obsidian-livesync | CLI 驱动 + Docker 容器 + 临时目录隔离        | cli/ 驱动数据交互，Docker Compose 启动完整环境 |
+| airflow           | 真实 API + Page Object Model + Fixtures 管理 | cli/ 命令准备数据，Playwright 验证 UI          |
 
 **核心理念**：真实环境端对端测试，不使用 mock。
 
 ### 1.3 技术选型
 
-| 组件 | 选型 | 理由 |
-|------|------|------|
-| 测试框架 | Playwright | 现代浏览器自动化，支持多浏览器 |
-| 测试运行器 | Node.js + TypeScript | 与前端技术栈一致 |
-| 数据交互 | cli/ 命令 | 真实环境 agent 使用的工具 |
-| 环境管理 | Docker Compose | 接近生产环境 |
-| 包管理器 | pnpm | 与项目其他部分一致 |
+| 组件       | 选型                 | 理由                           |
+| ---------- | -------------------- | ------------------------------ |
+| 测试框架   | Playwright           | 现代浏览器自动化，支持多浏览器 |
+| 测试运行器 | Node.js + TypeScript | 与前端技术栈一致               |
+| 数据交互   | cli/ 命令            | 真实环境 agent 使用的工具      |
+| 环境管理   | Docker Compose       | 接近生产环境                   |
+| 包管理器   | pnpm                 | 与项目其他部分一致             |
 
 ## 2. 测试架构
 
@@ -144,11 +144,11 @@ pnpm run docker:logs
 
 ### 3.5 环境变量
 
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| `GS_SERVER` | `http://localhost:8443` | 后端服务器地址 |
-| `BASE_URL` | `http://localhost:8443` | Playwright 测试基础 URL |
-| `CI` | - | CI 环境标识（影响重试和并行度） |
+| 变量        | 默认值                  | 说明                            |
+| ----------- | ----------------------- | ------------------------------- |
+| `GS_SERVER` | `http://localhost:8443` | 后端服务器地址                  |
+| `BASE_URL`  | `http://localhost:8443` | Playwright 测试基础 URL         |
+| `CI`        | -                       | CI 环境标识（影响重试和并行度） |
 
 ### 3.6 前置条件
 
@@ -160,6 +160,7 @@ pnpm run docker:logs
 ### 3.7 故障排除
 
 **Docker 构建失败**
+
 ```bash
 # 查看构建日志
 cd e2e && pnpm run docker:logs
@@ -169,12 +170,14 @@ pnpm run docker:down && pnpm run docker:up
 ```
 
 **测试超时**
+
 ```bash
 # 增加超时时间
 pnpm test -- --timeout=60000
 ```
 
 **容器启动失败**
+
 ```bash
 # 检查端口占用
 lsof -i :8443
@@ -191,10 +194,13 @@ docker compose -f docker-compose.local.yml down -v --remove-orphans
 
 ```typescript
 // e2e/utils/cli.ts
-export async function createSession(name: string, grillingJson: string): Promise<CreateSessionResult> {
+export async function createSession(
+  name: string,
+  grillingJson: string,
+): Promise<CreateSessionResult> {
   const { data } = await expectCliSuccess<CreateSessionResult>(
-    ['create', '--json=session_id,url,status,current_round,name,created_at,expires_at'],
-    grillingJson
+    ["create", "--json=session_id,url,status,current_round,name,created_at,expires_at"],
+    grillingJson,
   );
   return data;
 }
@@ -214,7 +220,7 @@ export class QuestionsPage extends BasePage {
   }
 
   async waitForSubmitSuccess() {
-    await expect(this.page.getByText('Waiting for the next round')).toBeVisible();
+    await expect(this.page.getByText("Waiting for the next round")).toBeVisible();
   }
 }
 ```
@@ -228,10 +234,10 @@ export class QuestionsPage extends BasePage {
 export const test = base.extend<DataFixtures>({
   basicSession: [
     async ({}, use) => {
-      const session = await createSession('Test', grillingJson);
+      const session = await createSession("Test", grillingJson);
       await use({ session, grillingJson });
     },
-    { scope: 'test' },
+    { scope: "test" },
   ],
 });
 ```
@@ -240,33 +246,33 @@ export const test = base.extend<DataFixtures>({
 
 ### 5.1 CLI 行为测试 (cli-behavior.spec.ts)
 
-| 测试 | 说明 |
-|------|------|
-| create 命令 > 成功创建会话 | 验证返回值结构 |
-| create 命令 > 无效 JSON 输入 | 验证错误码 64 |
-| create 命令 > Schema 验证失败 | 验证错误码 64 |
-| create 命令 > 重复问题 ID | 验证错误码 64 |
-| push 命令 > 成功推送新轮次 | 验证返回值 |
-| push 命令 > 不存在的会话 | 验证错误码 1 |
-| poll 命令 > 超时 | 验证退出码 75 |
-| poll 命令 > 会话取消 | 验证错误信息 |
-| status 命令 > 查询活跃会话 | 验证返回值 |
-| status 命令 > 查询已完成会话 | 验证状态 |
-| status 命令 > 查询已取消会话 | 验证状态 |
-| status 命令 > 查询不存在的会话 | 验证错误码 1 |
-| complete 命令 > 成功完成会话 | 验证状态变更 |
-| cancel 命令 > 成功取消会话 | 验证状态变更 |
-| cancel 命令 > 无效的取消原因 | 验证错误码 64 |
+| 测试                           | 说明           |
+| ------------------------------ | -------------- |
+| create 命令 > 成功创建会话     | 验证返回值结构 |
+| create 命令 > 无效 JSON 输入   | 验证错误码 64  |
+| create 命令 > Schema 验证失败  | 验证错误码 64  |
+| create 命令 > 重复问题 ID      | 验证错误码 64  |
+| push 命令 > 成功推送新轮次     | 验证返回值     |
+| push 命令 > 不存在的会话       | 验证错误码 1   |
+| poll 命令 > 超时               | 验证退出码 75  |
+| poll 命令 > 会话取消           | 验证错误信息   |
+| status 命令 > 查询活跃会话     | 验证返回值     |
+| status 命令 > 查询已完成会话   | 验证状态       |
+| status 命令 > 查询已取消会话   | 验证状态       |
+| status 命令 > 查询不存在的会话 | 验证错误码 1   |
+| complete 命令 > 成功完成会话   | 验证状态变更   |
+| cancel 命令 > 成功取消会话     | 验证状态变更   |
+| cancel 命令 > 无效的取消原因   | 验证错误码 64  |
 
 ### 5.2 会话生命周期测试 (session-lifecycle.spec.ts)
 
-| 测试 | 说明 |
-|------|------|
-| 完整流程 | 创建 → 答题 → 多轮 → 完成 |
-| 用户取消 | 验证取消页面 |
-| 会话完成 | 验证完成页面 |
-| 查询会话状态 | 验证 API 返回值 |
-| 多轮问答流程 | 验证轮次切换 |
+| 测试         | 说明                      |
+| ------------ | ------------------------- |
+| 完整流程     | 创建 → 答题 → 多轮 → 完成 |
+| 用户取消     | 验证取消页面              |
+| 会话完成     | 验证完成页面              |
+| 查询会话状态 | 验证 API 返回值           |
+| 多轮问答流程 | 验证轮次切换              |
 
 ### 5.3 待实现的测试
 

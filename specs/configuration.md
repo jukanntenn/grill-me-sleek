@@ -30,19 +30,19 @@ config::init(settings);
 
 ## 当前可配置项
 
-| 字段 | 环境变量 | 类型 | 默认值 | 说明 |
-|---|---|---|---|---|
+| 字段       | 环境变量          | 类型   | 默认值                               | 说明                                       |
+| ---------- | ----------------- | ------ | ------------------------------------ | ------------------------------------------ |
 | `base_url` | `GSLEEK_BASE_URL` | string | `https://grilling-sleek.example.com` | 会话链接基址（`{base_url}/#{session_id}`） |
-| `db_path` | `GSLEEK_DB_PATH` | string | `./data/grilling-sleek.db` | SQLite 数据库文件路径 |
-| `log_dir` | `GSLEEK_LOG_DIR` | string | `./log/grilling-sleek` | 日志目录（tracing-appender 滚动文件） |
+| `db_path`  | `GSLEEK_DB_PATH`  | string | `./data/grilling-sleek.db`           | SQLite 数据库文件路径                      |
+| `log_dir`  | `GSLEEK_LOG_DIR`  | string | `./log/grilling-sleek`               | 日志目录（tracing-appender 滚动文件）      |
 
 ## 辅助环境变量
 
-| 变量 | 说明 |
-|---|---|
-| `GSLEEK_CONFIG_FILE` | TOML 配置文件路径（不含扩展名）。设置后 config-rs 从该文件加载，缺失则报错。 |
-| `RUST_LOG` | tracing 日志级别（如 `info`）。 |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP 导出端点。设置后启用远程 OTel 导出；未设置则写本地文件。 |
+| 变量                          | 说明                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------- |
+| `GSLEEK_CONFIG_FILE`          | TOML 配置文件路径（不含扩展名）。设置后 config-rs 从该文件加载，缺失则报错。 |
+| `RUST_LOG`                    | tracing 日志级别（如 `info`）。                                              |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP 导出端点。设置后启用远程 OTel 导出；未设置则写本地文件。                |
 
 ## 环境变量命名规范
 
@@ -55,21 +55,21 @@ config::init(settings);
 
 以下参数目前为 `pub const`（见 `server/src/config.rs`），尚未纳入 `Settings`。后续逐步提取：
 
-| 常量 | 值 | 说明 |
-|---|---|---|
-| `LISTEN_ADDR` | `127.0.0.1:8080` | 监听地址 |
-| `SESSION_TTL` | `3600`（秒） | 会话固定 TTL |
-| `MAX_SESSIONS` | `15_000` | DashMap 软容量 |
-| `MAX_SSE_CONNECTIONS` | `50_000` | 全局 SSE 连接软上限 |
-| `LONGPOLL_WAIT` | `55`（秒） | 单次长轮询阻塞上限 |
-| `KEEPALIVE_INTERVAL` | `85s` | SSE keepalive 间隔 |
-| `SHUTDOWN_TIMEOUT` | `30s` | 优雅关停上限 |
-| `SWEEP_INTERVAL` | `30s` | TTL 扫描周期 |
-| `BUSY_TIMEOUT` | `5s` | SQLite busy_timeout |
-| `ACQUIRE_TIMEOUT` | `5s` | sqlx 连接获取超时 |
-| `RATE_LIMIT_PER_MIN` | `20` | 每 IP 创建会话限流 |
-| `IDEMPOTENCY_TTL` | `300s` | 幂等缓存条目 TTL |
-| `IDEMPOTENCY_CAPACITY` | `10_000` | 幂等缓存容量 |
+| 常量                   | 值               | 说明                |
+| ---------------------- | ---------------- | ------------------- |
+| `LISTEN_ADDR`          | `127.0.0.1:8080` | 监听地址            |
+| `SESSION_TTL`          | `3600`（秒）     | 会话固定 TTL        |
+| `MAX_SESSIONS`         | `15_000`         | DashMap 软容量      |
+| `MAX_SSE_CONNECTIONS`  | `50_000`         | 全局 SSE 连接软上限 |
+| `LONGPOLL_WAIT`        | `55`（秒）       | 单次长轮询阻塞上限  |
+| `KEEPALIVE_INTERVAL`   | `85s`            | SSE keepalive 间隔  |
+| `SHUTDOWN_TIMEOUT`     | `30s`            | 优雅关停上限        |
+| `SWEEP_INTERVAL`       | `30s`            | TTL 扫描周期        |
+| `BUSY_TIMEOUT`         | `5s`             | SQLite busy_timeout |
+| `ACQUIRE_TIMEOUT`      | `5s`             | sqlx 连接获取超时   |
+| `RATE_LIMIT_PER_MIN`   | `20`             | 每 IP 创建会话限流  |
+| `IDEMPOTENCY_TTL`      | `300s`           | 幂等缓存条目 TTL    |
+| `IDEMPOTENCY_CAPACITY` | `10_000`         | 幂等缓存容量        |
 
 ## Duration 配置的后续方案
 

@@ -28,6 +28,7 @@ docker compose -f docker/docker-compose.local.yml up -d --build
 ```
 
 **说明**：
+
 - `--build` 参数会先构建镜像（如果需要），然后启动容器
 - 前后端构建都在 Docker 镜像内完成，无需本地构建
 - 确保使用最新的源代码
@@ -58,6 +59,7 @@ curl -sk https://localhost:8443/assets/style-*.css | grep -o "\-\-spacing-[a-z0-
 ```
 
 **预期结果**：
+
 - 加载最新的 CSS 文件（如 `style-Dj_Hi23q.css`）
 - 包含所有 spacing 变量：`--spacing-xxs`, `--spacing-xs`, `--spacing-sm`, `--spacing-md`, `--spacing-lg`, `--spacing-xl`, `--spacing-2xl`, `--spacing-3xl`, `--spacing-4xl`, `--spacing-5xl`, `--spacing-6xl`, `--spacing-section`
 
@@ -139,6 +141,7 @@ export TEST_URL="https://localhost:8443/#$SESSION_ID"
 ```
 
 **预期结果**：
+
 - 输出会话 ID（UUID 格式）
 - 会话状态为 active
 
@@ -153,6 +156,7 @@ GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $TEST_SESSION
 ```
 
 **预期结果**：
+
 - 状态为 active
 - 当前轮次为 1
 - 名称为 "基础测试会话"
@@ -168,6 +172,7 @@ GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $TEST_SESSION
 ```
 
 **预期结果**：
+
 - 轮次从 1 变为 2
 - 推送成功（无错误输出）
 
@@ -182,6 +187,7 @@ echo "Exit code: $?"
 ```
 
 **预期结果**：
+
 - 退出码为 75（超时）
 - 输出超时信息
 
@@ -196,6 +202,7 @@ GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $TEST_SESSION
 ```
 
 **预期结果**：
+
 - 状态变为 gone
 - detail 为 completed
 
@@ -213,6 +220,7 @@ GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $CANCEL_SESSI
 ```
 
 **预期结果**：
+
 - 状态变为 gone
 - detail 为 cancelled
 
@@ -227,6 +235,7 @@ echo "Exit code: $?"
 ```
 
 **预期结果**：
+
 - 退出码为 64
 - 输出错误信息
 
@@ -241,6 +250,7 @@ echo "Exit code: $?"
 ```
 
 **预期结果**：
+
 - 退出码为 64
 - 输出错误信息
 
@@ -255,6 +265,7 @@ echo "Exit code: $?"
 ```
 
 **预期结果**：
+
 - 退出码为 1
 - 输出错误信息
 
@@ -269,6 +280,7 @@ echo "Exit code: $?"
 ```
 
 **预期结果**：
+
 - 退出码为 64
 - 输出错误信息
 
@@ -287,6 +299,7 @@ curl -s $TEST_URL | grep -o "<title>.*</title>"
 ```
 
 **预期结果**：
+
 - 页面正常加载
 - 标题为 "Grilling"
 
@@ -302,6 +315,7 @@ curl -s $TEST_URL | grep -o "Session Cookies"
 ```
 
 **预期结果**：
+
 - 单选题正常渲染
 - 选项显示正确
 
@@ -316,6 +330,7 @@ curl -s $TEST_URL | grep -o "<form"
 ```
 
 **预期结果**：
+
 - 提交按钮存在
 - 表单结构正确
 
@@ -339,6 +354,7 @@ GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $MULTI_SESSIO
 ```
 
 **预期结果**：
+
 - 轮次从 1 变为 2
 - 推送成功
 
@@ -353,6 +369,7 @@ curl -s $MULTI_URL | grep -o "q_db"
 ```
 
 **预期结果**：
+
 - 第二轮问题自动加载
 - 问题 ID 为 q_db
 
@@ -367,6 +384,7 @@ GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $MULTI_SESSIO
 ```
 
 **预期结果**：
+
 - 状态变为 gone
 - detail 为 completed
 
@@ -384,6 +402,7 @@ GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek status $CANCEL_MULTI
 ```
 
 **预期结果**：
+
 - 状态变为 gone
 - detail 为 cancelled
 
@@ -411,6 +430,7 @@ echo "Exit code: $?"
 ```
 
 **预期结果**：
+
 - 收到轮次创建事件
 - 退出码为 0
 
@@ -434,6 +454,7 @@ echo "Exit code: $?"
 ```
 
 **预期结果**：
+
 - 收到会话完成事件
 - 退出码为 0
 
@@ -457,6 +478,7 @@ echo "Exit code: $?"
 ```
 
 **预期结果**：
+
 - 收到会话取消事件
 - 退出码为 0
 
@@ -475,6 +497,7 @@ echo "Exit code: $?"
 ```
 
 **预期结果**：
+
 - 退出码为 1
 - 输出错误信息
 
@@ -489,6 +512,7 @@ echo "Exit code: $?"
 ```
 
 **预期结果**：
+
 - 退出码为 1
 - 输出错误信息
 
@@ -511,6 +535,7 @@ echo "请打开浏览器访问: $TEST_URL"
 ```
 
 **预期结果**：
+
 - 主题切换正常
 - 页面样式正确更新
 
@@ -529,6 +554,7 @@ echo "请打开浏览器访问: $TEST_URL"
 ```
 
 **预期结果**：
+
 - 语言切换正常
 - 页面文本正确更新
 
@@ -565,6 +591,7 @@ echo "✓ 环境已清理"
 ## 测试检查清单
 
 ### CLI 测试
+
 - [ ] 创建会话
 - [ ] 查询会话状态
 - [ ] 推送新轮次
@@ -577,26 +604,31 @@ echo "✓ 环境已清理"
 - [ ] 无效取消原因处理（退出码 64）
 
 ### Web UI 测试
+
 - [ ] 页面加载
 - [ ] 单选题交互
 - [ ] 提交成功反馈
 
 ### 多轮流程
+
 - [ ] 第一轮回答
 - [ ] 第二轮自动加载
 - [ ] 会话完成
 - [ ] 会话取消
 
 ### SSE 事件
+
 - [ ] 轮次创建事件
 - [ ] 会话完成事件
 - [ ] 会话取消事件
 
 ### 错误处理
+
 - [ ] 无效会话 ID
 - [ ] 不存在的会话
 
 ### 国际化与主题
+
 - [ ] 主题切换
 - [ ] 语言切换
 
@@ -629,25 +661,25 @@ GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek cancel $SESSION_ID -
 
 ## 退出码说明
 
-| 退出码 | 含义 |
-|--------|------|
-| 0 | 成功 |
-| 1 | 通用错误（API 错误、网络错误） |
-| 64 | 命令行用法错误 / 输入验证失败 |
-| 75 | 等待超时 |
-| 76 | 会话已过期 |
+| 退出码 | 含义                           |
+| ------ | ------------------------------ |
+| 0      | 成功                           |
+| 1      | 通用错误（API 错误、网络错误） |
+| 64     | 命令行用法错误 / 输入验证失败  |
+| 75     | 等待超时                       |
+| 76     | 会话已过期                     |
 
 ## status 命令可用字段
 
-| 字段 | 说明 |
-|------|------|
-| `session_id` | 会话 ID |
-| `status` | 状态（active/gone） |
-| `current_round` | 当前轮次 |
-| `name` | 会话名称 |
-| `created_at` | 创建时间 |
-| `expires_at` | 过期时间 |
-| `detail` | 详情（gone 时：completed/cancelled/expired） |
+| 字段            | 说明                                         |
+| --------------- | -------------------------------------------- |
+| `session_id`    | 会话 ID                                      |
+| `status`        | 状态（active/gone）                          |
+| `current_round` | 当前轮次                                     |
+| `name`          | 会话名称                                     |
+| `created_at`    | 创建时间                                     |
+| `expires_at`    | 过期时间                                     |
+| `detail`        | 详情（gone 时：completed/cancelled/expired） |
 
 ---
 
@@ -656,18 +688,21 @@ GRILLING_SLEEK_SERVER=https://localhost:8443 grilling-sleek cancel $SESSION_ID -
 ### Docker 构建规范
 
 #### 1. 构建命令
+
 ```bash
 # 一条命令完成构建和启动
 docker compose -f ../docker/docker-compose.local.yml up -d --build
 ```
 
 #### 2. 构建流程
+
 1. **构建镜像**：Docker 在容器内部构建前端和后端
 2. **创建网络**：创建 Docker 网络
 3. **创建容器**：创建 Docker 容器
 4. **启动容器**：启动 Docker 容器
 
 #### 3. 设计原则
+
 - **一致性**：所有构建都在 Docker 内部完成，确保环境一致
 - **简单性**：开发者不需要关心本地环境，只需要修改代码和构建镜像
 - **可靠性**：避免本地环境差异导致的问题
@@ -675,6 +710,7 @@ docker compose -f ../docker/docker-compose.local.yml up -d --build
 ### 文件规范
 
 #### 1. `.dockerignore` 文件
+
 ```dockerignore
 # Node — frontend is built inside Docker (no host node_modules or dist needed)
 node_modules/
@@ -682,11 +718,13 @@ web/dist/
 ```
 
 **说明**：
+
 - 排除 `node_modules/` 和 `web/dist/`
 - 确保 Docker 在容器内部构建前端
 - 避免本地环境差异导致的问题
 
 #### 2. `docker/docker-compose.local.yml` 文件
+
 ```yaml
 # e2e 和本地验收环境配置
 # 自签名 HTTPS，端口 8443，不需要数据持久化
@@ -718,6 +756,7 @@ services:
 ```
 
 **说明**：
+
 - 使用 `context: ..` 指向项目根目录
 - 使用 `dockerfile: docker/Dockerfile` 指向 Dockerfile
 - 映射端口 8443（HTTPS）
@@ -728,6 +767,7 @@ services:
 ### 开发流程规范
 
 #### 1. 修改样式后
+
 ```bash
 # 1. 修改样式文件
 vim web/src/styles/globals.css
@@ -740,6 +780,7 @@ curl -sk https://localhost:8443 | grep style
 ```
 
 #### 2. 修改 Rust 代码后
+
 ```bash
 # 1. 修改 Rust 代码
 vim server/src/main.rs
@@ -752,6 +793,7 @@ curl -sk https://localhost:8443/v1/healthz
 ```
 
 #### 3. 修改前端代码后
+
 ```bash
 # 1. 修改前端代码
 vim web/src/components/QuestionCard.tsx
@@ -766,6 +808,7 @@ curl -sk https://localhost:8443 | grep QuestionCard
 ### 验证规范
 
 #### 1. 验证容器状态
+
 ```bash
 # 查看容器状态
 docker compose -f ../docker/docker-compose.local.yml ps
@@ -776,6 +819,7 @@ docker compose -f ../docker/docker-compose.local.yml ps
 ```
 
 #### 2. 验证样式加载
+
 ```bash
 # 检查加载的 CSS 文件
 curl -sk https://localhost:8443 | grep -o "style-[^\"]*\.css"
@@ -799,6 +843,7 @@ curl -sk https://localhost:8443/assets/style-*.css | grep -o "\-\-spacing-[a-z0-
 ```
 
 #### 3. 验证健康检查
+
 ```bash
 # 检查健康状态
 curl -sk https://localhost:8443/v1/healthz
@@ -810,6 +855,7 @@ curl -sk https://localhost:8443/v1/healthz
 ### 故障排除
 
 #### 1. 构建失败
+
 ```bash
 # 查看构建日志
 docker compose -f ../docker/docker-compose.local.yml build --no-cache
@@ -819,6 +865,7 @@ docker compose -f ../docker/docker-compose.local.yml logs -f
 ```
 
 #### 2. 容器无法启动
+
 ```bash
 # 检查容器状态
 docker compose -f ../docker/docker-compose.local.yml ps
@@ -831,6 +878,7 @@ lsof -i :8443
 ```
 
 #### 3. 样式未更新
+
 ```bash
 # 强制重新构建
 docker compose -f ../docker/docker-compose.local.yml build --no-cache
@@ -847,16 +895,19 @@ curl -sk https://localhost:8443 | grep style
 ## 最佳实践
 
 ### 1. 开发流程
+
 - 修改代码后，使用 `docker compose up -d --build` 一条命令完成构建和启动
 - 验证样式和功能是否正常
 - 使用 `docker compose logs -f` 查看日志
 
 ### 2. 测试流程
+
 - 按照测试检查清单逐一验证
 - 记录测试结果和问题
 - 及时清理测试环境
 
 ### 3. 问题排查
+
 - 先检查容器状态和日志
 - 验证样式加载和健康检查
 - 使用故障排除指南解决问题

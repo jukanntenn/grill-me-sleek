@@ -4,12 +4,12 @@
 
 ## 校验分层模型
 
-| 载荷 | 方案 | 工具 | 接收方式 | 失败状态码 |
-|---|---|---|---|---|
-| **Grilling**（provider config） | JSON Schema + 手写 id 去重 | jsonschema 0.47 | `Json<serde_json::Value>` | **400** |
-| **SessionUpdate** 等固定结构 DTO | `ValidatedJson<T>` derive | garde 0.23 | `ValidatedJson<T>` | **400** |
-| **ResponseInput** 外壳 | garde derive | garde 0.23 | `Json<ResponseInput>` | **400** |
-| **ResponseInput** 交叉引用 | garde struct-level custom（context=`Grilling`） | garde 0.23 | handler 层 `validate_with(&grilling)` | **400** |
+| 载荷                             | 方案                                            | 工具            | 接收方式                              | 失败状态码 |
+| -------------------------------- | ----------------------------------------------- | --------------- | ------------------------------------- | ---------- |
+| **Grilling**（provider config）  | JSON Schema + 手写 id 去重                      | jsonschema 0.47 | `Json<serde_json::Value>`             | **400**    |
+| **SessionUpdate** 等固定结构 DTO | `ValidatedJson<T>` derive                       | garde 0.23      | `ValidatedJson<T>`                    | **400**    |
+| **ResponseInput** 外壳           | garde derive                                    | garde 0.23      | `Json<ResponseInput>`                 | **400**    |
+| **ResponseInput** 交叉引用       | garde struct-level custom（context=`Grilling`） | garde 0.23      | handler 层 `validate_with(&grilling)` | **400**    |
 
 ### 400 vs 422 语义
 
@@ -41,27 +41,33 @@
 **关键约定**：
 
 ### Validate trait 是同步的
+
 garde 0.23 的 `Validate` trait（`garde/src/validate.rs:12-52`）**完全同步**，无 async。在 async handler 里直接 `value.validate()` 即可（无需 `.await`）。
 
 ### 规则名 `pattern`（非 `regex`）
+
 garde 的正则规则属性是 `#[garde(pattern("regex"))]`，**不是** `#[garde(regex(...))]`。`regex` 是 feature flag 名（`garde = { features = ["regex"] }`），不是规则名。源码：`garde_derive/src/syntax.rs:353`、规则模块 `garde/src/rules/pattern.rs`。
 
 ### `length` 默认按字节计数
+
 `#[garde(length(max=N))]` 对 `String` 按 **UTF-8 字节**计数（`garde/src/rules/length/simple.rs:35-52`，调 `num_bytes()`）。要按 Unicode 字符计数须写 `#[garde(length(chars, max=N))]`。当前 ResponseInput 的 max_length 校验沿用字节语义（与原 `s.len() as i64` 一致）。
 
 ### struct-level `#[garde(custom(fn))]`
+
 - **签名**：`fn(&Self, &Ctx) -> Result<(), garde::Error>`。可访问结构体的所有字段并使用外部 context。源码：`garde_derive/src/emit.rs:24-32`。
 - **可叠加**：一个 struct 可堆叠多个 `#[garde(custom(...))]`，每个返回一个错误。
 - **在字段规则前执行**：struct-level custom 先于 per-field 规则运行。
 - 用于 ResponseInput 交叉引用（context = `Grilling`）。
 
 ### context 借用语义
+
 - 默认 context 是 `()`。
 - 自定义 context 声明 `#[garde(context(Grilling))]`（不写生命周期，宏自动加 `&`）。
 - 调用 `value.validate_with(&ctx)` 传入借用引用。无需 `Default` bound（`validate_with` 是独立方法）。
 - extractor 无法提供 DB context（`&Grilling` 在 handler 从 DB 取出），故 ResponseInput 的交叉引用校验在 handler 层调用，不在 extractor 层。
 
 ### `#[garde(skip)]`
+
 无校验规则的字段必须标注 `#[garde(skip)]`，否则编译报错"field has no validation"。SessionUpdate 的所有字段、ResponseInput 的字段均用 struct-level custom 校验，故都标 `skip`。
 
 ## `ValidatedJson<T>` extractor
@@ -69,6 +75,7 @@ garde 的正则规则属性是 `#[garde(pattern("regex"))]`，**不是** `#[gard
 **位置**：`server/src/extractors.rs`
 
 **设计**：
+
 - 反序列化 JSON → `T: DeserializeOwned + garde::Validate`。
 - serde 失败 → 400 `BadRequest`。
 - garde 失败 → 400 `BadRequest`（`Report` 的 `Display` 作为 message）。
