@@ -1,0 +1,104 @@
+# prek configuration — workspace root. See:
+#   - server/prek.toml  (Rust hooks, cwd=server)
+#   - web/prek.toml     (JS/TS hooks, cwd=web)
+#   - cli/prek.toml     (JS/TS hooks, cwd=cli)
+#
+# Single source of truth for the whole pipeline: AI post-edit hooks run
+# `prek run --group format --files <edited>`, AI Stop runs `prek run --group
+# lint --all-files`, git commit runs everything, CI runs `prek run
+# --all-files`. No parallel formatter/lint definition exists outside prek.
+#
+# Groups:
+#   format — mutating fixers (auto-fix by default)
+#   lint   — read-only quality gates (AI Stop + commit + CI)
+#   check  — read-only validation: generated files, lockfiles, static checks
+#
+# Install: prek install
+
+default_install_hook_types = ["pre-commit", "pre-push", "commit-msg"]
+
+# Mutating/fixer builtins share one generated-file exemption (the generator
+# owns those bytes; a fixer diverging from raw output would trip the
+# freshness gates in server/web/cli). The regex is inlined per hook because
+# prek does not support config-level variable interpolation.
+#
+# Generated files exempt from fixers:
+#   - server/.sqlx/     sqlx offline cache (validated by server:sqlx-check)
+#   - */pnpm-lock.yaml  lockfiles (validated by the *:lockfile-fresh gates)
+
+# ---- check group: read-only builtin checks (commit + CI; whole tree) ----
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "check-yaml", groups = ["check"] },
+  { id = "check-toml", groups = ["check"] },
+  { id = "check-json", exclude = '^\.vscode/', groups = ["check"] },
+  { id = "check-merge-conflict", groups = ["check"] },
+  { id = "check-added-large-files", groups = ["check"] },
+  { id = "detect-private-key", groups = ["check"] },
+  # Ensures the hook scripts in .claude/hooks, .codex/hooks, .zcode/hooks are
+  # executable.
+  { id = "check-shebang-scripts-are-executable", groups = ["check"] },
+]
+
+# ---- format group: mutating builtin fixers (AI post-edit + commit) ----
+[[repos]]
+repo = "builtin"
+hooks = [
+  { id = "trailing-whitespace", exclude = '^server/\.sqlx/|pnpm-lock\.yaml$', groups = ["format"] },
+  { id = "mixed-line-ending", args = ["--fix=lf"], exclude = '^server/\.sqlx/|pnpm-lock\.yaml$', groups = ["format"] },
+  { id = "end-of-file-fixer", exclude = '^server/\.sqlx/|pnpm-lock\.yaml$', groups = ["format"] },
+]
+
+[[repos]]
+repo = "local"
+
+# AI tool configs in sync (AGENTS.md == CLAUDE.md, mirrored skills identical;
+# the packaged grilling-sleek skill is deliberately not checked).
+[[repos.hooks]]
+id = "agents-sync"
+name = "AI tool configs in sync"
+language = "system"
+entry = "python3 scripts/check_agents.py"
+files = '^(AGENTS|CLAUDE)\.md$|^\.claude/skills/|^\.agents/skills/|^\.zcode/skills/'
+pass_filenames = false
+stages = ["pre-commit"]
+groups = ["check"]
+
+# ---- format group: root-level formatter (non-app, non-agent dirs) ----
+# Uses web's prettier install (no root node_modules); web/ and cli/ are
+# excluded because they have their own per-file prettier hooks with their own
+# configs. .vscode is JSONC; agent dirs, skills/ (packaged-skill source —
+# must stay byte-identical with the packaged copies) and .sqlx are exempt.
+[[repos.hooks]]
+id = "prettier-root"
+name = "prettier (root, non-app dirs)"
+language = "system"
+entry = "web/node_modules/.bin/prettier --write"
+files = '\.(md|ya?ml|json|html|css)$'
+exclude = '^(\.agents|\.claude|\.codex|\.opencode|\.zcode|\.vscode)/|^skills/|^(web|cli)/|^server/\.sqlx/|pnpm-lock\.yaml$'
+pass_filenames = true
+groups = ["format"]
+stages = ["pre-commit"]
+
+# GitHub Actions workflow linting. Skipped gracefully when actionlint is not
+# installed locally; CI installs it and enforces the gate.
+[[repos.hooks]]
+id = "actionlint"
+name = "actionlint (GitHub workflows)"
+language = "system"
+entry = "command -v actionlint >/dev/null || { echo 'actionlint not installed, skipping'; exit 0; }; actionlint"
+shell = "bash"
+files = '^\.github/workflows/'
+pass_filenames = true
+groups = ["check"]
+stages = ["pre-commit"]
+
+# ---- commit-msg: Conventional Commits ----
+[[repos.hooks]]
+id = "conventional-commits"
+name = "commit message format"
+language = "system"
+entry = "python3 scripts/check_commit_msg.py"
+pass_filenames = true
+stages = ["commit-msg"]

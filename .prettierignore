@@ -1,0 +1,35 @@
+# Build artifacts
+dist/
+build/
+
+# Dependencies
+node_modules/
+
+# Lockfiles (machine-generated; freshness gated by the prek *:lockfile-fresh
+# and server:cargo-clippy --locked hooks)
+pnpm-lock.yaml
+package-lock.json
+*.lock
+
+# Rust server (uses rustfmt, not prettier; .sqlx cache is generated, freshness
+# gated by the prek server:sqlx-check hook)
+server/
+
+# Local context / agent tooling (not source)
+.local/
+.playwright-cli/
+.agents/
+.claude/
+.codex/
+.opencode/
+.zcode/
+.vscode/
+
+# Packaged-skill source (must stay byte-identical with the copies under
+# .claude/.agents/.zcode skills dirs)
+skills/
+
+# Test artifacts
+e2e/playwright-report/
+e2e/test-results/
+web/test-results/

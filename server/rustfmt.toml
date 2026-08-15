@@ -1,0 +1,11 @@
+# rustfmt configuration — stable options only.
+#
+# `imports_granularity` / `group_imports` exist but are unstable (require
+# nightly + `unstable_features = true`); on stable rustfmt they are silently
+# ignored, so they are intentionally omitted.
+#
+# Keep `edition` / `style_edition` in sync with `Cargo.toml`'s `edition` field
+# and the toolchain's `rust-version`.
+
+edition = "2024"
+style_edition = "2024"

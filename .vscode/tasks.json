@@ -1,0 +1,127 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    // ── Development: run both services ────────────────────────────────────
+    {
+      "label": "dev:server",
+      "type": "shell",
+      "command": "cargo run",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true
+      },
+      "problemMatcher": [],
+      "isBackground": true,
+      "icon": { "id": "server", "color": "terminal.ansiCyan" }
+    },
+    {
+      "label": "dev:web",
+      "type": "shell",
+      "command": "pnpm dev",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false,
+        "clear": true
+      },
+      "problemMatcher": [],
+      "isBackground": true,
+      "icon": { "id": "globe", "color": "terminal.ansiGreen" }
+    },
+    {
+      "label": "dev:all",
+      "dependsOn": ["dev:server", "dev:web"],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "icon": { "id": "rocket", "color": "terminal.ansiBlue" }
+    },
+
+    // ── Build ─────────────────────────────────────────────────────────────
+    {
+      "label": "build:server",
+      "type": "shell",
+      "command": "cargo build",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "build:web",
+      "type": "shell",
+      "command": "pnpm build",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": ["$tsc"]
+    },
+    {
+      "label": "build:cli",
+      "type": "shell",
+      "command": "pnpm build",
+      "options": { "cwd": "${workspaceFolder}/cli" },
+      "group": "build",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+
+    // ── Test ──────────────────────────────────────────────────────────────
+    {
+      "label": "test:server",
+      "type": "shell",
+      "command": "cargo test",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "test:web",
+      "type": "shell",
+      "command": "pnpm test",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "test:cli",
+      "type": "shell",
+      "command": "pnpm test",
+      "options": { "cwd": "${workspaceFolder}/cli" },
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+
+    // ── Lint / Format ─────────────────────────────────────────────────────
+    {
+      "label": "lint:server",
+      "type": "shell",
+      "command": "cargo clippy --all-targets -- -D warnings",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": "$rustc"
+    },
+    {
+      "label": "lint:web",
+      "type": "shell",
+      "command": "pnpm lint",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    },
+    {
+      "label": "lint:cli",
+      "type": "shell",
+      "command": "pnpm lint",
+      "options": { "cwd": "${workspaceFolder}/cli" },
+      "presentation": { "reveal": "always", "panel": "shared" },
+      "problemMatcher": []
+    }
+  ]
+}

@@ -14,7 +14,9 @@ Thumbs.db
 *.swo
 *~
 .idea/
-.vscode/
+# Share VSCode tasks/launch/extensions with the team; only ignore personal
+# workspace settings.
+.vscode/settings.json
 
 .local/
 

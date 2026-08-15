@@ -1,162 +1,23 @@
 ---
 name: commit
-description: "Split and organize AI code changes into well-structured commits following this project's conventions. Use this skill whenever committing changes — whether one file or many. Trigger when the user asks to commit, save, submit, or stage changes, or when dirty files need committing after a task. Also use when multiple files were edited and need logical grouping into separate commits, or when the user asks about commit conventions for this project."
+description: Use when the user asks to commit or stage changes (commit/stage/save/submit), when a task ends with dirty files to commit, or when multiple files should be split into logical commits.
 ---
 
-One big commit is a black box — you can't bisect, can't cherry-pick, and can't tell "which change broke what." Split commits give you:
+# Commit
 
-- **`git bisect`** works — each commit is either good or bad, no mixed states
-- **`git revert`** is safe — revert one logical change without pulling out others
-- **Reviewable history** — humans and AI can audit what happened, in order
-- **Rollback confidence** — if a refactor broke something, revert just the refactor
+Group by logical change, not by file. Draft a plan, confirm, then execute. Never push, never amend.
 
-## Design principles
+1. `git status --porcelain` + `git log --oneline -5` for current changes and history style.
+2. Separate AI-edited files from unrecognized ones; list unrecognized separately, never mix them in.
+3. Group by logical unit (handler+db+test in server, page+component+types in web, cli flag+parse+help); a feature spanning server+web+cli is one unit when the parts are meaningless alone. Order: `build/chore` → `feat` → `fix` → `refactor` → `style` → `docs` → `test`, `release` last.
+4. Present the plan once; after confirmation run `git add` + `git commit` batch by batch. Rejected → stop.
+5. Verify before each commit: run the touched package's tests (`cd server && cargo test`, `cd web|cli && pnpm test`); the prek hooks (cargo fmt/clippy, eslint/tsc, prettier, sqlx-check) run on `git commit` — never `--no-verify`.
+6. Single file → skip the plan, commit directly.
 
-- **Split granularity — group by logical change unit**
-  A logical change unit is a set of file edits that together accomplish one coherent purpose. We do this instead of per-file splitting because this project's files are tightly coupled (server ↔ web ↔ cli form one product). Per-file would create meaningless fragments; per-TDD-stage is overkill.
+Message: `<type>(<scope>): <desc>` — lowercase, imperative, no trailing period. Types: `feat`/`fix`/`refactor`/`docs`/`test`/`chore`/`ci`/`build`/`style`/`perf`/`revert`. Scopes: `server`/`web`/`cli`/`e2e` (components), `docker`/`devops`/`github` (infra); omit for root-level changes. Match the change's language.
 
-- **Who decides grouping — AI drafts plan, human confirms**
-  The AI inspects dirty state and proposes a commit plan, but the human has final say. This balances automation speed with human oversight over their own git history.
-
-- **Commit message format — Conventional Commits, match existing history**
-  Our history already uses `feat(server):`, `feat(web):`, `feat(cli):`, `fix(...)`, `ci(...)`, `chore:`, `docs:`. Staying consistent makes `git log` readable and predictable.
-
-- **Verification gate — lint + test must pass before each commit**
-  We have `cargo fmt` + `cargo clippy` + `cargo test` (server) and `pnpm lint` + `pnpm test` (web/cli) in CI. Running them before commit catches issues early and saves CI round-trips.
-
-- **Push policy — never auto-push**
-  Pushing is an irreversible outward-facing action. The user always decides when to push.
-
-## Rules
-
-### 1. Group by logical change, not by file
-
-A "logical change unit" is a set of file edits that together accomplish one coherent purpose. Examples:
-
-| Logical change                  | Files                                | Rationale                                              |
-| ------------------------------- | ------------------------------------ | ------------------------------------------------------ |
-| Add multi-select support        | server/src/ + web/src/ + SKILL.md    | Feature spans backend, frontend, and docs — one commit |
-| Fix a CSS padding bug           | web/src/styles/ only                 | Isolated fix — one commit                              |
-| Update CI to add Node 22        | ci.yml only                          | CI change — one commit                                 |
-| Bump version + update CHANGELOG | package.json + CHANGELOG.md          | Release housekeeping — always together                 |
-
-### 2. Ordering: infrastructure → feature → fix → docs → chore
-
-When multiple commits are needed, follow this order:
-
-```
-1. chore / ci        — build system, dependencies, tooling
-2. feat              — new features
-3. fix               — bug fixes
-4. refactor          — code reorganization
-5. docs              — README, CHANGELOG, comments
-6. test              — test additions/changes
-7. chore(release)    — version bump, changelog update (always last)
-```
-
-Rationale: infrastructure changes first (they're prerequisites), features and fixes in the middle (the actual work), docs and release housekeeping last (they describe what happened).
-
-### 3. Commit message format
-
-```
-<type>(<scope>): <description>
-```
-
-**Types:** `feat`, `fix`, `refactor`, `docs`, `test`, `chore`, `ci`, `perf`
-
-**Scopes:** `server` (Rust backend), `web` (React frontend), `cli` (Node.js CLI), `github` (CI/release), or omit scope for root-level changes.
-
-**Rules:**
-
-- Lowercase description, no trailing period
-- Match the language of the change (Chinese files → Chinese message, English → English)
-- Imperative mood: "add" not "added", "fix" not "fixed"
-
-**Examples from our history:**
-
-```
-feat(web): add round indicator and auto-recommended select
-fix(server): avoid session collisions across different instances
-ci(github): add changelog check and set latest release flag
-chore: release v0.2.0-rc.1
-```
-
-### 4. Verification gate — lint & test before commit
-
-Before every commit, run relevant checks:
-
-```bash
-# Server (Rust)
-cd server && cargo fmt --check && cargo clippy -- -D warnings && cargo test && cd ..
-# CLI (TypeScript)
-cd cli && pnpm install --frozen-lockfile && pnpm lint && pnpm test && cd ..
-# Web (TypeScript)
-cd web && pnpm install --frozen-lockfile && pnpm lint && pnpm test && cd ..
-```
-
-If anything fails → fix first, then commit. Never commit failing code.
-
-### 5. The commit plan protocol
-
-When multiple files are dirty, the AI **must**:
-
-1. **Inspect dirty state:** `git status --porcelain`
-2. **Learn existing style:** `git log --oneline -5`
-3. **Classify files:**
-   - **AI-edited this session** — files the AI wrote/edited
-   - **Unrecognized** — files the AI didn't touch (user edits, other tools)
-4. **Draft a commit plan** grouping AI-edited files into logical commits
-5. **Present the plan once** for human confirmation:
-
-```
-Proposed commits (in order):
-  1. feat(server): add multi-select question support
-     - server/src/handlers/rounds.rs
-     - server/src/models/mod.rs
-  2. feat(web): add multi-select UI control
-     - web/src/components/MultiControl.tsx
-     - web/src/pages/QuestionsPage.tsx
-  3. docs: update README with multi-select example
-     - README.md
-     - README_zh.md
-
-Unrecognized dirty files (NOT in any commit):
-  - .gitignore
-
-Reply 'ok' / '行' to execute. Reply with edits, or '我自己来' / 'manual' to abort.
-```
-
-6. **On confirmation:** execute `git add` + `git commit` for each batch in order. No `--amend`. No push.
-7. **On rejection:** stop. Do not propose a second plan. Let the user commit manually.
-
-### 6. Special cases
-
-| Case                                                      | Rule                                                                                                 |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Only one file changed**                                 | Skip the plan protocol — commit directly with a descriptive message                                  |
-| **Release commit**                                        | Version bump in `package.json` + CHANGELOG entry = always one commit, type `chore: release vX.Y.Z` |
-| **Generated/trivial changes** (lint auto-fix, .gitignore) | Bundle with the commit that caused them, or a single `chore` commit if standalone                    |
-| **Mixed language edits** (e.g., README.md + README_zh.md) | Keep in one commit if they describe the same change                                                  |
-| **Scope-only change** (SKILL.md prompt wording)           | One commit with scope `server` or `cli`                                                              |
-
-### 7. What NOT to do
-
-- ❌ **One giant commit** for everything — defeats the purpose
-- ❌ **Per-file commits** when files are logically coupled (server handler + web component = one feature)
-- ❌ **Commit with failing tests** — always verify first
-- ❌ **`git commit --amend`** — never rewrite history
-- ❌ **`git push`** without explicit user request
-- ❌ **Include unrecognized dirty files** silently — always list them separately
-- ❌ **Placeholder commit messages** like "wip" or "update files"
-
-## Quick reference
-
-```
-1. git status --porcelain          → what changed?
-2. git log --oneline -5            → what style?
-3. Group by logical change          → plan commits
-4. Present plan → human confirms   → one shot
-5. cargo/pnpm checks               → verify BEFORE each commit
-6. git add + git commit            → execute in order
-7. Never push, never amend
-```
+- Generated files (`server/.sqlx/`, `pnpm-lock.yaml`, `Cargo.lock`) bundle into the producing commit, or as a standalone `chore` — regenerate (`python3 scripts/migrate.py prepare`, `pnpm install`, cargo build), never hand-edit.
+- A migration, the `server/src/db/` code that uses it, and the regenerated `.sqlx/` cache are one unit — the sqlx-check hook fails if they drift apart.
+- Version bump (plugin.json, marketplace.json, README badges) + CHANGELOG entry = one `chore: release vX.Y.Z` commit (see the release skill).
+- Template + code, and config + code, stay together when the code depends on them; mixed-language docs (`README.md` + `README_zh.md`) one commit.
+- Never silently include unrecognized files. Never amend, never push, never placeholder messages (wip, update files).

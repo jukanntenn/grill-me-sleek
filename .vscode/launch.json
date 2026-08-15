@@ -1,0 +1,44 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    // ── Debug the Rust server (CodeLLDB) ─────────────────────────────────
+    // Requires the `vadimcn.vscode-lldb` extension. Builds and launches the
+    // server, then waits for the debugger to attach before running.
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug: server",
+      "cargo": {
+        "args": ["build", "--bin", "grilling-sleek"],
+        "filter": {
+          "kind": "bin"
+        }
+      },
+      "program": "${workspaceFolder}/server/target/debug/grilling-sleek",
+      "cwd": "${workspaceFolder}/server",
+      "args": [],
+      "envFile": "${workspaceFolder}/server/.env",
+      "preLaunchTask": "build:server"
+    },
+
+    // ── Debug the web frontend (Chrome) ──────────────────────────────────
+    // Launches Chrome against the Vite dev server (run `dev:web` first).
+    // `url` should match Vite's server.port (default 5173).
+    {
+      "type": "chrome",
+      "request": "launch",
+      "name": "Debug: web (Chrome)",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/web/src",
+      "sourceMapPathOverrides": {
+        "webpack:///./src/*": "${webRoot}/*"
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug: full stack",
+      "configurations": ["Debug: server", "Debug: web (Chrome)"]
+    }
+  ]
+}

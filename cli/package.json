@@ -13,6 +13,8 @@
     "build:prod": "NODE_ENV=production node esbuild.config.mjs",
     "dev": "tsx src/grilling-sleek.ts",
     "lint": "eslint src/",
+    "format": "prettier --write \"src/**/*.{ts,js,md,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,js,md,json}\"",
     "prepublishOnly": "pnpm run build:prod",
     "test": "vitest run"
   },
@@ -44,11 +46,12 @@
     "rotating-file-stream": "^3.2.9"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "^9.0.0",
     "@types/node": "^22.0.0",
     "@types/pino": "^7.0.4",
     "esbuild": "^0.25.0",
-    "eslint": "^10.7.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.9.0",
     "tsx": "^4.0.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.63.0",

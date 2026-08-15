@@ -1,0 +1,14 @@
+{
+  "recommendations": [
+    // Rust
+    "rust-lang.rust-analyzer",
+    "vadimcn.vscode-lldb",
+    // TypeScript / JavaScript
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    // Tailwind CSS (web)
+    "bradlc.vscode-tailwindcss",
+    // TOML (Cargo.toml, rustfmt.toml, clippy.toml)
+    "tamasfe.even-better-toml"
+  ]
+}
