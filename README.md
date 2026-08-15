@@ -31,7 +31,7 @@ The commands below are for Claude Code. More tools coming soon — see [Platform
 
 Then just say:
 
-> *"Grill me on my plan to migrate the auth service to OAuth 2.0"*
+> _"Grill me on my plan to migrate the auth service to OAuth 2.0"_
 
 The AI generates a batch of questions, opens a web page in your browser with recommended answers pre-selected, and waits for your response. If new questions come up, the next batch loads in the same tab.
 
@@ -82,23 +82,23 @@ hosts the UI — no local server needed.
 
 ## grill-me-sleek vs grill-me
 
-| | grill-me-sleek | grill-me |
-|---|---|---|
-| **Questions** | ⚡ All at once, in a web page | One at a time, in the terminal |
-| **Recommended answers** | ✅ All pre-selected — bulk review | Yes, but confirm one by one |
-| **Multi-batch iteration** | 🔄 Automatic — next batch in the same tab | Manual back-and-forth |
-| **Interface** | 🖥️ Browser-based, clean layout | Terminal only |
-| **Browser support** | 🌐 macOS, Linux, WSL auto-open | N/A |
-| **Review time** | ⏱️ Typically ≤ 5 minutes | Usually 10–30 minutes |
+|                           | grill-me-sleek                            | grill-me                       |
+| ------------------------- | ----------------------------------------- | ------------------------------ |
+| **Questions**             | ⚡ All at once, in a web page             | One at a time, in the terminal |
+| **Recommended answers**   | ✅ All pre-selected — bulk review         | Yes, but confirm one by one    |
+| **Multi-batch iteration** | 🔄 Automatic — next batch in the same tab | Manual back-and-forth          |
+| **Interface**             | 🖥️ Browser-based, clean layout            | Terminal only                  |
+| **Browser support**       | 🌐 macOS, Linux, WSL auto-open            | N/A                            |
+| **Review time**           | ⏱️ Typically ≤ 5 minutes                  | Usually 10–30 minutes          |
 
 ## Platform Roadmap
 
-| Platform | Status |
-|---|---|
-| Claude Code | ✅ Supported |
+| Platform     | Status                        |
+| ------------ | ----------------------------- |
+| Claude Code  | ✅ Supported                  |
 | OpenAI Codex | ⚡ Supported (manual install) |
-| OpenCode | 🔜 Planned |
-| Trae | 🔜 Planned |
+| OpenCode     | 🔜 Planned                    |
+| Trae         | 🔜 Planned                    |
 
 ## Install
 
@@ -139,12 +139,12 @@ Restart Codex after installing. The skill appears in all new conversations.
 
 ## Use Cases
 
-| What you want | What to say |
-|---|---|
-| Review an architecture choice | *"Grill me on choosing gRPC over REST for the payment service"* |
-| Validate a migration plan | *"Grill me on my plan to migrate from MySQL to PostgreSQL"* |
-| Align on a new project | *"Grill me on the roadmap for the new dashboard feature"* |
-| Check a debugging approach | *"Grill me on my approach to fixing the memory leak in the worker pool"* |
+| What you want                 | What to say                                                              |
+| ----------------------------- | ------------------------------------------------------------------------ |
+| Review an architecture choice | _"Grill me on choosing gRPC over REST for the payment service"_          |
+| Validate a migration plan     | _"Grill me on my plan to migrate from MySQL to PostgreSQL"_              |
+| Align on a new project        | _"Grill me on the roadmap for the new dashboard feature"_                |
+| Check a debugging approach    | _"Grill me on my approach to fixing the memory leak in the worker pool"_ |
 
 ## License
 

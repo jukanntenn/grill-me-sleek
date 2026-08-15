@@ -43,14 +43,14 @@ pnpm build
 
 ### Basic Commands
 
-| Command | Description |
-|---------|-------------|
-| `create` | Create a new Q&A session |
-| `poll <id>` | Wait for user to submit answers |
-| `push <id>` | Push next round of questions |
-| `complete <id>` | Complete session |
-| `cancel <id>` | Cancel session |
-| `status <id>` | Query session status |
+| Command         | Description                     |
+| --------------- | ------------------------------- |
+| `create`        | Create a new Q&A session        |
+| `poll <id>`     | Wait for user to submit answers |
+| `push <id>`     | Push next round of questions    |
+| `complete <id>` | Complete session                |
+| `cancel <id>`   | Cancel session                  |
+| `status <id>`   | Query session status            |
 
 ### Configuration Commands
 
@@ -89,23 +89,23 @@ echo '{"name":"Tech Stack","questions":[...]}' | grilling-sleek push <session-id
 
 ## CLI Options
 
-| Option | Description |
-|--------|-------------|
-| `--file -\|<path>` | Read input from stdin or file |
-| `--inline <json>` | Pass JSON string directly (small data only) |
-| `--json [fields]` | Output in JSON format, optional field filter |
-| `--wait <sec>` | Poll timeout in seconds (default: 600) |
-| `--round <n>` | Poll specific round |
-| `--reason <enum>` | Cancel reason |
-| `--detail <text>` | Cancel details |
+| Option             | Description                                  |
+| ------------------ | -------------------------------------------- |
+| `--file -\|<path>` | Read input from stdin or file                |
+| `--inline <json>`  | Pass JSON string directly (small data only)  |
+| `--json [fields]`  | Output in JSON format, optional field filter |
+| `--wait <sec>`     | Poll timeout in seconds (default: 600)       |
+| `--round <n>`      | Poll specific round                          |
+| `--reason <enum>`  | Cancel reason                                |
+| `--detail <text>`  | Cancel details                               |
 
 ## Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `GRILLING_SLEEK_SERVER` | Server URL (default: https://grillingsleek.online) |
-| `GRILLING_SLEEK_TIMEOUT` | Request timeout in seconds |
-| `GRILLING_SLEEK_LONGPOLL_TIMEOUT` | Long poll timeout in seconds |
+| Variable                          | Description                                        |
+| --------------------------------- | -------------------------------------------------- |
+| `GRILLING_SLEEK_SERVER`           | Server URL (default: https://grillingsleek.online) |
+| `GRILLING_SLEEK_TIMEOUT`          | Request timeout in seconds                         |
+| `GRILLING_SLEEK_LONGPOLL_TIMEOUT` | Long poll timeout in seconds                       |
 
 ## Development
 

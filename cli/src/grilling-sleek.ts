@@ -221,12 +221,7 @@ function output(
  * Extract error info from a ky HTTP error.
  */
 async function extractHttpError(e: unknown): Promise<{ status: number; body: string }> {
-  if (
-    typeof e === "object" &&
-    e !== null &&
-    "response" in e &&
-    e.response instanceof Response
-  ) {
+  if (typeof e === "object" && e !== null && "response" in e && e.response instanceof Response) {
     const status = e.response.status;
     const body = await e.response.text().catch(() => "");
     return { status, body };
@@ -256,43 +251,45 @@ program
   .option("-i, --inline <json>", "Inline JSON string")
   .option("-j, --json [fields]", "JSON output (optionally filter fields)")
   .option("-w, --wait <sec>", "Wait for response after creating (seconds)")
-  .action(async (opts: { inline?: string; file?: string; json?: string | boolean; wait?: string }) => {
-    let raw: string;
-    if (opts.inline) {
-      raw = opts.inline;
-    } else {
-      raw = await readInput(opts.file);
-    }
-
-    const grilling = parseGrilling(raw);
-    logDebug("grilling_input", grilling);
-    const idempotencyKey = randomUUID();
-
-    const client = apiClient("post", false, idempotencyKey);
-    try {
-      const resp = await client.post("sessions", { json: grilling }).json<CreateResponse>();
-
-      const jsonFields = parseJsonFields(opts.json);
-      output(
-        resp as unknown as Record<string, unknown>,
-        jsonFields,
-        () => `Session created.\nURL: ${resp.url}`,
-      );
-
-      // If --wait, enter poll loop immediately (= create + poll, DESIGN.md §1894)
-      if (opts.wait) {
-        process.stderr.write("Waiting for user response...\n");
-        await pollLoop(resp.session_id, resp.current_round, Number(opts.wait), jsonFields);
+  .action(
+    async (opts: { inline?: string; file?: string; json?: string | boolean; wait?: string }) => {
+      let raw: string;
+      if (opts.inline) {
+        raw = opts.inline;
+      } else {
+        raw = await readInput(opts.file);
       }
-    } catch (e: unknown) {
-      logError("create session failed", e, { session_id: undefined });
-      const { status, body } = await extractHttpError(e);
-      if (status > 0) {
-        errExit(`API error ${status}: ${body}`, status === 429 ? 77 : 1);
+
+      const grilling = parseGrilling(raw);
+      logDebug("grilling_input", grilling);
+      const idempotencyKey = randomUUID();
+
+      const client = apiClient("post", false, idempotencyKey);
+      try {
+        const resp = await client.post("sessions", { json: grilling }).json<CreateResponse>();
+
+        const jsonFields = parseJsonFields(opts.json);
+        output(
+          resp as unknown as Record<string, unknown>,
+          jsonFields,
+          () => `Session created.\nURL: ${resp.url}`,
+        );
+
+        // If --wait, enter poll loop immediately (= create + poll, DESIGN.md §1894)
+        if (opts.wait) {
+          process.stderr.write("Waiting for user response...\n");
+          await pollLoop(resp.session_id, resp.current_round, Number(opts.wait), jsonFields);
+        }
+      } catch (e: unknown) {
+        logError("create session failed", e, { session_id: undefined });
+        const { status, body } = await extractHttpError(e);
+        if (status > 0) {
+          errExit(`API error ${status}: ${body}`, status === 429 ? 77 : 1);
+        }
+        errExit(`network error: ${body}`, 1);
       }
-      errExit(`network error: ${body}`, 1);
-    }
-  });
+    },
+  );
 
 // -- poll -----------------------------------------------------------------
 
@@ -302,23 +299,25 @@ program
   .option("-r, --round <n>", "Specific round to poll (default: current)")
   .option("-w, --wait <sec>", "Total wait timeout (default: 600)", "600")
   .option("-j, --json [fields]", "JSON output")
-  .action(async (sessionId: string, opts: { round?: string; wait: string; json?: string | boolean }) => {
-    let round = opts.round ? Number(opts.round) : undefined;
+  .action(
+    async (sessionId: string, opts: { round?: string; wait: string; json?: string | boolean }) => {
+      let round = opts.round ? Number(opts.round) : undefined;
 
-    // If no round specified, get current_round
-    if (round === undefined) {
-      try {
-        const client = apiClient("get");
-        const session = await client.get(`sessions/${sessionId}`).json<SessionResponse>();
-        round = session.current_round;
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
-        errExit(`failed to get session: ${msg}`, 1);
+      // If no round specified, get current_round
+      if (round === undefined) {
+        try {
+          const client = apiClient("get");
+          const session = await client.get(`sessions/${sessionId}`).json<SessionResponse>();
+          round = session.current_round;
+        } catch (e: unknown) {
+          const msg = e instanceof Error ? e.message : String(e);
+          errExit(`failed to get session: ${msg}`, 1);
+        }
       }
-    }
 
-    await pollLoop(sessionId, round, Number(opts.wait), parseJsonFields(opts.json));
-  });
+      await pollLoop(sessionId, round, Number(opts.wait), parseJsonFields(opts.json));
+    },
+  );
 
 // -- push -----------------------------------------------------------------
 
@@ -329,44 +328,49 @@ program
   .option("-i, --inline <json>", "Inline JSON string")
   .option("-j, --json [fields]", "JSON output")
   .option("-w, --wait <sec>", "Wait for response after pushing")
-  .action(async (sessionId: string, opts: { inline?: string; file?: string; json?: string | boolean; wait?: string }) => {
-    let raw: string;
-    if (opts.inline) {
-      raw = opts.inline;
-    } else {
-      raw = await readInput(opts.file);
-    }
-
-    const grilling = parseGrilling(raw);
-    logDebug("grilling_input", grilling);
-    const idempotencyKey = randomUUID();
-
-    const client = apiClient("post", false, idempotencyKey);
-    try {
-      const resp = await client
-        .post(`sessions/${sessionId}/rounds`, { json: grilling })
-        .json<RoundResponse>();
-
-      const jsonFields = parseJsonFields(opts.json);
-      output(
-        resp as unknown as Record<string, unknown>,
-        jsonFields,
-        () => `Round ${resp.round} pushed.`,
-      );
-
-      if (opts.wait) {
-        process.stderr.write("Waiting for user response...\n");
-        await pollLoop(sessionId, resp.round, Number(opts.wait), jsonFields);
+  .action(
+    async (
+      sessionId: string,
+      opts: { inline?: string; file?: string; json?: string | boolean; wait?: string },
+    ) => {
+      let raw: string;
+      if (opts.inline) {
+        raw = opts.inline;
+      } else {
+        raw = await readInput(opts.file);
       }
-    } catch (e: unknown) {
-      logError("push round failed", e, { session_id: sessionId });
-      const { status, body } = await extractHttpError(e);
-      if (status > 0) {
-        errExit(`API error ${status}: ${body}`, status === 429 ? 77 : 1);
+
+      const grilling = parseGrilling(raw);
+      logDebug("grilling_input", grilling);
+      const idempotencyKey = randomUUID();
+
+      const client = apiClient("post", false, idempotencyKey);
+      try {
+        const resp = await client
+          .post(`sessions/${sessionId}/rounds`, { json: grilling })
+          .json<RoundResponse>();
+
+        const jsonFields = parseJsonFields(opts.json);
+        output(
+          resp as unknown as Record<string, unknown>,
+          jsonFields,
+          () => `Round ${resp.round} pushed.`,
+        );
+
+        if (opts.wait) {
+          process.stderr.write("Waiting for user response...\n");
+          await pollLoop(sessionId, resp.round, Number(opts.wait), jsonFields);
+        }
+      } catch (e: unknown) {
+        logError("push round failed", e, { session_id: sessionId });
+        const { status, body } = await extractHttpError(e);
+        if (status > 0) {
+          errExit(`API error ${status}: ${body}`, status === 429 ? 77 : 1);
+        }
+        errExit(`network error: ${body}`, 1);
       }
-      errExit(`network error: ${body}`, 1);
-    }
-  });
+    },
+  );
 
 // -- complete -------------------------------------------------------------
 
@@ -377,15 +381,11 @@ program
     // Check for unanswered rounds
     try {
       const client = apiClient("get");
-      const rounds = await client
-        .get(`sessions/${sessionId}/rounds`)
-        .json<RoundSummary[]>();
+      const rounds = await client.get(`sessions/${sessionId}/rounds`).json<RoundSummary[]>();
       const unanswered = rounds.filter((r) => !r.has_response);
       if (unanswered.length > 0) {
         const nums = unanswered.map((r) => r.round).join(", ");
-        warnStderr(
-          `rounds [${nums}] have no response, will be archived as unanswered`,
-        );
+        warnStderr(`rounds [${nums}] have no response, will be archived as unanswered`);
       }
     } catch {
       // Non-fatal, proceed with complete
@@ -396,11 +396,7 @@ program
       const resp = await client
         .patch(`sessions/${sessionId}`, { json: { status: "completed" } })
         .json<Record<string, unknown>>();
-      output(
-        resp,
-        parseJsonFields(undefined),
-        () => `Session ${sessionId} completed.`,
-      );
+      output(resp, parseJsonFields(undefined), () => `Session ${sessionId} completed.`);
     } catch (e: unknown) {
       const { status, body } = await extractHttpError(e);
       if (status > 0) {
@@ -425,10 +421,7 @@ program
     // Validate reason enum locally — DESIGN.md §1975 (CLI pre-flight saves a round-trip).
     const validReasons = ["user_cancelled", "agent_aborted", "error"];
     if (!validReasons.includes(opts.reason)) {
-      errExit(
-        `invalid --reason '${opts.reason}'; must be one of: ${validReasons.join(", ")}`,
-        64,
-      );
+      errExit(`invalid --reason '${opts.reason}'; must be one of: ${validReasons.join(", ")}`, 64);
     }
 
     const body: Record<string, unknown> = {
@@ -482,7 +475,7 @@ program
       ) {
         const status = e.response.status;
         if (status === 410) {
-          const body = await e.response.json().catch(() => ({})) as { detail?: string };
+          const body = (await e.response.json().catch(() => ({}))) as { detail?: string };
           output(
             { status: "gone", detail: body.detail },
             parseJsonFields(opts.json),
@@ -536,12 +529,11 @@ async function pollLoop(
     }
 
     try {
-      const resp = await client
-        .get(`sessions/${sessionId}/rounds/${round}/response`, {
-          searchParams: { wait: waitSec },
-          timeout: (waitSec + 10) * 1000,
-          throwHttpErrors: false,
-        });
+      const resp = await client.get(`sessions/${sessionId}/rounds/${round}/response`, {
+        searchParams: { wait: waitSec },
+        timeout: (waitSec + 10) * 1000,
+        throwHttpErrors: false,
+      });
 
       const status = resp.status;
 
@@ -625,10 +617,7 @@ program.hook("preAction", (thisCommand) => {
   if (opts.verbose) {
     logger.level = "debug";
   }
-  logStartup(
-    thisCommand.args[0] ?? "unknown",
-    process.argv.slice(2),
-  );
+  logStartup(thisCommand.args[0] ?? "unknown", process.argv.slice(2));
 });
 
 program.hook("postAction", () => {
@@ -637,11 +626,15 @@ program.hook("postAction", () => {
 
 // -- config ---------------------------------------------------------------
 
-import { getConfigPath, loadConfig, setConfigValue, unsetConfigValue, getConfigValue } from "./config";
+import {
+  getConfigPath,
+  loadConfig,
+  setConfigValue,
+  unsetConfigValue,
+  getConfigValue,
+} from "./config";
 
-const configCmd = program
-  .command("config")
-  .description("Manage CLI configuration");
+const configCmd = program.command("config").description("Manage CLI configuration");
 
 configCmd
   .command("set <key> <value>")

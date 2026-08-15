@@ -20,9 +20,7 @@ export function MultiControl({ question, value, onChange }: MultiControlProps) {
   const options = question.options ?? [];
 
   const toggle = (label: string, checked: boolean) => {
-    const next = checked
-      ? [...selected, label]
-      : selected.filter((s) => s !== label);
+    const next = checked ? [...selected, label] : selected.filter((s) => s !== label);
     onChange({
       selected: next,
       custom_text: value?.custom_text ?? "",
@@ -39,20 +37,20 @@ export function MultiControl({ question, value, onChange }: MultiControlProps) {
             <label
               key={opt.label}
               data-selected={isChecked}
-              className="flex items-center gap-2.5 min-h-10 rounded-[var(--radius-md)] border border-hairline bg-canvas px-[var(--spacing-sm)] cursor-pointer hover:border-hairline-strong data-[selected=true]:border-primary transition-colors"
+              className="border-hairline bg-canvas hover:border-hairline-strong data-[selected=true]:border-primary flex min-h-10 cursor-pointer items-center gap-2.5 rounded-[var(--radius-md)] border px-[var(--spacing-sm)] transition-colors"
             >
               <Checkbox.Root
                 checked={isChecked}
                 onCheckedChange={(checked) => toggle(opt.label, checked as boolean)}
-                className={`size-4 rounded-[var(--radius-xs)] border-2 flex items-center justify-center transition-colors ${isChecked ? "border-primary bg-primary" : "border-hairline-strong"}`}
+                className={`flex size-4 items-center justify-center rounded-[var(--radius-xs)] border-2 transition-colors ${isChecked ? "border-primary bg-primary" : "border-hairline-strong"}`}
               >
                 <Checkbox.Indicator className="text-on-primary text-xs leading-none font-bold">
                   ✓
                 </Checkbox.Indicator>
               </Checkbox.Root>
-              <span className="text-sm text-ink">{opt.label}</span>
+              <span className="text-ink text-sm">{opt.label}</span>
               {isRecommended && (
-                <span className="ml-auto inline-flex items-center rounded-[var(--radius-full)] bg-canvas-soft px-[var(--spacing-xs)] caption text-body">
+                <span className="bg-canvas-soft caption text-body ml-auto inline-flex items-center rounded-[var(--radius-full)] px-[var(--spacing-xs)]">
                   {t("recommended")}
                 </span>
               )}
@@ -66,7 +64,7 @@ export function MultiControl({ question, value, onChange }: MultiControlProps) {
           value={value?.custom_text ?? ""}
           onChange={(e) => onChange({ selected, custom_text: e.target.value })}
           placeholder={t("customTextPlaceholder")}
-          className="mt-[var(--spacing-xs)] h-10 w-full rounded-[var(--radius-sm)] border border-hairline bg-canvas px-[var(--spacing-sm)] body-sm text-ink placeholder:text-mute focus:outline-none focus:border-hairline-strong transition-colors"
+          className="border-hairline bg-canvas body-sm text-ink placeholder:text-mute focus:border-hairline-strong mt-[var(--spacing-xs)] h-10 w-full rounded-[var(--radius-sm)] border px-[var(--spacing-sm)] transition-colors focus:outline-none"
         />
       )}
     </>

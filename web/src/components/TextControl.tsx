@@ -20,7 +20,7 @@ export function TextControl({ question, value, onChange }: TextControlProps) {
       onChange={(e) => onChange({ selected: e.target.value, custom_text: "" })}
       placeholder={question.placeholder || ""}
       maxLength={question.max_length}
-      className="w-full min-h-[80px] rounded-[var(--radius-sm)] border border-hairline bg-canvas px-3 py-2 text-sm text-ink placeholder:text-mute focus:outline-none focus:border-hairline-strong resize-y transition-colors"
+      className="border-hairline bg-canvas text-ink placeholder:text-mute focus:border-hairline-strong min-h-[80px] w-full resize-y rounded-[var(--radius-sm)] border px-3 py-2 text-sm transition-colors focus:outline-none"
     />
   );
 }

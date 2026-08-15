@@ -23,24 +23,18 @@ export function QuestionCard({ question, error, children }: QuestionCardProps) {
   return (
     <div
       data-testid={`question-${question.id}`}
-      className="rounded-[var(--radius-md)] border border-hairline bg-canvas-soft px-[var(--spacing-lg)] py-[var(--spacing-lg)] mb-[var(--spacing-md)]"
+      className="border-hairline bg-canvas-soft mb-[var(--spacing-md)] rounded-[var(--radius-md)] border px-[var(--spacing-lg)] py-[var(--spacing-lg)]"
     >
-      <label className="block font-semibold text-sm text-ink mb-[var(--spacing-xs)]">
+      <label className="text-ink mb-[var(--spacing-xs)] block text-sm font-semibold">
         {question.header}
         {required && <span className="text-error ml-0.5">*</span>}
       </label>
-      {question.text && (
-        <p className="text-sm text-body mb-[var(--spacing-xs)]">{question.text}</p>
-      )}
-      {error ? (
-        <p className="text-sm text-error mb-[var(--spacing-xs)]">{error}</p>
-      ) : null}
-      <div className="mt-[var(--spacing-sm)]">
-        {children}
-      </div>
+      {question.text && <p className="text-body mb-[var(--spacing-xs)] text-sm">{question.text}</p>}
+      {error ? <p className="text-error mb-[var(--spacing-xs)] text-sm">{error}</p> : null}
+      <div className="mt-[var(--spacing-sm)]">{children}</div>
       {/* recommended mark + explanation for yesno/rating shown inline in controls */}
       {question.recommended !== undefined && question.explanation && (
-        <p className="mt-[var(--spacing-xs)] text-xs text-mute">
+        <p className="text-mute mt-[var(--spacing-xs)] text-xs">
           {t("recommended")} — {question.explanation}
         </p>
       )}

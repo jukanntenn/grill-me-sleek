@@ -8,13 +8,5 @@
   "homepage": "https://github.com/jukanntenn/grill-me-sleek",
   "repository": "https://github.com/jukanntenn/grill-me-sleek",
   "license": "MIT",
-  "keywords": [
-    "interview",
-    "review",
-    "plan",
-    "design",
-    "questions",
-    "web-ui",
-    "interactive"
-  ]
+  "keywords": ["interview", "review", "plan", "design", "questions", "web-ui", "interactive"]
 }

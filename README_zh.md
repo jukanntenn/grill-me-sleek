@@ -31,7 +31,7 @@ Agent 帮你把方案里的坑都找出来，再动手写代码。
 
 输入以下内容即可触发：
 
-> *"Grill me on my plan to migrate the auth service to OAuth 2.0"*
+> _"Grill me on my plan to migrate the auth service to OAuth 2.0"_
 
 Agent 会一次生成所有问题，在浏览器打开页面等你回答。如果有新问题，下一批会在同一个标签页自动加载。
 
@@ -81,23 +81,23 @@ sequenceDiagram
 
 ## grill-me-sleek vs grill-me
 
-|  | grill-me-sleek | grill-me |
-|---|---|---|
-| **提问方式** | ⚡ 一次性出完，在网页里 | 逐个追问，在终端里 |
-| **推荐答案** | ✅ 全部预选好，批量审阅 | 有，但需要逐个确认 |
-| **多轮迭代** | 🔄 自动——下一批在同一标签页加载 | 手动来回对话 |
-| **界面** | 🖥️ 浏览器，排版清晰 | 只有终端 |
-| **浏览器支持** | 🌐 macOS、Linux、WSL 自动打开 | 不适用 |
-| **审阅耗时** | ⏱️ 通常 ≤ 5 分钟 | 通常 10~30 分钟 |
+|                | grill-me-sleek                  | grill-me           |
+| -------------- | ------------------------------- | ------------------ |
+| **提问方式**   | ⚡ 一次性出完，在网页里         | 逐个追问，在终端里 |
+| **推荐答案**   | ✅ 全部预选好，批量审阅         | 有，但需要逐个确认 |
+| **多轮迭代**   | 🔄 自动——下一批在同一标签页加载 | 手动来回对话       |
+| **界面**       | 🖥️ 浏览器，排版清晰             | 只有终端           |
+| **浏览器支持** | 🌐 macOS、Linux、WSL 自动打开   | 不适用             |
+| **审阅耗时**   | ⏱️ 通常 ≤ 5 分钟                | 通常 10~30 分钟    |
 
 ## 平台支持
 
-| 平台 | 状态 |
-|---|---|
-| Claude Code | ✅ 已支持 |
+| 平台         | 状态                  |
+| ------------ | --------------------- |
+| Claude Code  | ✅ 已支持             |
 | OpenAI Codex | ⚡ 已支持（手动安装） |
-| OpenCode | 🔜 计划中 |
-| Trae | 🔜 计划中 |
+| OpenCode     | 🔜 计划中             |
+| Trae         | 🔜 计划中             |
 
 ## 安装
 
@@ -138,12 +138,12 @@ cp -r grill-me-sleek/skills/grilling-sleek ~/.agents/skills/
 
 ## 使用场景
 
-| 你想做什么 | 可以这样说 |
-|---|---|
-| 评审架构选择 | *"Grill me on choosing gRPC over REST for the payment service"* |
-| 验证迁移方案 | *"Grill me on my plan to migrate from MySQL to PostgreSQL"* |
-| 对齐项目规划 | *"Grill me on the roadmap for the new dashboard feature"* |
-| 确认调试思路 | *"Grill me on my approach to fixing the memory leak in the worker pool"* |
+| 你想做什么   | 可以这样说                                                               |
+| ------------ | ------------------------------------------------------------------------ |
+| 评审架构选择 | _"Grill me on choosing gRPC over REST for the payment service"_          |
+| 验证迁移方案 | _"Grill me on my plan to migrate from MySQL to PostgreSQL"_              |
+| 对齐项目规划 | _"Grill me on the roadmap for the new dashboard feature"_                |
+| 确认调试思路 | _"Grill me on my approach to fixing the memory leak in the worker pool"_ |
 
 ## 许可证
 

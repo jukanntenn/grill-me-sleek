@@ -13,7 +13,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/v1": "http://127.0.0.1:8080", // dev API proxy to Rust
+      "/v1": "http://127.0.0.1:8000", // dev API proxy to Rust (server LISTEN_ADDR)
     },
   },
   resolve: {

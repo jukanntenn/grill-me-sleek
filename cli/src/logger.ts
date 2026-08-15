@@ -13,8 +13,7 @@ function getLogDir(): string {
   if (process.env.GRILLING_SLEEK_LOG_FILE) {
     return process.env.GRILLING_SLEEK_LOG_FILE;
   }
-  const xdgStateHome =
-    process.env.XDG_STATE_HOME || join(homedir(), ".local", "state");
+  const xdgStateHome = process.env.XDG_STATE_HOME || join(homedir(), ".local", "state");
   return join(xdgStateHome, "grilling-sleek", "logs");
 }
 
@@ -137,7 +136,12 @@ export function logDebug(label: string, data: unknown): void {
 /**
  * Log poll status.
  */
-export function logPoll(event: string, sessionId: string, round: number, extra?: Record<string, unknown>): void {
+export function logPoll(
+  event: string,
+  sessionId: string,
+  round: number,
+  extra?: Record<string, unknown>,
+): void {
   logger.debug({
     event: `poll_${event}`,
     session_id: sessionId,

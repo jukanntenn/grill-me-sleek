@@ -13,14 +13,14 @@ interface BannerProps {
 export function Banner({ message, onRetry, retryLabel }: BannerProps) {
   return (
     <div
-      className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-error-deep bg-error-soft px-[var(--spacing-md)] py-[var(--spacing-sm)] mb-[var(--spacing-md)] shadow-[var(--shadow-toast)]"
+      className="border-error-deep bg-error-soft mb-[var(--spacing-md)] flex items-center justify-between gap-3 rounded-[var(--radius-md)] border px-[var(--spacing-md)] py-[var(--spacing-sm)] shadow-[var(--shadow-toast)]"
       role="alert"
     >
-      <span className="text-sm text-error-deep">{message}</span>
+      <span className="text-error-deep text-sm">{message}</span>
       <button
         type="button"
         onClick={onRetry}
-        className="shrink-0 rounded-[var(--radius-sm)] bg-white px-3 py-1.5 text-sm font-medium text-error-deep hover:bg-error-soft transition-colors"
+        className="text-error-deep hover:bg-error-soft shrink-0 rounded-[var(--radius-sm)] bg-white px-3 py-1.5 text-sm font-medium transition-colors"
       >
         {retryLabel}
       </button>

@@ -14,10 +14,7 @@
 import { z } from "zod";
 
 /** Helper: a non-empty string after trim, for required text fields. */
-const nonEmpty = z
-  .string()
-  .trim()
-  .min(1, "required");
+const nonEmpty = z.string().trim().min(1, "required");
 
 /** Build a schema for a single question answer based on its variant. */
 function singleAnswerSchema(_variant: string | undefined, required: boolean) {
@@ -75,7 +72,13 @@ export { singleAnswerSchema, multiAnswerSchema, textAnswerSchema };
  * field. Used as the RHF resolver schema.
  */
 export function buildRoundSchema(
-  questions: { id: string; type: string; variant?: string; required?: boolean; max_length?: number }[],
+  questions: {
+    id: string;
+    type: string;
+    variant?: string;
+    required?: boolean;
+    max_length?: number;
+  }[],
   additionalNotes?: { required?: boolean; max_length?: number } | null,
 ) {
   const shape: Record<string, z.ZodTypeAny> = {};
