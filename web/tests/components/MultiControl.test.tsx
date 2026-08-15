@@ -13,11 +13,7 @@ const baseQuestion: Question = {
   header: "Features",
   text: "Which features do you need?",
   type: "multi",
-  options: [
-    { label: "Feature A" },
-    { label: "Feature B" },
-    { label: "Feature C" },
-  ],
+  options: [{ label: "Feature A" }, { label: "Feature B" }, { label: "Feature C" }],
   recommended: 1, // Feature B
 };
 

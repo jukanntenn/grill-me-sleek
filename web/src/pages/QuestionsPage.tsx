@@ -60,11 +60,16 @@ export function QuestionsPage({
           recommendedValue = q.options[q.recommended].label;
         }
         defaultValues[q.id] = { selected: recommendedValue, custom_text: "" };
-      } else if (q.type === "multi" && q.options && q.recommended >= 0 && q.recommended < q.options.length) {
+      } else if (
+        q.type === "multi" &&
+        q.options &&
+        q.recommended >= 0 &&
+        q.recommended < q.options.length
+      ) {
         const recommendedOption = q.options[q.recommended].label;
         defaultValues[q.id] = {
           selected: [recommendedOption],
-          custom_text: ""
+          custom_text: "",
         };
       } else {
         defaultValues[q.id] = {
@@ -125,7 +130,7 @@ export function QuestionsPage({
     <div>
       {/* Round indicator */}
       <div className="mb-[var(--spacing-md)]">
-        <span className="text-sm text-mute">
+        <span className="text-mute text-sm">
           {round.name
             ? t("roundWithName", { n: round.round, name: round.name })
             : t("round", { n: round.round })}
@@ -139,7 +144,12 @@ export function QuestionsPage({
       )}
 
       {bannerMessage && (
-        <BannerInline message={bannerMessage} onRetry={onRetry} retryLabel={t("retry")} onDismiss={() => onBanner(null)} />
+        <BannerInline
+          message={bannerMessage}
+          onRetry={onRetry}
+          retryLabel={t("retry")}
+          onDismiss={() => onBanner(null)}
+        />
       )}
 
       <form onSubmit={handleSubmit(onValid)}>
@@ -175,7 +185,7 @@ export function QuestionsPage({
         <div className="mt-[var(--spacing-xl)]">
           <button
             type="submit"
-            className="w-full h-12 rounded-[var(--radius-pill)] bg-primary px-[var(--spacing-sm)] button-lg text-on-primary hover:opacity-90 transition-opacity"
+            className="bg-primary button-lg text-on-primary h-12 w-full rounded-[var(--radius-pill)] px-[var(--spacing-sm)] transition-opacity hover:opacity-90"
           >
             {t("submit")}
           </button>
@@ -186,7 +196,11 @@ export function QuestionsPage({
 }
 
 /** Maps a Zod validation message code to a user-facing i18n string. */
-function mapErrorMessage(q: Question, code: string, t: (key: string, params?: Record<string, unknown>) => string): string {
+function mapErrorMessage(
+  q: Question,
+  code: string,
+  t: (key: string, params?: Record<string, unknown>) => string,
+): string {
   const h = q.header;
   switch (code) {
     case "required":
@@ -221,19 +235,25 @@ function AdditionalNotesField({
 }) {
   const label = config.label || t("additionalNotesDefault");
   return (
-    <div data-testid="additional-notes" className="rounded-[var(--radius-md)] border border-hairline bg-canvas-soft px-[var(--spacing-lg)] py-[var(--spacing-lg)] mb-[var(--spacing-md)] mt-[var(--spacing-xs)]">
-      <label htmlFor="additional-notes" className="block font-semibold text-sm text-ink mb-[var(--spacing-xxs)]">
+    <div
+      data-testid="additional-notes"
+      className="border-hairline bg-canvas-soft mt-[var(--spacing-xs)] mb-[var(--spacing-md)] rounded-[var(--radius-md)] border px-[var(--spacing-lg)] py-[var(--spacing-lg)]"
+    >
+      <label
+        htmlFor="additional-notes"
+        className="text-ink mb-[var(--spacing-xxs)] block text-sm font-semibold"
+      >
         {label}
         {config.required && <span className="text-error ml-0.5">*</span>}
       </label>
-      {error && <p className="text-sm text-error mb-[var(--spacing-xs)]">{error}</p>}
+      {error && <p className="text-error mb-[var(--spacing-xs)] text-sm">{error}</p>}
       <textarea
         id="additional-notes"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={config.placeholder || t("additionalNotesDefault")}
         maxLength={config.max_length}
-        className="w-full min-h-[80px] rounded-[var(--radius-sm)] border border-hairline bg-canvas px-3 py-2 text-sm text-ink placeholder:text-mute focus:outline-none focus:border-hairline-strong resize-y transition-colors"
+        className="border-hairline bg-canvas text-ink placeholder:text-mute focus:border-hairline-strong min-h-[80px] w-full resize-y rounded-[var(--radius-sm)] border px-3 py-2 text-sm transition-colors focus:outline-none"
       />
     </div>
   );
@@ -251,13 +271,25 @@ function BannerInline({
   onDismiss: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-error-deep bg-error-soft px-[var(--spacing-md)] py-[var(--spacing-sm)] mb-[var(--spacing-md)] shadow-[var(--shadow-toast)]" role="alert">
-      <span className="text-sm text-error-deep">{message}</span>
-      <div className="flex gap-2 shrink-0">
-        <button type="button" onClick={onRetry} className="rounded-[var(--radius-sm)] bg-white px-3 py-1.5 text-sm font-medium text-error-deep hover:bg-error-soft transition-colors">
+    <div
+      className="border-error-deep bg-error-soft mb-[var(--spacing-md)] flex items-center justify-between gap-3 rounded-[var(--radius-md)] border px-[var(--spacing-md)] py-[var(--spacing-sm)] shadow-[var(--shadow-toast)]"
+      role="alert"
+    >
+      <span className="text-error-deep text-sm">{message}</span>
+      <div className="flex shrink-0 gap-2">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="text-error-deep hover:bg-error-soft rounded-[var(--radius-sm)] bg-white px-3 py-1.5 text-sm font-medium transition-colors"
+        >
           {retryLabel}
         </button>
-        <button type="button" onClick={onDismiss} className="rounded-[var(--radius-sm)] px-2 py-1.5 text-sm text-error-deep transition-colors" aria-label="dismiss">
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="text-error-deep rounded-[var(--radius-sm)] px-2 py-1.5 text-sm transition-colors"
+          aria-label="dismiss"
+        >
           ✕
         </button>
       </div>

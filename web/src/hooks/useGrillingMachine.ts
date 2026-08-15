@@ -71,10 +71,14 @@ export function reducer(state: State, action: Action): State {
 
     case "FETCH_GONE":
       switch (action.detail) {
-        case "completed": return { type: "PAGE_COMPLETED" };
-        case "cancelled": return { type: "PAGE_CANCELLED" };
-        case "expired": return { type: "PAGE_EXPIRED" };
-        default: return { type: "ERROR_PAGE", message: "session-ended" };
+        case "completed":
+          return { type: "PAGE_COMPLETED" };
+        case "cancelled":
+          return { type: "PAGE_CANCELLED" };
+        case "expired":
+          return { type: "PAGE_EXPIRED" };
+        default:
+          return { type: "ERROR_PAGE", message: "session-ended" };
       }
 
     case "FETCH_RETRY":
@@ -95,11 +99,19 @@ export function reducer(state: State, action: Action): State {
       return { type: "VALIDATE", round: action.round, sessionId: action.sessionId };
 
     case "SUBMIT_SUCCESS":
-      return { type: "WAIT_NEXT_ROUND", sessionId: action.sessionId, currentRound: action.currentRound };
+      return {
+        type: "WAIT_NEXT_ROUND",
+        sessionId: action.sessionId,
+        currentRound: action.currentRound,
+      };
 
     case "SUBMIT_CONFLICT":
       // 409 — already submitted, enter waiting (DESIGN.md §1369-1388)
-      return { type: "WAIT_NEXT_ROUND", sessionId: action.sessionId, currentRound: action.currentRound };
+      return {
+        type: "WAIT_NEXT_ROUND",
+        sessionId: action.sessionId,
+        currentRound: action.currentRound,
+      };
 
     case "SSE_COMPLETED":
       return { type: "PAGE_COMPLETED" };

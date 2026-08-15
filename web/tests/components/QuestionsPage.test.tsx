@@ -6,12 +6,14 @@ import { z } from "zod";
 
 // Mock react-i18next
 vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string, params?: Record<string, unknown>) => {
-    if (params) {
-      return `${key} ${JSON.stringify(params)}`;
-    }
-    return key;
-  }}),
+  useTranslation: () => ({
+    t: (key: string, params?: Record<string, unknown>) => {
+      if (params) {
+        return `${key} ${JSON.stringify(params)}`;
+      }
+      return key;
+    },
+  }),
 }));
 
 // Mock the schema validation with a valid Zod schema
@@ -43,11 +45,7 @@ const createMockRound = (roundNumber: number, name?: string): RoundData => ({
         header: "Features",
         text: "Which features do you need?",
         type: "multi",
-        options: [
-          { label: "Feature A" },
-          { label: "Feature B" },
-          { label: "Feature C" },
-        ],
+        options: [{ label: "Feature A" }, { label: "Feature B" }, { label: "Feature C" }],
         recommended: 1,
       },
       {

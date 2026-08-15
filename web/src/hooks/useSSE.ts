@@ -100,9 +100,7 @@ export function useSSE({
         const st = stateRef.current;
         if (st.type === "RENDER_QUESTIONS") {
           // Confirm with user before switching (DESIGN.md §959).
-          const confirmed = onRoundCreated
-            ? await onRoundCreated(newRound)
-            : true;
+          const confirmed = onRoundCreated ? await onRoundCreated(newRound) : true;
           if (confirmed) {
             dispatch({ type: "FETCH_START", sessionId: sid });
             const result = await fetchCurrent(sid);

@@ -17,19 +17,13 @@ function run(state: State, action: Action): State {
 
 describe("reducer: BOOT → FETCH_CURRENT", () => {
   it("BOOT_NO_SESSION → ERROR_PAGE", () => {
-    const result = run(
-      { type: "BOOT" },
-      { type: "BOOT_NO_SESSION", message: "invalid" },
-    );
+    const result = run({ type: "BOOT" }, { type: "BOOT_NO_SESSION", message: "invalid" });
     expect(result.type).toBe("ERROR_PAGE");
     expect((result as { message: string }).message).toBe("invalid");
   });
 
   it("FETCH_START → FETCH_CURRENT", () => {
-    const result = run(
-      { type: "BOOT" },
-      { type: "FETCH_START", sessionId: mockSessionId },
-    );
+    const result = run({ type: "BOOT" }, { type: "FETCH_START", sessionId: mockSessionId });
     expect(result.type).toBe("FETCH_CURRENT");
     expect((result as { sessionId: string }).sessionId).toBe(mockSessionId);
   });
@@ -39,7 +33,11 @@ describe("reducer: FETCH_CURRENT outcomes", () => {
   const fetchState: State = { type: "FETCH_CURRENT", sessionId: mockSessionId };
 
   it("FETCH_SUCCESS → RENDER_QUESTIONS", () => {
-    const result = run(fetchState, { type: "FETCH_SUCCESS", round: mockRound, sessionId: mockSessionId });
+    const result = run(fetchState, {
+      type: "FETCH_SUCCESS",
+      round: mockRound,
+      sessionId: mockSessionId,
+    });
     expect(result.type).toBe("RENDER_QUESTIONS");
   });
 
@@ -78,17 +76,29 @@ describe("reducer: RENDER_QUESTIONS → submit", () => {
   };
 
   it("ENTER_VALIDATE → VALIDATE", () => {
-    const result = run(renderState, { type: "ENTER_VALIDATE", round: mockRound, sessionId: mockSessionId });
+    const result = run(renderState, {
+      type: "ENTER_VALIDATE",
+      round: mockRound,
+      sessionId: mockSessionId,
+    });
     expect(result.type).toBe("VALIDATE");
   });
 
   it("SUBMIT_SUCCESS → WAIT_NEXT_ROUND", () => {
-    const result = run(renderState, { type: "SUBMIT_SUCCESS", sessionId: mockSessionId, currentRound: 1 });
+    const result = run(renderState, {
+      type: "SUBMIT_SUCCESS",
+      sessionId: mockSessionId,
+      currentRound: 1,
+    });
     expect(result.type).toBe("WAIT_NEXT_ROUND");
   });
 
   it("SUBMIT_CONFLICT → WAIT_NEXT_ROUND (409 recovery)", () => {
-    const result = run(renderState, { type: "SUBMIT_CONFLICT", sessionId: mockSessionId, currentRound: 1 });
+    const result = run(renderState, {
+      type: "SUBMIT_CONFLICT",
+      sessionId: mockSessionId,
+      currentRound: 1,
+    });
     expect(result.type).toBe("WAIT_NEXT_ROUND");
   });
 });
