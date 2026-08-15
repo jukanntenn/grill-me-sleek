@@ -36,5 +36,71 @@
   "languageLabel": "言語",
   "round": "ラウンド",
   "roundWithName": "ラウンド {{n}} — {{name}}",
-  "noSelection": "上記の選択肢に該当しない"
+  "noSelection": "上記の選択肢に該当しない",
+  "landing": {
+    "nav": {
+      "install": "インストール",
+      "github": "GitHub"
+    },
+    "hero": {
+      "kicker": "ROUND 1 — PLAN REVIEW",
+      "title": "何を作るつもりですか？",
+      "subtitle": "vibe coding の前に、プランを徹底的に検証。エージェントが穴・暗黙の前提・未決定事項をすべて洗い出し、質問を 1 ページに並べます。推奨回答は最初から選択済み。",
+      "cta": "インストール",
+      "preview": "エージェントが送ってくる質問の一例 — 推奨回答は選択済み。"
+    },
+    "s1": {
+      "title": "このプランはどこで壊れる？",
+      "body": "Vibe coding の立ち上がりは速い。しかしその後、エージェントは話し合ったことのない決断 — 認証、DB、構成 — を下し、あなたは diff でそれを知る。",
+      "quote1": "JWT でいいですよね？",
+      "quote2": "SQLite で十分でしょう。",
+      "quote3": "サービスは 1 つで足りるはず。",
+      "attribution": "— エージェントの暗黙の了解"
+    },
+    "s2": {
+      "title": "どう動くの？",
+      "step1Tag": "01 · 記述",
+      "step1Title": "エージェントに伝える",
+      "step1Body": "一言 —「このプランについて私を問い詰めて」。CLI が質問を Hub に送り、ブラウザを開きます。",
+      "step2Tag": "02 · レビュー",
+      "step2Title": "ブラウザで確認",
+      "step2Body": "すべての質問が 1 ページに、推奨回答は選択済み。不同意のものだけ直して、一度で送信。",
+      "step3Tag": "03 · 構築",
+      "step3Title": "文脈を持って実装",
+      "step3Body": "回答は構造化 JSON でエージェントへ。新しい質問があれば、同じタブで次のラウンド。"
+    },
+    "s3": {
+      "title": "プランはどう確認する？",
+      "opt1Label": "ターミナルで 1 つずつ",
+      "opt1Desc": "10–30 分 · 回答がスクロール履歴に埋もれる",
+      "opt2Label": "質問せず、そのまま書く",
+      "opt2Desc": "0 分 · 前提は diff で露見する",
+      "opt3Label": "1 ページにまとめて",
+      "opt3Desc": "≤ 5 分 · 全問に推奨回答付き"
+    },
+    "s4": {
+      "title": "何を質問される？",
+      "body": "実際のラウンドを体験 — 回答を選んで送信。",
+      "receiptTitle": "回答を送信しました。",
+      "receiptBody": "これはデモでした。本番は一行で始まります：",
+      "again": "もう一度"
+    },
+    "s5": {
+      "title": "認識が揃いました。",
+      "body": "エージェントが尋ね、あなたが決め、全体像を持って実装が進む。",
+      "cliLabel": "npm · どのエージェントでも",
+      "pluginLabel": "Claude Code プラグイン",
+      "triggerLead": "あとはエージェントに一言：",
+      "trigger": "“Grill me on my plan to …”",
+      "github": "GitHub でスター"
+    },
+    "footer": {
+      "license": "MIT",
+      "selfHost": "セルフホスト"
+    },
+    "command": {
+      "copy": "コピー",
+      "copied": "コピーしました"
+    }
+  }
 }

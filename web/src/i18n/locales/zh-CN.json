@@ -36,5 +36,71 @@
   "languageLabel": "语言",
   "round": "轮次",
   "roundWithName": "第 {{n}} 轮 — {{name}}",
-  "noSelection": "以上选项都不符合"
+  "noSelection": "以上选项都不符合",
+  "landing": {
+    "nav": {
+      "install": "安装",
+      "github": "GitHub"
+    },
+    "hero": {
+      "kicker": "ROUND 1 — PLAN REVIEW",
+      "title": "你到底要做什么？",
+      "subtitle": "在 vibe coding 之前，先把方案拷问一遍。Agent 会找出方案里所有的坑、假设和没想清楚的决定，把全部问题摊在同一页上——每个问题都带一个已选好的推荐答案。",
+      "cta": "安装",
+      "preview": "这是 agent 会发给你的问题之一——推荐答案已预选。"
+    },
+    "s1": {
+      "title": "方案会在哪里出问题？",
+      "body": "Vibe coding 开始总是很快。然后 agent 做了一个你们从没讨论过的决定——认证、数据库、架构——直到看 diff 你才发现。",
+      "quote1": "你想要的是 JWT 对吧？",
+      "quote2": "这里用 SQLite 就行。",
+      "quote3": "暂时一个服务就够了。",
+      "attribution": "—— agent，沉默地"
+    },
+    "s2": {
+      "title": "它是怎么工作的？",
+      "step1Tag": "01 · 描述",
+      "step1Title": "告诉你的 agent",
+      "step1Body": "一句话——「就这个计划拷问我：…」。CLI 把问题推到 Hub，并自动打开浏览器。",
+      "step2Tag": "02 · 审阅",
+      "step2Title": "在浏览器里审阅",
+      "step2Body": "所有问题一页摊开，推荐答案已预选。不同意的改掉，一次提交。",
+      "step3Tag": "03 · 构建",
+      "step3Title": "带着共识构建",
+      "step3Body": "答案以结构化 JSON 回到 agent 手里。有新问题？下一轮在同一个标签页继续。"
+    },
+    "s3": {
+      "title": "你想怎么审阅你的方案？",
+      "opt1Label": "在终端里一问一答",
+      "opt1Desc": "10–30 分钟 · 作答被埋进滚动记录里",
+      "opt2Label": "不问，直接写代码",
+      "opt2Desc": "0 分钟 · 假设直到看 diff 才暴露",
+      "opt3Label": "全部摊在一页上",
+      "opt3Desc": "≤ 5 分钟 · 每个问题都带推荐答案"
+    },
+    "s4": {
+      "title": "你会问我什么？",
+      "body": "体验一轮真实的问答——选好答案，提交。",
+      "receiptTitle": "答案已送达。",
+      "receiptBody": "这只是演示。真的一行就能开始：",
+      "again": "再玩一次"
+    },
+    "s5": {
+      "title": "共识达成。",
+      "body": "Agent 提问，你拍板，它带着完整的图景开工。",
+      "cliLabel": "npm · 任何 agent",
+      "pluginLabel": "Claude Code 插件",
+      "triggerLead": "然后只需要对 agent 说：",
+      "trigger": "“Grill me on my plan to …”",
+      "github": "去 GitHub 点个星"
+    },
+    "footer": {
+      "license": "MIT",
+      "selfHost": "自托管"
+    },
+    "command": {
+      "copy": "复制",
+      "copied": "已复制"
+    }
+  }
 }

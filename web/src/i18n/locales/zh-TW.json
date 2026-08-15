@@ -36,5 +36,71 @@
   "languageLabel": "語言",
   "round": "輪次",
   "roundWithName": "第 {{n}} 輪 — {{name}}",
-  "noSelection": "以上選項都不符合"
+  "noSelection": "以上選項都不符合",
+  "landing": {
+    "nav": {
+      "install": "安裝",
+      "github": "GitHub"
+    },
+    "hero": {
+      "kicker": "ROUND 1 — PLAN REVIEW",
+      "title": "你到底要做什麼？",
+      "subtitle": "在 vibe coding 之前，先把方案拷問一遍。Agent 會找出方案裡所有的坑、假設和沒想清楚的決定，把全部問題攤在同一頁上——每個問題都帶一個已選好的推薦答案。",
+      "cta": "安裝",
+      "preview": "這是 agent 會寄給你的問題之一——推薦答案已預選。"
+    },
+    "s1": {
+      "title": "方案會在哪裡出問題？",
+      "body": "Vibe coding 開始總是很快。然後 agent 做了一個你們從沒討論過的決定——認證、資料庫、架構——直到看 diff 你才發現。",
+      "quote1": "你想要的是 JWT 對吧？",
+      "quote2": "這裡用 SQLite 就行。",
+      "quote3": "暫時一個服務就夠了。",
+      "attribution": "—— agent，沉默地"
+    },
+    "s2": {
+      "title": "它是怎麼運作的？",
+      "step1Tag": "01 · 描述",
+      "step1Title": "告訴你的 agent",
+      "step1Body": "一句話——「就這個計畫拷問我：…」。CLI 把問題推到 Hub，並自動開啟瀏覽器。",
+      "step2Tag": "02 · 審閱",
+      "step2Title": "在瀏覽器裡審閱",
+      "step2Body": "所有問題一頁攤開，推薦答案已預選。不同意的改掉，一次送出。",
+      "step3Tag": "03 · 建構",
+      "step3Title": "帶著共識建構",
+      "step3Body": "答案以結構化 JSON 回到 agent 手裡。有新問題？下一輪在同一個分頁繼續。"
+    },
+    "s3": {
+      "title": "你想怎麼審閱你的方案？",
+      "opt1Label": "在終端機裡一問一答",
+      "opt1Desc": "10–30 分鐘 · 作答被埋進捲動記錄裡",
+      "opt2Label": "不問，直接寫程式",
+      "opt2Desc": "0 分鐘 · 假設直到看 diff 才暴露",
+      "opt3Label": "全部攤在一頁上",
+      "opt3Desc": "≤ 5 分鐘 · 每個問題都帶推薦答案"
+    },
+    "s4": {
+      "title": "你會問我什麼？",
+      "body": "體驗一輪真實的問答——選好答案，送出。",
+      "receiptTitle": "答案已送達。",
+      "receiptBody": "這只是示範。真的只要一行就能開始：",
+      "again": "再玩一次"
+    },
+    "s5": {
+      "title": "共識達成。",
+      "body": "Agent 提問，你拍板，它帶著完整的圖像開工。",
+      "cliLabel": "npm · 任何 agent",
+      "pluginLabel": "Claude Code 外掛",
+      "triggerLead": "然後只需要對 agent 說：",
+      "trigger": "“Grill me on my plan to …”",
+      "github": "去 GitHub 點個星"
+    },
+    "footer": {
+      "license": "MIT",
+      "selfHost": "自架"
+    },
+    "command": {
+      "copy": "複製",
+      "copied": "已複製"
+    }
+  }
 }

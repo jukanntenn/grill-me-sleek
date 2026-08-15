@@ -17,6 +17,7 @@ import { useSubmit } from "./hooks/useSubmit";
 import { fetchCurrent } from "./lib/api";
 import { Controls } from "./components/Controls";
 import { TerminalPage } from "./components/TerminalPage";
+import { LandingPage } from "./pages/LandingPage";
 import { QuestionsPage } from "./pages/QuestionsPage";
 
 export function App() {
@@ -54,13 +55,10 @@ export function App() {
   );
 
   // --- Reconnect round caching ---
-  const onReconnectRound = useCallback(
-    (round: import("./types").RoundData) => {
-      // Round data is dispatched via RECONNECT_SUCCESS; no extra caching needed.
-      void round;
-    },
-    [],
-  );
+  const onReconnectRound = useCallback((round: import("./types").RoundData) => {
+    // Round data is dispatched via RECONNECT_SUCCESS; no extra caching needed.
+    void round;
+  }, []);
 
   // --- SSE ---
   useSSE({
@@ -96,7 +94,11 @@ export function App() {
 
   // --- Submit wrapper (caches form values before submit) ---
   const handleSubmit = useCallback(
-    (round: import("./types").RoundData, answers: Record<string, import("./types").Answer>, additionalNotes?: string) => {
+    (
+      round: import("./types").RoundData,
+      answers: Record<string, import("./types").Answer>,
+      additionalNotes?: string,
+    ) => {
       setFormCache(round.round, answers);
       dispatch({ type: "ENTER_VALIDATE", round, sessionId: sessionId ?? "" });
       void submit(sessionId ?? "", round, answers, additionalNotes);
@@ -111,8 +113,14 @@ export function App() {
   }, [retry]);
 
   // --- Render ---
+  // No session id in the URL hash → plain visit: show the landing page.
+  // All hooks above already ran; they are no-ops without a session id.
+  if (!sessionId) {
+    return <LandingPage />;
+  }
+
   return (
-    <>
+    <div className="session-shell">
       <Controls />
       {renderState(state, {
         t,
@@ -123,7 +131,7 @@ export function App() {
         onSubmit: handleSubmit,
         onRetry: handleRetry,
       })}
-    </>
+    </div>
   );
 }
 
@@ -133,7 +141,11 @@ interface RenderProps {
   getFormCache: (round: number) => Record<string, import("./types").Answer> | undefined;
   banner: string | null;
   setBanner: (msg: string | null) => void;
-  onSubmit: (round: import("./types").RoundData, answers: Record<string, import("./types").Answer>, additionalNotes?: string) => void;
+  onSubmit: (
+    round: import("./types").RoundData,
+    answers: Record<string, import("./types").Answer>,
+    additionalNotes?: string,
+  ) => void;
   onRetry: () => void;
 }
 
@@ -143,7 +155,9 @@ function renderState(state: State, props: RenderProps) {
   switch (state.type) {
     case "BOOT":
     case "FETCH_CURRENT":
-      return <p className="text-center body-md text-body py-[var(--spacing-5xl)]">{t("loading")}</p>;
+      return (
+        <p className="body-md text-body py-[var(--spacing-5xl)] text-center">{t("loading")}</p>
+      );
 
     case "RENDER_QUESTIONS":
     case "VALIDATE":
@@ -159,10 +173,18 @@ function renderState(state: State, props: RenderProps) {
       );
 
     case "WAIT_NEXT_ROUND":
-      return <p className="text-center body-md text-body py-[var(--spacing-5xl)]">{t("waitingNextRound")}</p>;
+      return (
+        <p className="body-md text-body py-[var(--spacing-5xl)] text-center">
+          {t("waitingNextRound")}
+        </p>
+      );
 
     case "RECONNECTING":
-      return <p className="text-center body-md text-body py-[var(--spacing-5xl)]">{t("reconnecting", { n: state.attempt })}</p>;
+      return (
+        <p className="body-md text-body py-[var(--spacing-5xl)] text-center">
+          {t("reconnecting", { n: state.attempt })}
+        </p>
+      );
 
     case "PAGE_COMPLETED":
       return <TerminalPage title={t("completed")} body={t("completedBody")} />;

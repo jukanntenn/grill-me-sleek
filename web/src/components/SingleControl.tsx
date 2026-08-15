@@ -45,11 +45,13 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
                 type="button"
                 onClick={() => handleSelect(val)}
                 data-selected={selected === val}
-                className="rounded-[var(--radius-pill-sm)] px-[var(--spacing-md)] py-[var(--spacing-xs)] body-sm text-ink border border-hairline bg-canvas hover:border-hairline-strong data-[selected=true]:bg-primary data-[selected=true]:text-on-primary data-[selected=true]:border-primary"
+                className="body-sm text-ink border-hairline bg-canvas hover:border-hairline-strong data-[selected=true]:bg-primary data-[selected=true]:text-on-primary data-[selected=true]:border-primary rounded-[var(--radius-pill-sm)] border px-[var(--spacing-md)] py-[var(--spacing-xs)]"
               >
                 {val === "yes" ? t("yes") : t("no")}
                 {isRecommended && (
-                  <span className={`ml-1.5 text-xs ${selected === val ? "text-on-primary" : "text-mute"}`}>
+                  <span
+                    className={`ml-1.5 text-xs ${selected === val ? "text-on-primary" : "text-mute"}`}
+                  >
                     ({t("recommended")})
                   </span>
                 )}
@@ -58,11 +60,16 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
           })}
         </div>
         {question.allow_custom_text !== false && (
-        <CustomTextInput value={value?.custom_text} onChange={(ct) => onChange({ selected, custom_text: ct })} t={t} questionId={question.id} />
-      )}
-    </>
-  );
-}
+          <CustomTextInput
+            value={value?.custom_text}
+            onChange={(ct) => onChange({ selected, custom_text: ct })}
+            t={t}
+            questionId={question.id}
+          />
+        )}
+      </>
+    );
+  }
 
   if (variant === "rating") {
     const max = question.rating_max || 5;
@@ -78,11 +85,13 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
                 type="button"
                 onClick={() => handleSelect(val)}
                 data-selected={selected === val}
-                className="min-w-[48px] rounded-[var(--radius-pill-sm)] px-[var(--spacing-md)] py-[var(--spacing-xs)] body-sm text-ink text-center border border-hairline bg-canvas hover:border-hairline-strong data-[selected=true]:bg-primary data-[selected=true]:text-on-primary data-[selected=true]:border-primary"
+                className="body-sm text-ink border-hairline bg-canvas hover:border-hairline-strong data-[selected=true]:bg-primary data-[selected=true]:text-on-primary data-[selected=true]:border-primary min-w-[48px] rounded-[var(--radius-pill-sm)] border px-[var(--spacing-md)] py-[var(--spacing-xs)] text-center"
               >
                 {val}
                 {isRecommended && (
-                  <span className={`block text-xs ${selected === val ? "text-on-primary" : "text-mute"}`}>
+                  <span
+                    className={`block text-xs ${selected === val ? "text-on-primary" : "text-mute"}`}
+                  >
                     ({t("recommended")})
                   </span>
                 )}
@@ -91,7 +100,12 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
           })}
         </div>
         {question.allow_custom_text !== false && (
-          <CustomTextInput value={value?.custom_text} onChange={(ct) => onChange({ selected, custom_text: ct })} t={t} questionId={question.id} />
+          <CustomTextInput
+            value={value?.custom_text}
+            onChange={(ct) => onChange({ selected, custom_text: ct })}
+            t={t}
+            questionId={question.id}
+          />
         )}
       </>
     );
@@ -112,15 +126,15 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
         {question.required === false && (
           <label
             data-selected={selected === ""}
-            className="flex items-center gap-2.5 min-h-10 rounded-[var(--radius-md)] border border-hairline bg-canvas px-[var(--spacing-sm)] cursor-pointer hover:border-hairline-strong data-[selected=true]:border-primary transition-colors"
+            className="border-hairline bg-canvas hover:border-hairline-strong data-[selected=true]:border-primary flex min-h-10 cursor-pointer items-center gap-2.5 rounded-[var(--radius-md)] border px-[var(--spacing-sm)] transition-colors"
           >
             <Radio.Root
               value=""
-              className={`size-4 rounded-full border-2 flex items-center justify-center transition-colors ${selected === "" ? "border-primary bg-primary" : "border-hairline-strong"}`}
+              className={`flex size-4 items-center justify-center rounded-full border-2 transition-colors ${selected === "" ? "border-primary bg-primary" : "border-hairline-strong"}`}
             >
-              <Radio.Indicator className="size-2 rounded-full bg-on-primary" />
+              <Radio.Indicator className="bg-on-primary size-2 rounded-full" />
             </Radio.Root>
-            <span className="text-sm text-ink">{t("noSelection")}</span>
+            <span className="text-ink text-sm">{t("noSelection")}</span>
           </label>
         )}
         {options.map((opt, i) => {
@@ -130,17 +144,17 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
             <label
               key={opt.label}
               data-selected={isSelected}
-              className="flex items-center gap-2.5 min-h-10 rounded-[var(--radius-md)] border border-hairline bg-canvas px-[var(--spacing-sm)] cursor-pointer hover:border-hairline-strong data-[selected=true]:border-primary transition-colors"
+              className="border-hairline bg-canvas hover:border-hairline-strong data-[selected=true]:border-primary flex min-h-10 cursor-pointer items-center gap-2.5 rounded-[var(--radius-md)] border px-[var(--spacing-sm)] transition-colors"
             >
               <Radio.Root
                 value={opt.label}
-                className={`size-4 rounded-full border-2 flex items-center justify-center transition-colors ${isSelected ? "border-primary bg-primary" : "border-hairline-strong"}`}
+                className={`flex size-4 items-center justify-center rounded-full border-2 transition-colors ${isSelected ? "border-primary bg-primary" : "border-hairline-strong"}`}
               >
-                <Radio.Indicator className="size-2 rounded-full bg-on-primary" />
+                <Radio.Indicator className="bg-on-primary size-2 rounded-full" />
               </Radio.Root>
-              <span className="text-sm text-ink">{opt.label}</span>
+              <span className="text-ink text-sm">{opt.label}</span>
               {isRecommended && (
-                <span className="ml-auto inline-flex items-center rounded-[var(--radius-full)] bg-canvas-soft px-[var(--spacing-xs)] caption text-body">
+                <span className="bg-canvas-soft caption text-body ml-auto inline-flex items-center rounded-[var(--radius-full)] px-[var(--spacing-xs)]">
                   {t("recommended")}
                 </span>
               )}
@@ -149,7 +163,12 @@ export function SingleControl({ question, value, onChange }: SingleControlProps)
         })}
       </RadioGroup>
       {question.allow_custom_text !== false && (
-        <CustomTextInput value={value?.custom_text} onChange={(ct) => onChange({ selected, custom_text: ct })} t={t} questionId={question.id} />
+        <CustomTextInput
+          value={value?.custom_text}
+          onChange={(ct) => onChange({ selected, custom_text: ct })}
+          t={t}
+          questionId={question.id}
+        />
       )}
     </>
   );
@@ -174,7 +193,7 @@ function CustomTextInput({
       value={value ?? ""}
       onChange={(e) => onChange(e.target.value)}
       placeholder={t("customTextPlaceholder")}
-      className="mt-[var(--spacing-xs)] h-10 w-full rounded-[var(--radius-sm)] border border-hairline bg-canvas px-[var(--spacing-sm)] body-sm text-ink placeholder:text-mute focus:outline-none focus:border-hairline-strong transition-colors"
+      className="border-hairline bg-canvas body-sm text-ink placeholder:text-mute focus:border-hairline-strong mt-[var(--spacing-xs)] h-10 w-full rounded-[var(--radius-sm)] border px-[var(--spacing-sm)] transition-colors focus:outline-none"
     />
   );
 }

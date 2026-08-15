@@ -102,17 +102,11 @@
 
   /* Shadows - stacked system (Vercel design language) */
   --shadow-card:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 2px 4px rgba(0, 0, 0, 0.04),
-    0 4px 8px rgba(0, 0, 0, 0.04);
+    0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 4px rgba(0, 0, 0, 0.04), 0 4px 8px rgba(0, 0, 0, 0.04);
   --shadow-card-hover:
-    0 2px 4px rgba(0, 0, 0, 0.06),
-    0 4px 8px rgba(0, 0, 0, 0.06),
-    0 8px 16px rgba(0, 0, 0, 0.06);
+    0 2px 4px rgba(0, 0, 0, 0.06), 0 4px 8px rgba(0, 0, 0, 0.06), 0 8px 16px rgba(0, 0, 0, 0.06);
   --shadow-toast:
-    0 2px 4px rgba(0, 0, 0, 0.08),
-    0 4px 8px rgba(0, 0, 0, 0.08),
-    0 8px 16px rgba(0, 0, 0, 0.08);
+    0 2px 4px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.08), 0 8px 16px rgba(0, 0, 0, 0.08);
   --shadow-inset-hairline: inset 0 0 0 1px var(--color-hairline);
 }
 
@@ -137,17 +131,11 @@
 
   /* Dark shadows */
   --shadow-card:
-    0 1px 2px rgba(0, 0, 0, 0.2),
-    0 2px 4px rgba(0, 0, 0, 0.2),
-    0 4px 8px rgba(0, 0, 0, 0.2);
+    0 1px 2px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.2), 0 4px 8px rgba(0, 0, 0, 0.2);
   --shadow-card-hover:
-    0 2px 4px rgba(0, 0, 0, 0.3),
-    0 4px 8px rgba(0, 0, 0, 0.3),
-    0 8px 16px rgba(0, 0, 0, 0.3);
+    0 2px 4px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.3), 0 8px 16px rgba(0, 0, 0, 0.3);
   --shadow-toast:
-    0 2px 4px rgba(0, 0, 0, 0.4),
-    0 4px 8px rgba(0, 0, 0, 0.4),
-    0 8px 16px rgba(0, 0, 0, 0.4);
+    0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 8px rgba(0, 0, 0, 0.4), 0 8px 16px rgba(0, 0, 0, 0.4);
   --shadow-inset-hairline: inset 0 0 0 1px var(--color-hairline);
 }
 
@@ -173,7 +161,10 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  #app {
+  /* #app is a full-width mount point; each surface opts into its own
+   * column: session pages use the 640px shell, the landing page manages
+   * its own ~1400px marketing grid. */
+  .session-shell {
     max-width: 640px;
     margin: 0 auto;
     padding: var(--spacing-lg) var(--spacing-md) var(--spacing-4xl);

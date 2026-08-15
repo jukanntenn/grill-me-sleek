@@ -36,5 +36,71 @@
   "languageLabel": "Language",
   "round": "Round",
   "roundWithName": "Round {{n}} — {{name}}",
-  "noSelection": "None of the above"
+  "noSelection": "None of the above",
+  "landing": {
+    "nav": {
+      "install": "Install",
+      "github": "GitHub"
+    },
+    "hero": {
+      "kicker": "ROUND 1 — PLAN REVIEW",
+      "title": "What are you actually building?",
+      "subtitle": "Stress-test your plan before vibe coding. The agent finds every hole, assumption, and unclear decision — and puts every question on one page, each with a recommended answer already selected.",
+      "cta": "Install",
+      "preview": "One of the questions your agent will send you — recommended answer pre-selected."
+    },
+    "s1": {
+      "title": "Where does this plan break?",
+      "body": "Vibe coding starts fast. Then the agent makes a decision you never discussed — auth, database, structure — and you find out in the diff.",
+      "quote1": "You wanted JWT, right?",
+      "quote2": "SQLite should be fine here.",
+      "quote3": "One service is enough for now.",
+      "attribution": "— the agent, silently"
+    },
+    "s2": {
+      "title": "How does it work?",
+      "step1Tag": "01 · DESCRIBE",
+      "step1Title": "Tell your agent",
+      "step1Body": "One sentence — “Grill me on my plan to…”. The CLI pushes the questions to the Hub and opens your browser.",
+      "step2Tag": "02 · REVIEW",
+      "step2Title": "Review in the browser",
+      "step2Body": "Every question on one page, recommended answers pre-selected. Change what you disagree with, submit once.",
+      "step3Tag": "03 · BUILD",
+      "step3Title": "Build with context",
+      "step3Body": "Answers return to your agent as structured JSON. New questions? The next round loads in the same tab."
+    },
+    "s3": {
+      "title": "How do you want to review your plan?",
+      "opt1Label": "One at a time, in the terminal",
+      "opt1Desc": "10–30 min · answers buried in your scrollback",
+      "opt2Label": "Don't ask — just write the code",
+      "opt2Desc": "0 min · the assumptions surface in the diff",
+      "opt3Label": "All at once, on one page",
+      "opt3Desc": "≤ 5 min · every question with a suggested answer"
+    },
+    "s4": {
+      "title": "What will you ask me?",
+      "body": "A taste of a real round — pick your answers and submit.",
+      "receiptTitle": "Answers delivered.",
+      "receiptBody": "This was the demo. The real round is one line away:",
+      "again": "Run it again"
+    },
+    "s5": {
+      "title": "Shared understanding reached.",
+      "body": "Your agent asks. You decide. It builds with the full picture.",
+      "cliLabel": "npm · any agent",
+      "pluginLabel": "Claude Code plugin",
+      "triggerLead": "Then just tell your agent:",
+      "trigger": "“Grill me on my plan to …”",
+      "github": "Star on GitHub"
+    },
+    "footer": {
+      "license": "MIT",
+      "selfHost": "Self-hosting"
+    },
+    "command": {
+      "copy": "Copy",
+      "copied": "Copied"
+    }
+  }
 }

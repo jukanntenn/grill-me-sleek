@@ -8,21 +8,22 @@ import { useTranslation } from "react-i18next";
 import { useTheme, type Theme } from "../hooks/useTheme";
 import { getLocale, setLocale, SUPPORTED_LOCALES, type Locale } from "../i18n";
 
-export function Controls() {
+/** className overrides the default bottom margin (e.g. inside the landing nav). */
+export function Controls({ className }: { className?: string }) {
   const { t } = useTranslation();
   const { theme, setTheme, supportedThemes } = useTheme();
 
   const themeKey = (th: Theme) =>
     ("theme" + th.charAt(0).toUpperCase() + th.slice(1)) as
-      | "themeLight" | "themeDark" | "themeSystem";
+      "themeLight" | "themeDark" | "themeSystem";
 
   return (
-    <div className="flex justify-end gap-2 mb-[var(--spacing-md)]">
+    <div className={className ?? "mb-[var(--spacing-md)] flex justify-end gap-2"}>
       <select
         aria-label="theme"
         value={theme}
         onChange={(e) => setTheme(e.target.value as Theme)}
-        className="h-7 rounded-[var(--radius-sm)] border border-hairline bg-canvas px-[var(--spacing-xs)] body-sm-strong text-ink cursor-pointer hover:border-hairline-strong transition-colors"
+        className="border-hairline bg-canvas body-sm-strong text-ink hover:border-hairline-strong h-7 cursor-pointer rounded-[var(--radius-sm)] border px-[var(--spacing-xs)] transition-colors"
       >
         {supportedThemes.map((th) => (
           <option key={th} value={th}>
@@ -35,7 +36,7 @@ export function Controls() {
         aria-label={t("languageLabel")}
         value={getLocale()}
         onChange={(e) => setLocale(e.target.value as Locale)}
-        className="h-7 rounded-[var(--radius-sm)] border border-hairline bg-canvas px-[var(--spacing-xs)] body-sm-strong text-ink cursor-pointer hover:border-hairline-strong transition-colors"
+        className="border-hairline bg-canvas body-sm-strong text-ink hover:border-hairline-strong h-7 cursor-pointer rounded-[var(--radius-sm)] border px-[var(--spacing-xs)] transition-colors"
       >
         {SUPPORTED_LOCALES.map((loc) => (
           <option key={loc} value={loc}>
