@@ -368,7 +368,9 @@ fn terminal_session_state(
     }
 }
 
-/// Health probe (no DB check).
+/// Health probe (no DB check). Reports the server version (from Cargo.toml,
+/// kept in sync across the repo by scripts/sync-version.py) so post-deploy
+/// verification can detect a healthy container still running an old image.
 #[utoipa::path(
     get,
     path = "/v1/healthz",
@@ -378,7 +380,7 @@ fn terminal_session_state(
     )
 )]
 pub async fn healthz() -> Json<serde_json::Value> {
-    Json(serde_json::json!({"status": "ok"}))
+    Json(serde_json::json!({"status": "ok", "version": env!("CARGO_PKG_VERSION")}))
 }
 
 /// Readiness probe (checks SQLite connection).
