@@ -2,7 +2,7 @@
 # 发布工作流（统一版本）
 #
 # 触发条件：
-#   - 推送 v* tag（统一发布：GitHub Release + CLI npm + Docker）
+#   - 推送 v* tag（统一发布：GitHub Release + CLI npm）
 #   - 手动触发
 #
 # 设计原则：
@@ -10,23 +10,23 @@
 #   - 自动从 CHANGELOG.md 提取版本
 #   - 创建 GitHub Release
 #   - 发布 CLI 到 npm（使用可信发布，无需 token）
-#   - 发布 Docker 镜像
+#   - Docker 镜像发布在 docker-publish.yml（同一 tag 触发，多架构原生构建）
 # =============================================================================
 
 name: Release
 
 on:
   push:
-    tags: ['v*']
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version (leave empty to extract from CHANGELOG)'
+        description: "Version (leave empty to extract from CHANGELOG)"
         required: false
 
 permissions:
   contents: write
-  id-token: write  # npm 可信发布需要
+  id-token: write # npm 可信发布需要
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -125,40 +125,3 @@ jobs:
           draft: false
           prerelease: ${{ steps.prerelease.outputs.is_prerelease }}
           make_latest: ${{ steps.prerelease.outputs.make_latest }}
-
-  # ---------------------------------------------------------------------------
-  # 发布 Docker 镜像（可选，需要配置 Docker Hub）
-  # ---------------------------------------------------------------------------
-  # release-docker:
-  #   name: Release Docker Image
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v3
-  #
-  #     - name: Login to Docker Hub
-  #       uses: docker/login-action@v3
-  #       with:
-  #         username: ${{ secrets.DOCKERHUB_USERNAME }}
-  #         password: ${{ secrets.DOCKERHUB_TOKEN }}
-  #
-  #     - name: Extract version
-  #       id: version
-  #       run: |
-  #         VERSION=${GITHUB_REF#refs/tags/v}
-  #         echo "version=$VERSION" >> $GITHUB_OUTPUT
-  #
-  #     - name: Build and push
-  #       uses: docker/build-push-action@v6
-  #       with:
-  #         context: .
-  #         file: docker/Dockerfile
-  #         push: true
-  #         tags: |
-  #           jukanntenn/grilling-sleek:latest
-  #           jukanntenn/grilling-sleek:${{ steps.version.outputs.version }}
-  #         cache-from: type=gha
-  #         cache-to: type=gha,mode=max

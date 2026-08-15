@@ -15,17 +15,17 @@ name: Load Test
 
 on:
   push:
-    tags: ['v*', 'cli-v*']
+    tags: ["v*", "cli-v*"]
   workflow_dispatch:
     inputs:
       duration:
-        description: 'Test duration (e.g., 1m, 5m)'
+        description: "Test duration (e.g., 1m, 5m)"
         required: false
-        default: '1m'
+        default: "1m"
       vus:
-        description: 'Number of virtual users'
+        description: "Number of virtual users"
         required: false
-        default: '10'
+        default: "10"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

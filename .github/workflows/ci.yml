@@ -1,19 +1,14 @@
 # =============================================================================
-# CI: 快速检查 + 单元测试
+# CI: prek 质量门控 + 单元测试 + 构建
 #
-# 技术栈：
-#   - 服务器: Rust + Cargo
-#   - 前端: React + Vite + pnpm
-#   - CLI: TypeScript + esbuild + pnpm
+# 单一真相源：所有 format/lint/check 都在 prek 中声明（prek.toml +
+# server/prek.toml + web/prek.toml + cli/prek.toml）。gate job 只负责装好
+# prek hooks 需要的工具链，然后运行 `prek run --all-files`。CI 中不存在
+# 第二套 lint/format 定义 —— 本地（git commit / AI hooks / pre-push）与
+# CI 跑的是同一批 hooks，不会 drift。
 #
-# 触发条件：
-#   - 所有 PR（快速反馈 < 3分钟）
-#   - 推送到 main
-#
-# 设计原则：
-#   - 并行执行 4 个 Job
-#   - 使用缓存加速
-#   - 取消进行中的同分支 workflow
+# gate 无路径过滤（简单优先于 CI 分钟数：纯 web 改动也会装 Rust 工具链）；
+# test/build job 仍按路径过滤（dorny/paths-filter），纯文档改动零成本。
 # =============================================================================
 
 name: CI
@@ -22,7 +17,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -30,10 +24,12 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Job 1: Rust 服务器检查
+  # Job 0: prek 质量门控（format + lint + check，全量文件）
+  # 等价于本地 `prek run --all-files`；formatter 在 CI 中会改文件，
+  # exit 1 即视为失败（等效 check 模式）。
   # ---------------------------------------------------------------------------
-  server:
-    name: Server
+  gate:
+    name: prek gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -44,36 +40,98 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Install sqlx-cli
-        run: cargo install sqlx-cli --no-default-features --features sqlite
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "server -> target"
+
+      - name: Install sqlx-cli (with sqlite)
+        run: cargo install sqlx-cli --no-default-features --features sqlite --locked
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: |
+            web/pnpm-lock.yaml
+            cli/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: |
+          pnpm --dir web install --frozen-lockfile
+          pnpm --dir cli install --frozen-lockfile
+
+      # prek 的 actionlint hook 本地未安装时优雅跳过，CI 负责强制执行。
+      - name: Install actionlint
+        run: |
+          curl -sSL "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz" | tar xz -C /tmp
+          sudo mv /tmp/actionlint /usr/local/bin/
+          actionlint --version
+
+      - name: Setup uv (prek via uvx)
+        uses: astral-sh/setup-uv@v9
+
+      - name: Validate prek config
+        run: uvx prek validate-config prek.toml server/prek.toml web/prek.toml cli/prek.toml
+
+      - name: prek run --all-files
+        run: uvx prek run --all-files
+
+  # ---------------------------------------------------------------------------
+  # Job 1: 路径过滤 — 总是运行，输出哪些子系统有变更
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    needs: gate
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      web: ${{ steps.filter.outputs.web }}
+      cli: ${{ steps.filter.outputs.cli }}
+      docker: ${{ steps.filter.outputs.docker }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Path filter
+        id: filter
+        uses: dorny/paths-filter@v4
+        with:
+          filters: |
+            server:
+              - 'server/**'
+              - 'Cargo.lock'
+            web:
+              - 'web/**'
+            cli:
+              - 'cli/**'
+            docker:
+              - 'docker/**'
+              - '.dockerignore'
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Rust 服务器测试 + 构建（lint/format 由 gate 覆盖）
+  # ---------------------------------------------------------------------------
+  server:
+    name: Server
+    needs: changes
+    if: ${{ needs.changes.outputs.server == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ~/.cargo/bin
-            server/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('server/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Format check
-        run: cd server && cargo fmt -- --check
-
-      - name: Clippy lint
-        run: cd server && cargo clippy -- -D warnings
-
-      - name: SQLx cache check
-        run: |
-          cd server
-          # Create temp DB from migrations, then verify .sqlx/ cache is up-to-date
-          export DATABASE_URL="sqlite:ci-check.db"
-          sqlx database create
-          sqlx migrate run
-          cargo sqlx prepare --check
-          rm -f ci-check.db
+          workspaces: "server -> target"
 
       - name: Tests
         run: cd server && cargo test
@@ -82,10 +140,12 @@ jobs:
         run: cd server && cargo build --release
 
   # ---------------------------------------------------------------------------
-  # Job 2: Web 前端检查
+  # Job 3: Web 前端测试 + 构建（lint/format 由 gate 覆盖）
   # ---------------------------------------------------------------------------
   web:
     name: Web
+    needs: changes
+    if: ${{ needs.changes.outputs.web == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -94,32 +154,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
-
-      - name: Enable corepack
-        run: corepack enable
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pnpm-store
-            web/node_modules
-          key: ${{ runner.os }}-pnpm-web-${{ hashFiles('web/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-web-
+          cache: "pnpm"
+          cache-dependency-path: "web/pnpm-lock.yaml"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Type check
-        run: pnpm tsc --noEmit
 
       - name: Tests
         run: pnpm test
@@ -128,10 +174,12 @@ jobs:
         run: pnpm build
 
   # ---------------------------------------------------------------------------
-  # Job 3: CLI 检查
+  # Job 4: CLI 构建 + 冒烟测试（lint/format 由 gate 覆盖）
   # ---------------------------------------------------------------------------
   cli:
     name: CLI
+    needs: changes
+    if: ${{ needs.changes.outputs.cli == 'true' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -140,29 +188,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
-
-      - name: Enable corepack
-        run: corepack enable
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pnpm-store
-            cli/node_modules
-          key: ${{ runner.os }}-pnpm-cli-${{ hashFiles('cli/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-cli-
+          cache: "pnpm"
+          cache-dependency-path: "cli/pnpm-lock.yaml"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        run: pnpm lint
 
       - name: Build (development)
         run: pnpm build
@@ -174,10 +211,12 @@ jobs:
         run: node dist/grilling-sleek.js --help
 
   # ---------------------------------------------------------------------------
-  # Job 4: Docker 构建检查
+  # Job 5: Docker 构建检查
   # ---------------------------------------------------------------------------
   docker:
     name: Docker
+    needs: changes
+    if: ${{ needs.changes.outputs.docker == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
