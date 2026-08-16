@@ -195,8 +195,8 @@ they cannot drift from prek/CI. Only edit them when the user explicitly asks
 for a change to agent behavior. The packaged skills under `*/skills/grilling-sleek/`
 in particular are release artifacts — never edit them in place unless
 explicitly instructed. `AGENTS.md` == `CLAUDE.md` and the mirrored skills
-(`commit`, `playwright-cli`, `release`) are kept identical by
-`scripts/sync_agents.py` / enforced by the prek `agents-sync` hook.
+(`commit`, `shipping`, `playwright-cli`, `release`, `iterating`) are kept
+identical by `scripts/sync_agents.py` / enforced by the prek `agents-sync` hook.
 
 ## 10. Build & Deploy
 

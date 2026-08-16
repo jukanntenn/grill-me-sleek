@@ -13,7 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-MIRRORED_SKILLS = ("commit", "shipping", "playwright-cli", "release")
+MIRRORED_SKILLS = ("commit", "shipping", "playwright-cli", "release", "iterating")
 MIRROR_DIRS = (ROOT / ".agents" / "skills", ROOT / ".zcode" / "skills")
 
 shutil.copy2(ROOT / "AGENTS.md", ROOT / "CLAUDE.md")
