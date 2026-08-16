@@ -31,6 +31,8 @@ pub enum ApiError {
 
     RoundAlreadySubmitted(Box<RoundAlreadySubmittedInner>), // 409 (with round+response in body)
 
+    RoundNotAnswered(i64, Backtrace), // 409 — PUT revision on a round with no response yet
+
     IdempotencyMismatch(Backtrace), // 422
 
     MaxSessions(Backtrace), // 503
@@ -61,6 +63,11 @@ impl std::fmt::Debug for ApiError {
                 .field("round", &inner.round)
                 .field("response", &inner.response)
                 .field("backtrace", &inner.backtrace)
+                .finish(),
+            Self::RoundNotAnswered(round, bt) => f
+                .debug_tuple("RoundNotAnswered")
+                .field(round)
+                .field(bt)
                 .finish(),
             Self::IdempotencyMismatch(bt) => {
                 f.debug_tuple("IdempotencyMismatch").field(bt).finish()
@@ -100,6 +107,9 @@ impl Clone for ApiError {
                     backtrace: Backtrace::capture(),
                 }))
             }
+            Self::RoundNotAnswered(round, _) => {
+                Self::RoundNotAnswered(*round, Backtrace::capture())
+            }
             Self::IdempotencyMismatch(_) => Self::IdempotencyMismatch(Backtrace::capture()),
             Self::MaxSessions(_) => Self::MaxSessions(Backtrace::capture()),
             Self::Internal(e) => Self::Internal(e.clone()),
@@ -122,6 +132,9 @@ impl ApiError {
             Self::RoundAlreadySubmitted(inner) => {
                 std::borrow::Cow::Owned(format!("round {} already submitted", inner.round))
             }
+            Self::RoundNotAnswered(round, _) => std::borrow::Cow::Owned(format!(
+                "round {round} has no response yet; submit it via POST before revising"
+            )),
             Self::IdempotencyMismatch(_) => {
                 std::borrow::Cow::Borrowed("idempotency key reused with different body")
             }
@@ -167,6 +180,11 @@ impl ApiError {
         }))
     }
 
+    /// Create a RoundNotAnswered error with backtrace (PUT on unanswered round).
+    pub fn round_not_answered(round: i64) -> Self {
+        Self::RoundNotAnswered(round, Backtrace::capture())
+    }
+
     /// Create an IdempotencyMismatch error with backtrace.
     pub fn idempotency_mismatch() -> Self {
         Self::IdempotencyMismatch(Backtrace::capture())
@@ -187,6 +205,7 @@ impl ApiError {
             Self::Gone { backtrace, .. } => Some(backtrace),
             Self::TerminalState(bt) => Some(bt),
             Self::RoundAlreadySubmitted(inner) => Some(&inner.backtrace),
+            Self::RoundNotAnswered(_, bt) => Some(bt),
             Self::IdempotencyMismatch(bt) => Some(bt),
             Self::MaxSessions(bt) => Some(bt),
             Self::Internal(_) => None,
@@ -201,6 +220,7 @@ impl ApiError {
             Self::Gone { .. } => StatusCode::GONE,
             Self::TerminalState(_) => StatusCode::CONFLICT,
             Self::RoundAlreadySubmitted(_) => StatusCode::CONFLICT,
+            Self::RoundNotAnswered(_, _) => StatusCode::CONFLICT,
             Self::IdempotencyMismatch(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::MaxSessions(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -272,6 +292,7 @@ impl IntoResponse for ApiError {
             // to avoid Display::to_string() dispatch overhead for static strings.
             ApiError::NotFound(_)
             | ApiError::TerminalState(_)
+            | ApiError::RoundNotAnswered(_, _)
             | ApiError::IdempotencyMismatch(_)
             | ApiError::MaxSessions(_) => (
                 status,

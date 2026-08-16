@@ -15,14 +15,19 @@ import { QuestionCard } from "../components/QuestionCard";
 import { SingleControl } from "../components/SingleControl";
 import { MultiControl } from "../components/MultiControl";
 import { TextControl } from "../components/TextControl";
+import { Markdown } from "../components/Markdown";
 
 interface QuestionsPageProps {
   round: RoundData;
   cachedValues: Record<string, Answer> | undefined;
+  /** Prefill for additional_notes (revise mode: the submitted notes). */
+  cachedNotes?: string;
   bannerMessage: string | null;
   onBanner: (msg: string | null) => void;
   onSubmit: (answers: Record<string, Answer>, additionalNotes?: string) => void;
   onRetry: () => void;
+  /** "revise" = PUT flow: prefills the submitted response, labels the CTA accordingly. */
+  mode?: "submit" | "revise";
 }
 
 type FormValues = Record<string, Answer> & { additional_notes?: string };
@@ -30,10 +35,12 @@ type FormValues = Record<string, Answer> & { additional_notes?: string };
 export function QuestionsPage({
   round,
   cachedValues,
+  cachedNotes,
   bannerMessage,
   onBanner,
   onSubmit,
   onRetry,
+  mode = "submit",
 }: QuestionsPageProps) {
   const { t } = useTranslation();
   const grilling = round.grilling;
@@ -85,7 +92,7 @@ export function QuestionsPage({
     }
   }
   if (additionalNotesConfig) {
-    defaultValues.additional_notes = "";
+    defaultValues.additional_notes = cachedNotes ?? "";
   }
 
   const {
@@ -140,7 +147,9 @@ export function QuestionsPage({
         <h1 className="display-lg text-ink mb-[var(--spacing-xs)]">{grilling.name}</h1>
       )}
       {grilling.description && (
-        <p className="body-sm text-body mb-[var(--spacing-xl)]">{grilling.description}</p>
+        <div className="border-hairline bg-canvas-soft mb-[var(--spacing-xl)] rounded-[var(--radius-md)] border px-[var(--spacing-lg)] py-[var(--spacing-md)]">
+          <Markdown>{grilling.description}</Markdown>
+        </div>
       )}
 
       {bannerMessage && (
@@ -185,9 +194,10 @@ export function QuestionsPage({
         <div className="mt-[var(--spacing-xl)]">
           <button
             type="submit"
+            data-testid={mode === "revise" ? "revise-submit" : "submit"}
             className="bg-primary button-lg text-on-primary h-12 w-full rounded-[var(--radius-pill)] px-[var(--spacing-sm)] transition-opacity hover:opacity-90"
           >
-            {t("submit")}
+            {mode === "revise" ? t("updateAnswer") : t("submit")}
           </button>
         </div>
       </form>

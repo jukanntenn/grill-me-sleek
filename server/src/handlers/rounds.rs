@@ -39,6 +39,7 @@ pub async fn list_rounds(
             round: r.seq,
             name: r.name,
             has_response: r.has_response != 0,
+            revision: r.revision,
         })
         .collect();
 

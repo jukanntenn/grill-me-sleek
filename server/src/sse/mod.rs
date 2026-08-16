@@ -59,6 +59,13 @@ impl SseEvent {
         }
     }
 
+    pub fn response_revised(round: i64, revision: i64) -> Self {
+        Self {
+            event: "response.revised",
+            data: serde_json::json!({ "round": round, "revision": revision }).to_string(),
+        }
+    }
+
     pub fn session_completed(session_id: &str) -> Self {
         Self {
             event: "session.completed",
@@ -78,5 +85,23 @@ impl SseEvent {
             event: "session.expired",
             data: serde_json::json!({ "session_id": session_id }).to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn response_revised_event_shape() {
+        let hub = SseHub::new(4);
+        let mut rx = hub.subscribe();
+        hub.broadcast(SseEvent::response_revised(3, 2));
+
+        let event = rx.try_recv().expect("event broadcast to subscriber");
+        assert_eq!(event.event, "response.revised");
+        let data: serde_json::Value = serde_json::from_str(&event.data).unwrap();
+        assert_eq!(data["round"], 3);
+        assert_eq!(data["revision"], 2);
     }
 }

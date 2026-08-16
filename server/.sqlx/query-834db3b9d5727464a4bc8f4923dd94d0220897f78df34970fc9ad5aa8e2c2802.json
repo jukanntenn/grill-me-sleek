@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT seq, revision FROM rounds\n         WHERE session_id = ? AND revised_at IS NOT NULL AND revised_at >= ?\n         ORDER BY revised_at DESC, seq DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "seq",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "seq"
+          }
+        }
+      },
+      {
+        "name": "revision",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "revision"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "834db3b9d5727464a4bc8f4923dd94d0220897f78df34970fc9ad5aa8e2c2802"
+}

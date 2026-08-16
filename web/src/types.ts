@@ -70,6 +70,9 @@ export interface ResponseData {
   answers: Record<string, Answer>;
   additional_notes?: string;
   submitted_at: string;
+  /** 1 = original submission; 2+ = revised via PUT. Absent on old payloads → treat as 1. */
+  revision?: number;
+  revised_at?: string;
 }
 
 /** A round as returned by GET /rounds/current. */
@@ -78,6 +81,24 @@ export interface RoundData {
   name?: string;
   grilling: Grilling;
   response: ResponseData | null;
+}
+
+/** Round summary item as returned by GET /rounds. */
+export interface RoundSummaryData {
+  round: number;
+  name?: string;
+  has_response: boolean;
+  revision: number;
+}
+
+/** Session state as returned by GET /sessions/{id} (name used for the tab title). */
+export interface SessionStateData {
+  session_id: string;
+  status: string;
+  current_round: number;
+  name?: string;
+  created_at: string;
+  expires_at: string;
 }
 
 /** 410 Gone body: { status: "gone", detail: "completed"|"cancelled"|"expired" }. */
@@ -100,6 +121,10 @@ export interface RoundCreatedEvent {
 }
 export interface ResponseCreatedEvent {
   round: number;
+}
+export interface ResponseRevisedEvent {
+  round: number;
+  revision: number;
 }
 export interface SessionCompletedEvent {
   session_id: string;

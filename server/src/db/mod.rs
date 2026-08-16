@@ -297,10 +297,11 @@ pub async fn create_round(
 pub async fn get_current_round(pool: &Pool<Sqlite>, session_id: &str) -> Result<Option<RoundRow>> {
     let row = sqlx::query_as!(
         RoundRow,
-        "SELECT r.id, r.session_id, r.seq, r.name, r.grilling, r.response, r.created_at
-         FROM rounds r
-         JOIN sessions s ON s.curr_round = r.id
-         WHERE s.id = ?",
+        r#"SELECT r.id, r.session_id, r.seq, r.name, r.grilling, r.response, r.created_at,
+                  r.revision, r.revised_at
+           FROM rounds r
+           JOIN sessions s ON s.curr_round = r.id
+           WHERE s.id = ?"#,
         session_id
     )
     .fetch_optional(pool)
@@ -317,7 +318,7 @@ pub async fn get_round(
 ) -> Result<Option<RoundRow>> {
     let row = sqlx::query_as!(
         RoundRow,
-        "SELECT id, session_id, seq, name, grilling, response, created_at
+        "SELECT id, session_id, seq, name, grilling, response, created_at, revision, revised_at
          FROM rounds WHERE session_id = ? AND seq = ?",
         session_id,
         seq,
@@ -332,7 +333,7 @@ pub async fn get_round(
 pub async fn list_rounds(pool: &Pool<Sqlite>, session_id: &str) -> Result<Vec<RoundSummaryRow>> {
     let rows = sqlx::query_as!(
         RoundSummaryRow,
-        "SELECT seq, name, response IS NOT NULL AS has_response
+        "SELECT seq, name, response IS NOT NULL AS has_response, revision
          FROM rounds WHERE session_id = ? ORDER BY seq",
         session_id
     )
@@ -346,7 +347,7 @@ pub async fn list_rounds(pool: &Pool<Sqlite>, session_id: &str) -> Result<Vec<Ro
 pub async fn get_round_by_id(pool: &Pool<Sqlite>, round_id: i64) -> Result<Option<RoundRow>> {
     let row = sqlx::query_as!(
         RoundRow,
-        "SELECT id, session_id, seq, name, grilling, response, created_at
+        "SELECT id, session_id, seq, name, grilling, response, created_at, revision, revised_at
          FROM rounds WHERE id = ?",
         round_id
     )
@@ -389,6 +390,70 @@ pub async fn submit_response(
     .execute(pool)
     .await?;
     Ok(result.rows_affected() == 1)
+}
+
+/// Revise an already-submitted response (PUT). Atomically bumps the revision
+/// counter and stores the new response JSON (whose `revision` field must match
+/// the column — hence both writes share one transaction). Returns
+/// `Ok(Some((response_json, new_revision)))` on success, `Ok(None)` when the
+/// round exists but was never answered (caller maps that to 409).
+pub async fn revise_response(
+    pool: &Pool<Sqlite>,
+    session_id: &str,
+    seq: i64,
+    build_response: impl Fn(i64) -> Result<String>,
+    now: i64,
+) -> Result<Option<(String, i64)>> {
+    let mut tx = pool.begin().await?;
+
+    let new_revision: Option<i64> = sqlx::query_scalar!(
+        "UPDATE rounds SET revision = revision + 1, revised_at = ?
+         WHERE session_id = ? AND seq = ? AND response IS NOT NULL
+         RETURNING revision",
+        now,
+        session_id,
+        seq,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(new_revision) = new_revision else {
+        tx.rollback().await?;
+        return Ok(None);
+    };
+
+    let response_json = build_response(new_revision)?;
+    sqlx::query!(
+        "UPDATE rounds SET response = ? WHERE session_id = ? AND seq = ?",
+        response_json,
+        session_id,
+        seq,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(Some((response_json, new_revision)))
+}
+
+/// Latest revision (if any) recorded on this session at or after `since`
+/// (unix seconds). Used by long-poll waiters to surface revisions that landed
+/// on *other* rounds while they were parked.
+pub async fn latest_revision_since(
+    pool: &Pool<Sqlite>,
+    session_id: &str,
+    since: i64,
+) -> Result<Option<(i64, i64)>> {
+    let row = sqlx::query!(
+        "SELECT seq, revision FROM rounds
+         WHERE session_id = ? AND revised_at IS NOT NULL AND revised_at >= ?
+         ORDER BY revised_at DESC, seq DESC LIMIT 1",
+        session_id,
+        since,
+    )
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| (r.seq, r.revision)))
 }
 
 /// Get the response for a round. Ok(None) if no response yet or round absent.
@@ -434,7 +499,7 @@ pub async fn archive_session(
 
     let rounds = sqlx::query_as!(
         RoundRow,
-        "SELECT id, session_id, seq, name, grilling, response, created_at
+        "SELECT id, session_id, seq, name, grilling, response, created_at, revision, revised_at
          FROM rounds WHERE session_id = ? ORDER BY seq",
         session_id
     )
@@ -451,6 +516,8 @@ pub async fn archive_session(
                 grilling: r.grilling,
                 response: r.response,
                 created_at: r.created_at,
+                revision: r.revision,
+                revised_at: r.revised_at,
             })
             .collect(),
     };

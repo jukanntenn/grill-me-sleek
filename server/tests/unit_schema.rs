@@ -128,6 +128,8 @@ fn response_selected_string_single() {
         .collect(),
         additional_notes: None,
         submitted_at: "2026-07-12T00:00:00Z".to_string(),
+        revision: 1,
+        revised_at: None,
     };
     let json = serde_json::to_string(&r).unwrap();
     assert!(json.contains("\"selected\":\"JWT\""));
@@ -150,6 +152,8 @@ fn response_selected_array_multi() {
         .collect(),
         additional_notes: None,
         submitted_at: "2026-07-12T00:00:00Z".to_string(),
+        revision: 1,
+        revised_at: None,
     };
     let json = serde_json::to_string(&r).unwrap();
     assert!(json.contains("\"selected\":[\"Redis\",\"WebSocket\"]"));
@@ -174,6 +178,8 @@ fn response_selected_rating_as_number_string() {
         .collect(),
         additional_notes: None,
         submitted_at: "2026-07-12T00:00:00Z".to_string(),
+        revision: 1,
+        revised_at: None,
     };
     let json = serde_json::to_string(&r).unwrap();
     assert!(json.contains("\"selected\":\"4\""));
@@ -186,6 +192,8 @@ fn response_additional_notes_none_omitted() {
         answers: Default::default(),
         additional_notes: None,
         submitted_at: "2026-07-12T00:00:00Z".to_string(),
+        revision: 1,
+        revised_at: None,
     };
     let json = serde_json::to_string(&r).unwrap();
     assert!(!json.contains("additional_notes"), "None should be omitted");
@@ -198,6 +206,8 @@ fn response_additional_notes_some_present() {
         answers: Default::default(),
         additional_notes: Some("notes here".to_string()),
         submitted_at: "2026-07-12T00:00:00Z".to_string(),
+        revision: 1,
+        revised_at: None,
     };
     let json = serde_json::to_string(&r).unwrap();
     assert!(json.contains("\"additional_notes\":\"notes here\""));

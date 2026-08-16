@@ -9,6 +9,7 @@
 import type { ReactNode } from "react";
 import type { Question } from "../types";
 import { useTranslation } from "react-i18next";
+import { Markdown } from "./Markdown";
 
 interface QuestionCardProps {
   question: Question;
@@ -29,14 +30,19 @@ export function QuestionCard({ question, error, children }: QuestionCardProps) {
         {question.header}
         {required && <span className="text-error ml-0.5">*</span>}
       </label>
-      {question.text && <p className="text-body mb-[var(--spacing-xs)] text-sm">{question.text}</p>}
+      {question.text && (
+        <div className="mb-[var(--spacing-xs)]">
+          <Markdown>{question.text}</Markdown>
+        </div>
+      )}
       {error ? <p className="text-error mb-[var(--spacing-xs)] text-sm">{error}</p> : null}
       <div className="mt-[var(--spacing-sm)]">{children}</div>
       {/* recommended mark + explanation for yesno/rating shown inline in controls */}
       {question.recommended !== undefined && question.explanation && (
-        <p className="text-mute mt-[var(--spacing-xs)] text-xs">
-          {t("recommended")} — {question.explanation}
-        </p>
+        <div className="text-mute mt-[var(--spacing-xs)] text-xs">
+          <span className="mr-1">{t("recommended")} —</span>
+          <Markdown>{question.explanation}</Markdown>
+        </div>
       )}
     </div>
   );

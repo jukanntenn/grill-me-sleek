@@ -124,6 +124,12 @@ export class QuestionsPage extends BasePage {
   // 轮次显示
   readonly roundIndicator: Locator;
 
+  // 轮次导航（stepper）
+  readonly roundStepper: Locator;
+
+  // 修订提交按钮
+  readonly reviseSubmitButton: Locator;
+
   constructor(page: Page) {
     super(page);
     // QuestionCard 使用 question-${id} 作为 testid
@@ -135,6 +141,28 @@ export class QuestionsPage extends BasePage {
     this.waitingMessage = page.getByText(/waiting for next round/i);
     // 轮次显示
     this.roundIndicator = page.locator('div').filter({ hasText: /round|轮次/i }).first();
+    this.roundStepper = page.getByTestId('round-stepper');
+    this.reviseSubmitButton = page.getByTestId('revise-submit');
+  }
+
+  /** 点击轮次导航中的指定轮次（查看历史） */
+  async selectStepperRound(round: number) {
+    await this.page.getByTestId(`stepper-round-${round}`).click();
+  }
+
+  /** 从历史视图进入修订模式 */
+  async startRevise() {
+    await this.page.getByTestId('revise-button').click();
+  }
+
+  /** 从历史视图返回当前轮 */
+  async backToCurrent() {
+    await this.page.getByTestId('back-to-current').click();
+  }
+
+  /** 提交修订 */
+  async submitRevision() {
+    await this.reviseSubmitButton.click();
   }
 
   /**

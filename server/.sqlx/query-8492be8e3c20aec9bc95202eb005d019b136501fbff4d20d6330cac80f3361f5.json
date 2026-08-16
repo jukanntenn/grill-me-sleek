@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT seq, name, response IS NOT NULL AS has_response\n         FROM rounds WHERE session_id = ? ORDER BY seq",
+  "query": "SELECT seq, name, response IS NOT NULL AS has_response, revision\n         FROM rounds WHERE session_id = ? ORDER BY seq",
   "describe": {
     "columns": [
       {
@@ -30,6 +30,17 @@
         "ordinal": 2,
         "type_info": "Integer",
         "origin": "Expression"
+      },
+      {
+        "name": "revision",
+        "ordinal": 3,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "revision"
+          }
+        }
       }
     ],
     "parameters": {
@@ -38,8 +49,9 @@
     "nullable": [
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "e9e99cbf037a6d071232574a7bd76542ca61ba97f93639e409ea83e0b3afab26"
+  "hash": "8492be8e3c20aec9bc95202eb005d019b136501fbff4d20d6330cac80f3361f5"
 }

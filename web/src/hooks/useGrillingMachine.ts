@@ -22,6 +22,8 @@ export type State =
   | { type: "RENDER_QUESTIONS"; round: RoundData; sessionId: string }
   | { type: "VALIDATE"; round: RoundData; sessionId: string }
   | { type: "WAIT_NEXT_ROUND"; sessionId: string; currentRound: number }
+  | { type: "REVIEW_ROUND"; round: RoundData; sessionId: string }
+  | { type: "REVISE_ROUND"; round: RoundData; sessionId: string }
   | { type: "RECONNECTING"; sessionId: string; attempt: number; since: number }
   | { type: "PAGE_COMPLETED" }
   | { type: "PAGE_CANCELLED"; reason?: string }
@@ -44,6 +46,9 @@ export type Action =
   | { type: "ENTER_VALIDATE"; round: RoundData; sessionId: string }
   | { type: "SUBMIT_SUCCESS"; sessionId: string; currentRound: number }
   | { type: "SUBMIT_CONFLICT"; sessionId: string; currentRound: number }
+  | { type: "VIEW_ROUND"; round: RoundData; sessionId: string }
+  | { type: "ENTER_REVISE" }
+  | { type: "CANCEL_REVISE" }
   | { type: "SSE_ROUND_CREATED" }
   | { type: "SSE_COMPLETED" }
   | { type: "SSE_CANCELLED"; reason?: string }
@@ -126,6 +131,19 @@ export function reducer(state: State, action: Action): State {
       // Handled by the effect layer (confirm dialog + fetch), not a pure
       // state change — the effect will dispatch FETCH_START. Return unchanged.
       return state;
+
+    case "VIEW_ROUND":
+      // Only answered rounds have something to review.
+      if (!action.round.response) return state;
+      return { type: "REVIEW_ROUND", round: action.round, sessionId: action.sessionId };
+
+    case "ENTER_REVISE":
+      if (state.type !== "REVIEW_ROUND") return state;
+      return { type: "REVISE_ROUND", round: state.round, sessionId: state.sessionId };
+
+    case "CANCEL_REVISE":
+      if (state.type !== "REVISE_ROUND") return state;
+      return { type: "REVIEW_ROUND", round: state.round, sessionId: state.sessionId };
 
     case "ERROR":
       return { type: "ERROR_PAGE", message: action.message };

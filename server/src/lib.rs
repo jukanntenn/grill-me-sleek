@@ -46,6 +46,7 @@ use sqlx::{Pool, Sqlite};
         handlers::rounds::get_round,
         handlers::response::long_poll_response,
         handlers::response::submit_response,
+        handlers::response::revise_response,
         handlers::sse::sse_handler,
     ),
     components(schemas(
@@ -67,6 +68,7 @@ use sqlx::{Pool, Sqlite};
         crate::models::RoundResponse,
         crate::models::RoundSummary,
         crate::models::PendingResponse,
+        crate::models::Revised,
         crate::models::GoneResponse,
         crate::models::ConflictResponse,
         crate::models::ErrorResponse,
@@ -128,10 +130,12 @@ pub fn assemble_routes(sessions_post: axum::routing::MethodRouter<AppState>) -> 
             "/v1/sessions/{session_id}/rounds/{round}",
             get(handlers::rounds::get_round),
         )
-        // Response (long-poll GET + submit POST)
+        // Response (long-poll GET + submit POST + revise PUT)
         .route(
             "/v1/sessions/{session_id}/rounds/{round}/response",
-            get(handlers::response::long_poll_response).post(handlers::response::submit_response),
+            get(handlers::response::long_poll_response)
+                .post(handlers::response::submit_response)
+                .put(handlers::response::revise_response),
         )
         // SSE
         .route(

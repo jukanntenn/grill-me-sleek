@@ -129,6 +129,8 @@ mod tests {
             .collect(),
             additional_notes: None,
             submitted_at: "2026-07-12T00:00:00Z".to_string(),
+            revision: 1,
+            revised_at: None,
         };
         let json = serde_json::to_string(&r).unwrap();
         assert!(json.contains("\"selected\":\"A\""));
@@ -149,10 +151,40 @@ mod tests {
             .collect(),
             additional_notes: Some("notes".to_string()),
             submitted_at: "2026-07-12T00:00:00Z".to_string(),
+            revision: 2,
+            revised_at: Some("2026-08-16T00:00:00Z".to_string()),
         };
         let json = serde_json::to_string(&r).unwrap();
         assert!(json.contains("\"selected\":[\"A\",\"B\"]"));
         assert!(json.contains("\"additional_notes\":\"notes\""));
+        assert!(json.contains("\"revision\":2"));
+        assert!(json.contains("\"revised_at\":\"2026-08-16T00:00:00Z\""));
+    }
+
+    #[test]
+    fn response_revision_defaults_for_pre_revision_snapshots() {
+        // Responses stored before revisions existed have no `revision` /
+        // `revised_at` fields — deserializing them must yield revision 1.
+        let json = r#"{
+            "round": 1,
+            "answers": {"q1": {"selected": "A"}},
+            "submitted_at": "2026-07-12T00:00:00Z"
+        }"#;
+        let r: Response = serde_json::from_str(json).unwrap();
+        assert_eq!(r.revision, 1);
+        assert_eq!(r.revised_at, None);
+    }
+
+    #[test]
+    fn archive_round_revision_defaults_for_pre_revision_snapshots() {
+        let json = r#"{
+            "rounds": [
+                {"seq": 1, "grilling": "{}", "response": null, "created_at": 0}
+            ]
+        }"#;
+        let snapshot: ArchiveSnapshot = serde_json::from_str(json).unwrap();
+        assert_eq!(snapshot.rounds[0].revision, 1);
+        assert_eq!(snapshot.rounds[0].revised_at, None);
     }
 
     #[test]
@@ -162,6 +194,8 @@ mod tests {
             answers: Default::default(),
             additional_notes: None,
             submitted_at: "2026-07-12T00:00:00Z".to_string(),
+            revision: 1,
+            revised_at: None,
         };
         let json = serde_json::to_string(&r).unwrap();
         assert!(!json.contains("additional_notes"));

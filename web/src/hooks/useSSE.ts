@@ -28,6 +28,8 @@ interface UseSSEParams {
   onRoundCreated?: (newRound: number) => Promise<boolean>;
   /** Called when reconnect succeeds — allows re-caching the round. */
   onReconnectRound?: (round: import("../types").RoundData) => void;
+  /** Called when a response.revised event arrives (revision landed on `round`). */
+  onResponseRevised?: (round: number, revision: number) => void;
 }
 
 export function useSSE({
@@ -36,6 +38,7 @@ export function useSSE({
   dispatch,
   onRoundCreated,
   onReconnectRound,
+  onResponseRevised,
 }: UseSSEParams) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
@@ -98,8 +101,13 @@ export function useSSE({
         const data = JSON.parse(e.data);
         const newRound = data.round as number;
         const st = stateRef.current;
-        if (st.type === "RENDER_QUESTIONS") {
-          // Confirm with user before switching (DESIGN.md §959).
+        if (
+          st.type === "RENDER_QUESTIONS" ||
+          st.type === "REVIEW_ROUND" ||
+          st.type === "REVISE_ROUND"
+        ) {
+          // Confirm with user before switching (DESIGN.md §959). Also applies
+          // while reviewing/revising an earlier round — the session moved on.
           const confirmed = onRoundCreated ? await onRoundCreated(newRound) : true;
           if (confirmed) {
             dispatch({ type: "FETCH_START", sessionId: sid });
@@ -121,6 +129,14 @@ export function useSSE({
 
       es.addEventListener("response.created", () => {
         // Client-only ack; the agent receives the answer via long-poll.
+      });
+
+      es.addEventListener("response.revised", (e: MessageEvent) => {
+        // A revision landed — typically from another tab. The agent is
+        // notified via long-poll/SSE independently; here we only refresh
+        // what the user is looking at.
+        const data = JSON.parse(e.data);
+        onResponseRevised?.(data.round as number, data.revision as number);
       });
 
       es.addEventListener("session.completed", () => {

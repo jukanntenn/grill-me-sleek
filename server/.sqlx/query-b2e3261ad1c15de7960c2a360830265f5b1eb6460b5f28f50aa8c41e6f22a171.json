@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE rounds SET revision = revision + 1, revised_at = ?\n         WHERE session_id = ? AND seq = ? AND response IS NOT NULL\n         RETURNING revision",
+  "describe": {
+    "columns": [
+      {
+        "name": "revision",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "revision"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b2e3261ad1c15de7960c2a360830265f5b1eb6460b5f28f50aa8c41e6f22a171"
+}

@@ -3,22 +3,27 @@
 // Orchestrates the grilling lifecycle:
 //   1. Read sessionId from URL hash
 //   2. FETCH_CURRENT → RENDER_QUESTIONS
-//   3. SSE listens for round.created / terminal events
+//   3. SSE listens for round.created / response.revised / terminal events
 //   4. Submit → WAIT_NEXT_ROUND
 //   5. Reconnect on SSE/network errors
-//
-// Migrated from app.ts:103-112 (main) + app.ts:340-384 (render dispatch).
+//   6. Round history: answered rounds are reviewable (REVIEW_ROUND) and
+//      revisable (REVISE_ROUND → PUT), with the agent notified server-side
+//   7. document.title = session name (tab identification across projects)
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useGrillingMachine, type State } from "./hooks/useGrillingMachine";
 import { useSSE } from "./hooks/useSSE";
 import { useSubmit } from "./hooks/useSubmit";
-import { fetchCurrent } from "./lib/api";
+import type { RoundData, RoundSummaryData, Answer } from "./types";
+import { fetchCurrent, fetchRound, fetchRounds, fetchSession, reviseResponse } from "./lib/api";
+import { sessionTitle } from "./lib/title";
 import { Controls } from "./components/Controls";
+import { RoundStepper } from "./components/RoundStepper";
 import { TerminalPage } from "./components/TerminalPage";
 import { LandingPage } from "./pages/LandingPage";
 import { QuestionsPage } from "./pages/QuestionsPage";
+import { ReviewRoundPage } from "./pages/ReviewRoundPage";
 
 export function App() {
   const { t } = useTranslation();
@@ -30,6 +35,12 @@ export function App() {
   stateRef.current = state;
 
   const [banner, setBanner] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [rounds, setRounds] = useState<RoundSummaryData[] | null>(null);
+  const [sessionName, setSessionName] = useState<string | null>(null);
+  // Self-revision marker: the response.revised SSE echo of our own PUT must
+  // not fight the post-revise "back to current" navigation.
+  const selfRevisionRef = useRef<{ round: number; until: number } | null>(null);
 
   // Read sessionId from hash.
   const sessionId = (() => {
@@ -55,18 +66,70 @@ export function App() {
   );
 
   // --- Reconnect round caching ---
-  const onReconnectRound = useCallback((round: import("./types").RoundData) => {
+  const onReconnectRound = useCallback((round: RoundData) => {
     // Round data is dispatched via RECONNECT_SUCCESS; no extra caching needed.
     void round;
   }, []);
 
+  // --- Round summaries (stepper) ---
+  const refreshRounds = useCallback(async () => {
+    if (!sessionId) return;
+    const list = await fetchRounds(sessionId);
+    if (list) setRounds(list);
+  }, [sessionId]);
+
+  // Refresh summaries whenever the current round changes (covers initial
+  // load, round.created refetches, and reconnects).
+  const currentSeq =
+    state.type === "RENDER_QUESTIONS" || state.type === "VALIDATE"
+      ? state.round.round
+      : state.type === "WAIT_NEXT_ROUND"
+        ? state.currentRound
+        : null;
+  useEffect(() => {
+    if (sessionId && currentSeq !== null) void refreshRounds();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, currentSeq]);
+
   // --- SSE ---
+  const onResponseRevised = useCallback(
+    (roundSeq: number) => {
+      void refreshRounds();
+
+      // Our own PUT echoes back as response.revised — ignore the view refresh
+      // for it (the revise flow itself navigates back to the current round).
+      const self = selfRevisionRef.current;
+      if (self && self.round === roundSeq && Date.now() < self.until) return;
+
+      const st = stateRef.current;
+      if (!sessionId) return;
+      if (st.type !== "REVIEW_ROUND" && st.type !== "REVISE_ROUND") return;
+      if (st.round.round !== roundSeq) return;
+      if (st.type === "REVIEW_ROUND") {
+        // Viewing the revised round: reload the latest version and surface it.
+        void (async () => {
+          const round = await fetchRound(sessionId, roundSeq);
+          if (round?.response) {
+            dispatch({ type: "VIEW_ROUND", round, sessionId });
+            setBanner(t("revisedElsewhere"));
+          }
+        })();
+      } else if (st.type === "REVISE_ROUND") {
+        // Editing the same round while another tab revised it: don't clobber
+        // in-progress edits — warn; the server is last-writer-wins anyway.
+        setBanner(t("revisedElsewhere"));
+      }
+    },
+    [sessionId, refreshRounds, dispatch, t],
+  );
+
   useSSE({
     sessionId,
     stateRef,
     dispatch,
     onRoundCreated,
     onReconnectRound,
+    onResponseRevised,
   });
 
   // --- Initial fetch on mount ---
@@ -92,18 +155,97 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // --- Tab title: session name (stable), falling back to the round's
+  //     grilling name until the session fetch resolves (or if it fails). ---
+  useEffect(() => {
+    if (!sessionId) return;
+    void (async () => {
+      const result = await fetchSession(sessionId);
+      if (result.ok && result.session.name) setSessionName(result.session.name);
+    })();
+  }, [sessionId]);
+
+  const grillingName =
+    state.type === "RENDER_QUESTIONS" ||
+    state.type === "VALIDATE" ||
+    state.type === "REVIEW_ROUND" ||
+    state.type === "REVISE_ROUND"
+      ? state.round.grilling.name
+      : null;
+  useEffect(() => {
+    const name = sessionName ?? grillingName;
+    if (sessionId && name) document.title = sessionTitle(name);
+  }, [sessionId, sessionName, grillingName]);
+
   // --- Submit wrapper (caches form values before submit) ---
   const handleSubmit = useCallback(
-    (
-      round: import("./types").RoundData,
-      answers: Record<string, import("./types").Answer>,
-      additionalNotes?: string,
-    ) => {
+    (round: RoundData, answers: Record<string, Answer>, additionalNotes?: string) => {
       setFormCache(round.round, answers);
       dispatch({ type: "ENTER_VALIDATE", round, sessionId: sessionId ?? "" });
       void submit(sessionId ?? "", round, answers, additionalNotes);
     },
     [setFormCache, dispatch, submit, sessionId],
+  );
+
+  // --- Round history: view / revise / back ---
+  const handleBackToCurrent = useCallback(async () => {
+    if (!sessionId) return;
+    dispatch({ type: "FETCH_START", sessionId });
+    const result = await fetchCurrent(sessionId);
+    if (result.ok) {
+      dispatch({ type: "FETCH_SUCCESS", round: result.round, sessionId });
+    } else if (result.kind === "not-found") {
+      dispatch({ type: "FETCH_NOT_FOUND" });
+    } else if (result.kind === "gone") {
+      dispatch({ type: "FETCH_GONE", detail: result.detail });
+    } else {
+      dispatch({ type: "FETCH_RETRY", sessionId, attempt: 1 });
+    }
+  }, [sessionId, dispatch]);
+
+  const handleViewRound = useCallback(
+    async (seq: number) => {
+      if (!sessionId) return;
+      const st = stateRef.current;
+      // Leaving revise mode discards in-progress edits — confirm first.
+      if (st.type === "REVISE_ROUND" && !window.confirm(t("confirmDiscardRevise"))) return;
+      void refreshRounds();
+      const round = await fetchRound(sessionId, seq);
+      if (round?.response) {
+        dispatch({ type: "VIEW_ROUND", round, sessionId });
+      } else if (round) {
+        // Unanswered round (the current one) — show its form instead.
+        dispatch({ type: "FETCH_SUCCESS", round, sessionId });
+      }
+    },
+    [sessionId, dispatch, t, refreshRounds],
+  );
+
+  const handleRevise = useCallback(
+    async (round: RoundData, answers: Record<string, Answer>, additionalNotes?: string) => {
+      if (!sessionId) return;
+      setFormCache(round.round, answers);
+      // Mark this revision as self-initiated so its SSE echo doesn't fight
+      // the back-to-current navigation below.
+      selfRevisionRef.current = { round: round.round, until: Date.now() + 5000 };
+      const result = await reviseResponse(sessionId, round.round, answers, additionalNotes);
+      if (result.ok) {
+        setNotice(t("revisedNotice", { n: round.round }));
+        void refreshRounds();
+        await handleBackToCurrent();
+      } else if (result.kind === "not-answered") {
+        setBanner(t("bannerRoundNotAnswered"));
+      } else if (result.kind === "gone") {
+        dispatch({ type: "FETCH_GONE", detail: result.detail });
+      } else if (result.kind === "bad-request") {
+        setBanner(t("bannerServerError", { n: 400 }) + ` ${result.message}`);
+      } else if (result.kind === "server-error") {
+        setBanner(t("bannerServerError", { n: result.status }));
+      } else {
+        setBanner(t("bannerNetworkError"));
+      }
+    },
+    [sessionId, setFormCache, refreshRounds, handleBackToCurrent, dispatch, t],
   );
 
   // --- Retry wrapper ---
@@ -119,9 +261,43 @@ export function App() {
     return <LandingPage />;
   }
 
+  const stepperVisible =
+    state.type === "RENDER_QUESTIONS" ||
+    state.type === "VALIDATE" ||
+    state.type === "WAIT_NEXT_ROUND" ||
+    state.type === "REVIEW_ROUND" ||
+    state.type === "REVISE_ROUND";
+  const currentRoundFromList = rounds && rounds.length > 0 ? rounds[rounds.length - 1].round : null;
+  const activeRound =
+    state.type === "RENDER_QUESTIONS" ||
+    state.type === "VALIDATE" ||
+    state.type === "REVIEW_ROUND" ||
+    state.type === "REVISE_ROUND"
+      ? state.round.round
+      : state.type === "WAIT_NEXT_ROUND"
+        ? state.currentRound
+        : null;
+
   return (
     <div className="session-shell">
       <Controls />
+      {stepperVisible && rounds && currentRoundFromList !== null && (
+        <RoundStepper
+          rounds={rounds}
+          currentRound={currentRoundFromList}
+          activeRound={activeRound ?? currentRoundFromList}
+          onSelect={(n) => void handleViewRound(n)}
+        />
+      )}
+      {notice && (
+        <div
+          role="status"
+          data-testid="notice"
+          className="border-primary bg-canvas-soft text-primary mb-[var(--spacing-md)] rounded-[var(--radius-md)] border px-[var(--spacing-md)] py-[var(--spacing-sm)] text-sm"
+        >
+          {notice}
+        </div>
+      )}
       {renderState(state, {
         t,
         sessionId,
@@ -130,6 +306,9 @@ export function App() {
         setBanner,
         onSubmit: handleSubmit,
         onRetry: handleRetry,
+        onRevise: (round, answers, notes) => void handleRevise(round, answers, notes),
+        onEnterRevise: () => dispatch({ type: "ENTER_REVISE" }),
+        onBackToCurrent: () => void handleBackToCurrent(),
       })}
     </div>
   );
@@ -138,15 +317,14 @@ export function App() {
 interface RenderProps {
   t: (key: string, params?: Record<string, unknown>) => string;
   sessionId: string | null;
-  getFormCache: (round: number) => Record<string, import("./types").Answer> | undefined;
+  getFormCache: (round: number) => Record<string, Answer> | undefined;
   banner: string | null;
   setBanner: (msg: string | null) => void;
-  onSubmit: (
-    round: import("./types").RoundData,
-    answers: Record<string, import("./types").Answer>,
-    additionalNotes?: string,
-  ) => void;
+  onSubmit: (round: RoundData, answers: Record<string, Answer>, additionalNotes?: string) => void;
   onRetry: () => void;
+  onRevise: (round: RoundData, answers: Record<string, Answer>, additionalNotes?: string) => void;
+  onEnterRevise: () => void;
+  onBackToCurrent: () => void;
 }
 
 function renderState(state: State, props: RenderProps) {
@@ -174,9 +352,33 @@ function renderState(state: State, props: RenderProps) {
 
     case "WAIT_NEXT_ROUND":
       return (
-        <p className="body-md text-body py-[var(--spacing-5xl)] text-center">
-          {t("waitingNextRound")}
-        </p>
+        <div className="py-[var(--spacing-5xl)] text-center">
+          <p className="body-md text-body">{t("waitingNextRound")}</p>
+          <p className="text-mute mt-[var(--spacing-sm)] text-sm">{t("roundHistoryHint")}</p>
+        </div>
+      );
+
+    case "REVIEW_ROUND":
+      return (
+        <ReviewRoundPage
+          round={state.round}
+          onRevise={props.onEnterRevise}
+          onBack={props.onBackToCurrent}
+        />
+      );
+
+    case "REVISE_ROUND":
+      return (
+        <QuestionsPage
+          round={state.round}
+          cachedValues={state.round.response?.answers}
+          cachedNotes={state.round.response?.additional_notes}
+          mode="revise"
+          bannerMessage={props.banner}
+          onBanner={props.setBanner}
+          onSubmit={(answers, notes) => props.onRevise(state.round, answers, notes)}
+          onRetry={props.onRetry}
+        />
       );
 
     case "RECONNECTING":

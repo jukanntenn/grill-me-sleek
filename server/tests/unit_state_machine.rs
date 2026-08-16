@@ -117,6 +117,8 @@ fn api_error_round_already_submitted_is_409() {
             answers: Default::default(),
             additional_notes: None,
             submitted_at: "2026-07-12T00:00:00Z".to_string(),
+            revision: 1,
+            revised_at: None,
         },
     );
     let resp = err.into_response();
@@ -166,6 +168,8 @@ fn round_already_submitted_body_has_round_response() {
             answers: Default::default(),
             additional_notes: None,
             submitted_at: "2026-07-12T00:00:00Z".to_string(),
+            revision: 1,
+            revised_at: None,
         },
     );
     let resp = err.into_response();

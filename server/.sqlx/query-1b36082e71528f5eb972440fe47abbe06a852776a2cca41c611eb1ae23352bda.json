@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE rounds SET response = ? WHERE session_id = ? AND seq = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "1b36082e71528f5eb972440fe47abbe06a852776a2cca41c611eb1ae23352bda"
+}

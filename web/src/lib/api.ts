@@ -1,14 +1,25 @@
 // API layer — fetch wrappers for the grilling-sleek backend.
 //
 // Endpoints (same-origin via Caddy reverse_proxy, no CORS):
-//   GET  /v1/sessions/{id}/rounds/current          → 200 | 404 | 410
-//   POST /v1/sessions/{id}/rounds/{n}/response      → 201 | 400 | 409 | 410 | 5xx
-//   GET  /v1/sessions/{id}/events (SSE)             → handled by useSSE
+//   GET   /v1/sessions/{id}                        → 200 | 404 | 410
+//   GET   /v1/sessions/{id}/rounds/current         → 200 | 404 | 410
+//   GET   /v1/sessions/{id}/rounds                 → 200 | 404
+//   GET   /v1/sessions/{id}/rounds/{n}             → 200 | 404
+//   POST  /v1/sessions/{id}/rounds/{n}/response    → 201 | 400 | 409 | 410 | 5xx
+//   PUT   /v1/sessions/{id}/rounds/{n}/response    → 200 | 400 | 409 | 410 | 5xx
+//   GET   /v1/sessions/{id}/events (SSE)           → handled by useSSE
 //
 // 410 body: { status: "gone", detail: "completed"|"cancelled"|"expired" }
 // 409 body: { message, status, round, response } — carries already-submitted response.
 
-import type { RoundData, Answer, GoneBody, ConflictBody } from "../types";
+import type {
+  RoundData,
+  RoundSummaryData,
+  Answer,
+  GoneBody,
+  ConflictBody,
+  SessionStateData,
+} from "../types";
 
 const API = "/v1";
 
@@ -91,4 +102,96 @@ export async function submitResponse(
 /** SSE endpoint URL. */
 export function sseUrl(sessionId: string): string {
   return `${API}/sessions/${sessionId}/events`;
+}
+
+// ---------------------------------------------------------------------------
+// Session / round history / revision
+// ---------------------------------------------------------------------------
+
+/** GET /v1/sessions/{id} — session metadata (tab title uses `name`). */
+export async function fetchSession(
+  sessionId: string,
+): Promise<
+  { ok: true; session: SessionStateData } | { ok: false; kind: "not-found" | "gone" | "retry" }
+> {
+  try {
+    const resp = await fetch(`${API}/sessions/${sessionId}`);
+    if (resp.ok) {
+      return { ok: true, session: (await resp.json()) as SessionStateData };
+    }
+    if (resp.status === 410 || resp.status === 404) {
+      return { ok: false, kind: resp.status === 410 ? "gone" : "not-found" };
+    }
+    return { ok: false, kind: "retry" };
+  } catch {
+    return { ok: false, kind: "retry" };
+  }
+}
+
+/** GET /v1/sessions/{id}/rounds — round summaries (stepper + revision counts). */
+export async function fetchRounds(sessionId: string): Promise<RoundSummaryData[] | null> {
+  try {
+    const resp = await fetch(`${API}/sessions/${sessionId}/rounds`);
+    if (!resp.ok) return null;
+    return (await resp.json()) as RoundSummaryData[];
+  } catch {
+    return null;
+  }
+}
+
+/** GET /v1/sessions/{id}/rounds/{n} — a specific round (history view). */
+export async function fetchRound(sessionId: string, seq: number): Promise<RoundData | null> {
+  try {
+    const resp = await fetch(`${API}/sessions/${sessionId}/rounds/${seq}`);
+    if (!resp.ok) return null;
+    return (await resp.json()) as RoundData;
+  } catch {
+    return null;
+  }
+}
+
+export type ReviseResult =
+  | { ok: true }
+  | { ok: false; kind: "not-answered" }
+  | { ok: false; kind: "gone"; detail: GoneBody["detail"] }
+  | { ok: false; kind: "bad-request"; message: string }
+  | { ok: false; kind: "server-error"; status: number }
+  | { ok: false; kind: "network-error" };
+
+/** PUT /v1/sessions/{id}/rounds/{n}/response — revise a submitted response. */
+export async function reviseResponse(
+  sessionId: string,
+  round: number,
+  answers: Record<string, Answer>,
+  additionalNotes?: string,
+): Promise<ReviseResult> {
+  const body: Record<string, unknown> = { answers };
+  if (additionalNotes !== undefined) body.additional_notes = additionalNotes;
+
+  try {
+    const resp = await fetch(`${API}/sessions/${sessionId}/rounds/${round}/response`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (resp.status === 200) {
+      return { ok: true };
+    }
+    if (resp.status === 409) {
+      // Round exists but was never answered — POST is the submit path.
+      return { ok: false, kind: "not-answered" };
+    }
+    if (resp.status === 400) {
+      const err = (await resp.json().catch(() => ({}))) as { message?: string };
+      return { ok: false, kind: "bad-request", message: err.message ?? "" };
+    }
+    if (resp.status === 410) {
+      const body = (await resp.json()) as GoneBody;
+      return { ok: false, kind: "gone", detail: body.detail };
+    }
+    return { ok: false, kind: "server-error", status: resp.status };
+  } catch {
+    return { ok: false, kind: "network-error" };
+  }
 }

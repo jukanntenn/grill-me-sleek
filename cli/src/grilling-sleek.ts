@@ -3,6 +3,7 @@ import { jsonrepair } from "jsonrepair";
 // Ajv2020 supports draft 2020-12 — the `$schema` of the shared Grilling schema.
 import Ajv2020 from "ajv/dist/2020.js";
 import { apiClient, readInput } from "./api";
+import { parsePendingBody, revisionNotice } from "./pending";
 import { randomUUID } from "node:crypto";
 import logger, { logStartup, logExit, logDebug, logPoll, logRetry, logError } from "./logger";
 // Single source of truth for the Grilling schema: import the same JSON Schema
@@ -79,6 +80,7 @@ interface RoundSummary {
   round: number;
   name?: string;
   has_response: boolean;
+  revision: number;
 }
 
 interface PollResponse {
@@ -86,6 +88,9 @@ interface PollResponse {
   answers: Record<string, { selected: string | string[]; custom_text?: string }>;
   additional_notes?: string;
   submitted_at: string;
+  /** 1 = original submission; 2+ = revised via PUT by the user. */
+  revision?: number;
+  revised_at?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -460,11 +465,31 @@ program
     const client = apiClient("get");
     try {
       const resp = await client.get(`sessions/${sessionId}`).json<SessionResponse>();
+
+      // Round summaries (incl. revision counters) — active sessions only;
+      // terminal sessions have their rounds archived away.
+      let rounds: RoundSummary[] | undefined;
+      try {
+        rounds = await client.get(`sessions/${sessionId}/rounds`).json<RoundSummary[]>();
+      } catch (e: unknown) {
+        warnStderr(`failed to list rounds: ${e instanceof Error ? e.message : String(e)}`);
+      }
+
+      const roundLines = rounds
+        ? rounds.map((r) => {
+            const label = r.name ? `${r.round} · ${r.name}` : `${r.round}`;
+            const state = r.has_response ? `answered (revision ${r.revision})` : "unanswered";
+            return `    ${label}: ${state}`;
+          })
+        : [];
+      const result = { ...resp, ...(rounds ? { rounds } : {}) };
+
       output(
-        resp as unknown as Record<string, unknown>,
+        result,
         parseJsonFields(opts.json),
         () =>
-          `Session ${resp.session_id}\n  status: ${resp.status}\n  current_round: ${resp.current_round}\n  created_at: ${resp.created_at}\n  expires_at: ${resp.expires_at}`,
+          `Session ${resp.session_id}\n  status: ${resp.status}\n  current_round: ${resp.current_round}\n  created_at: ${resp.created_at}\n  expires_at: ${resp.expires_at}` +
+          (roundLines.length > 0 ? `\n  rounds:\n${roundLines.join("\n")}` : ""),
       );
     } catch (e: unknown) {
       if (
@@ -545,6 +570,16 @@ async function pollLoop(
       }
 
       if (status === 202) {
+        // The body may carry a revision that landed on another round while
+        // this poll was parked — surface it on stderr and keep waiting.
+        const raw = await resp.json().catch(() => null);
+        const pending = parsePendingBody(raw);
+        if (pending?.revised) {
+          warnStderr(revisionNotice(pending.revised));
+          logPoll("revised", sessionId, pending.revised.round, {
+            revision: pending.revised.revision,
+          });
+        }
         logPoll("202", sessionId, round);
         consecutiveErrors = 0;
         continue;

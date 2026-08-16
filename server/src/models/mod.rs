@@ -182,7 +182,17 @@ pub struct Response {
     pub answers: HashMap<String, Answer>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub additional_notes: Option<String>,
-    pub submitted_at: String, // RFC 3339
+    pub submitted_at: String, // RFC 3339 (first submission; unchanged by revisions)
+    /// Monotonic revision counter: 1 = original submission, 2+ = revised via PUT.
+    /// Defaults to 1 when deserializing snapshots stored before revisions existed.
+    #[serde(default = "default_revision")]
+    pub revision: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revised_at: Option<String>, // RFC 3339
+}
+
+fn default_revision() -> i64 {
+    1
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -339,11 +349,22 @@ pub struct RoundSummary {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     pub has_response: bool,
+    pub revision: i64,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct PendingResponse {
     pub status: String, // "pending"
+    /// Set when a revision landed on another round while this request was
+    /// waiting — lets long-polling agents notice revisions immediately.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revised: Option<Revised>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct Revised {
+    pub round: i64,
+    pub revision: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -382,6 +403,10 @@ pub struct ArchiveRound {
     pub grilling: String,         // raw JSON string
     pub response: Option<String>, // raw JSON string
     pub created_at: i64,
+    #[serde(default = "default_revision")]
+    pub revision: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revised_at: Option<i64>, // unix seconds
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +435,8 @@ pub struct RoundRow {
     pub grilling: String,
     pub response: Option<String>,
     pub created_at: i64,
+    pub revision: i64,
+    pub revised_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -418,6 +445,7 @@ pub struct RoundSummaryRow {
     pub name: Option<String>,
     // SQLite booleans are INTEGER (0/1); the handler converts to bool.
     pub has_response: i64,
+    pub revision: i64,
 }
 
 // NOTE: unit tests live in `tests.rs` (separate file) — no inline test module

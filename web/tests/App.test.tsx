@@ -31,6 +31,10 @@ vi.mock("../src/hooks/useSubmit", () => ({
 }));
 vi.mock("../src/lib/api", () => ({
   fetchCurrent: vi.fn(),
+  fetchSession: vi.fn().mockResolvedValue({ ok: false, kind: "retry" }),
+  fetchRounds: vi.fn().mockResolvedValue(null),
+  fetchRound: vi.fn(),
+  reviseResponse: vi.fn(),
 }));
 
 const mockFetch = vi.mocked(fetchCurrent);

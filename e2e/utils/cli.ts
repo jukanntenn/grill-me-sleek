@@ -43,6 +43,8 @@ export interface WaitResult {
   answers: Record<string, { selected: string | string[]; custom_text?: string }>;
   additional_notes?: string;
   submitted_at: string;
+  revision?: number;
+  revised_at?: string;
 }
 
 export interface SessionResult {
@@ -58,10 +60,12 @@ export interface RoundSummary {
   round: number;
   name?: string;
   has_response: boolean;
+  revision: number;
 }
 
 export interface GenerateGrillingOptions {
   name?: string;
+  description?: string;
   questions?: Array<{
     id: string;
     header: string;
@@ -190,6 +194,9 @@ export function generateGrilling(options: GenerateGrillingOptions): string {
       },
     ],
   };
+  if (options.description) {
+    grilling.description = options.description;
+  }
   if (options.additional_notes) {
     grilling.additional_notes = options.additional_notes;
   }
@@ -391,15 +398,43 @@ export async function simulateSessionExpired(sessionId: string): Promise<void> {
  * 列出轮次
  */
 export async function listRounds(sessionId: string): Promise<RoundSummary[]> {
+  return apiRequest<RoundSummary[]>(`/v1/sessions/${sessionId}/rounds`);
+}
+
+/**
+ * 通过 API 修订已提交的回答（PUT，与 web UI 相同路径）
+ */
+export async function reviseResponse(
+  sessionId: string,
+  round: number,
+  answers: Record<string, { selected: string | string[]; custom_text?: string }>,
+  additionalNotes?: string
+): Promise<{ revision: number }> {
+  const body: Record<string, unknown> = { answers };
+  if (additionalNotes !== undefined) body.additional_notes = additionalNotes;
+  return apiRequest<{ revision: number }>(
+    `/v1/sessions/${sessionId}/rounds/${round}/response`,
+    'PUT',
+    body
+  );
+}
+
+/** 直连 Hub 的 REST 请求（绕过 CLI，用于测试 API 契约本身） */
+async function apiRequest<T>(path: string, method: 'GET' | 'PUT' = 'GET', body?: unknown): Promise<T> {
   // Temporarily disable TLS verification for self-signed certs in e2e
   const origValue = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   try {
-    const resp = await fetch(`${GRILLING_SLEEK_SERVER}/v1/sessions/${sessionId}/rounds`);
+    const resp = await fetch(`${GRILLING_SLEEK_SERVER}${path}`, {
+      method,
+      ...(body !== undefined
+        ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        : {}),
+    });
     if (!resp.ok) {
-      throw new Error(`listRounds failed: ${resp.status} ${await resp.text()}`);
+      throw new Error(`apiRequest ${method} ${path} failed: ${resp.status} ${await resp.text()}`);
     }
-    return (await resp.json()) as RoundSummary[];
+    return (await resp.json()) as T;
   } finally {
     if (origValue !== undefined) {
       process.env.NODE_TLS_REJECT_UNAUTHORIZED = origValue;

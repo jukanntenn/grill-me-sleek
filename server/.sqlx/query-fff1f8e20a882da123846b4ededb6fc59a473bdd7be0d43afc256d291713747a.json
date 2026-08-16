@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, session_id, seq, name, grilling, response, created_at\n         FROM rounds WHERE session_id = ? AND seq = ?",
+  "query": "SELECT id, session_id, seq, name, grilling, response, created_at, revision, revised_at\n         FROM rounds WHERE id = ?",
   "describe": {
     "columns": [
       {
@@ -79,10 +79,32 @@
             "name": "created_at"
           }
         }
+      },
+      {
+        "name": "revision",
+        "ordinal": 7,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "name": "revised_at",
+        "ordinal": 8,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "rounds",
+            "name": "revised_at"
+          }
+        }
       }
     ],
     "parameters": {
-      "Right": 2
+      "Right": 1
     },
     "nullable": [
       false,
@@ -91,8 +113,10 @@
       true,
       false,
       true,
-      false
+      false,
+      false,
+      true
     ]
   },
-  "hash": "34fbafcd5aa8a2523494f3356f0ef25ed73f8c5843bdab46206ac9e10d49c03a"
+  "hash": "fff1f8e20a882da123846b4ededb6fc59a473bdd7be0d43afc256d291713747a"
 }
