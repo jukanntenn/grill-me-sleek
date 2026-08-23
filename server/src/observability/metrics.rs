@@ -16,6 +16,7 @@ pub struct Metrics {
     pub longpoll_wait_seconds: Histogram<f64>,
     pub sse_connections_active: Gauge<u64>,
     pub ttl_swept_total: Counter<u64>,
+    pub archive_retention_deleted_total: Counter<u64>,
     pub http_request_duration_seconds: Histogram<f64>,
 }
 
@@ -65,6 +66,11 @@ pub fn init_metrics() {
         .with_description("Total sessions swept by TTL")
         .build();
 
+    let archive_retention_deleted_total = meter
+        .u64_counter("archive_retention_deleted_total")
+        .with_description("Total archived sessions deleted by the retention task")
+        .build();
+
     let http_request_duration_seconds = meter
         .f64_histogram("http_request_duration_seconds")
         .with_description("HTTP request processing duration in seconds")
@@ -79,6 +85,7 @@ pub fn init_metrics() {
         longpoll_wait_seconds,
         sse_connections_active,
         ttl_swept_total,
+        archive_retention_deleted_total,
         http_request_duration_seconds,
     });
 }
@@ -143,6 +150,13 @@ pub fn record_sse_connections(count: u64) {
 pub fn record_ttl_swept() {
     if let Some(m) = metrics() {
         m.ttl_swept_total.add(1, &[]);
+    }
+}
+
+/// Record archive rows deleted by the retention task.
+pub fn record_archive_retention(deleted: u64) {
+    if let Some(m) = metrics() {
+        m.archive_retention_deleted_total.add(deleted, &[]);
     }
 }
 

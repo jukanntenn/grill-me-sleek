@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM session_archive WHERE id IN (\n            SELECT id FROM session_archive WHERE archived_at < ? ORDER BY archived_at LIMIT ?\n        )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "a8bceb82eaf56a4c4d1e4ca6f13f3a89b049bac74fc493cc179352112c51b74a"
+}

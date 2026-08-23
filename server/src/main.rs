@@ -60,6 +60,10 @@ async fn main() -> anyhow::Result<()> {
     let sweeper_handles = handles.clone();
     tokio::spawn(session::run_ttl_sweeper(sweeper_pool, sweeper_handles));
 
+    // Start archive retention task (bounds session_archive disk usage)
+    let retention_pool = pool.clone();
+    tokio::spawn(session::run_archive_retention(retention_pool));
+
     // Build application state
     let state = AppState {
         pool,
@@ -75,10 +79,13 @@ async fn main() -> anyhow::Result<()> {
         base_url: std::sync::Arc::from(config::settings().base_url.as_str()),
     };
 
-    // Build router — rate limiter attached only to POST /v1/sessions
-    // (DESIGN.md §735). The lib::build_app variant omits the governor layer
+    // Build router — two per-IP rate-limit layers, both attached only in
+    // production (DESIGN.md §735). The tight layer rides POST /v1/sessions
+    // (create is the only unauthenticated write that needs no session id);
+    // the general layer wraps every business route (see assemble_routes;
+    // health probes are exempt). The lib::build_app variant omits both layers
     // and is used by integration tests to avoid bucket exhaustion.
-    // E2E runs can set GSLEEK_DISABLE_RATE_LIMIT=true to bypass the governor,
+    // E2E runs can set GSLEEK_DISABLE_RATE_LIMIT=true to bypass both governors,
     // because the test suite creates sessions far faster than 20/min.
     let disable_rate_limit = std::env::var("GSLEEK_DISABLE_RATE_LIMIT")
         .map(|v| v == "true" || v == "1")
@@ -87,36 +94,20 @@ async fn main() -> anyhow::Result<()> {
     let sessions_post = if disable_rate_limit {
         post(handlers::sessions::create_session)
     } else {
-        let rate_limit_layer = axum_governor::GovernorLayer::new(
-            GovernorConfigBuilder::default()
-                .with_extractor(
-                    SmartIp::new().with_trusted_proxies(["127.0.0.1/32".parse::<IpNet>().unwrap()]),
-                )
-                .expect_connect_info()
-                .quota_default(axum_governor::Quota::requests_per_minute(
-                    std::num::NonZeroU32::new(config::RATE_LIMIT_PER_MIN).unwrap(),
-                ))
-                .error_handler(|reason| {
-                    let body = serde_json::json!({"message": "rate limited", "status": 429});
-                    let mut response = axum::response::Json(body).into_response();
-                    if let axum_governor::RejectionReason::QuotaExceeded { wait, .. } = reason {
-                        let headers = response.headers_mut();
-                        headers.insert(
-                            "retry-after",
-                            axum::http::HeaderValue::from_str(&wait.as_secs().to_string()).unwrap(),
-                        );
-                    }
-                    *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
-                    response
-                })
-                .finish()
-                .unwrap(),
-        );
-        post(handlers::sessions::create_session).layer(rate_limit_layer)
+        post(handlers::sessions::create_session).layer(axum_governor::GovernorLayer::new(
+            governor_config(config::RATE_LIMIT_PER_MIN),
+        ))
     };
 
-    let app = grilling_sleek::apply_middleware(grilling_sleek::assemble_routes(sessions_post))
-        .with_state(state);
+    let general_rate_limit = (!disable_rate_limit).then(|| {
+        axum_governor::GovernorLayer::new(governor_config(config::RATE_LIMIT_GENERAL_PER_MIN))
+    });
+
+    let app = grilling_sleek::apply_middleware(grilling_sleek::assemble_routes(
+        sessions_post,
+        general_rate_limit,
+    ))
+    .with_state(state);
 
     // Start server
     let listener = tokio::net::TcpListener::bind(config::LISTEN_ADDR).await?;
@@ -132,6 +123,41 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("server shut down");
     // _guard drops here, flushing OTel exporters
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Rate limiting
+// ---------------------------------------------------------------------------
+
+/// Build a per-IP governor config shared by both limiter layers: the SmartIp
+/// extractor trusting only the local Caddy hop (the X-Forwarded-For it emits
+/// carries the real client IP — see the Caddyfile `header_up X-Forwarded-For
+/// {http.request.header.CF-Connecting-IP}`), and a JSON 429 response with
+/// Retry-After (ky honours it, DESIGN.md §2201-2207).
+fn governor_config(per_min: u32) -> axum_governor::GovernorConfig<std::net::IpAddr> {
+    GovernorConfigBuilder::default()
+        .with_extractor(
+            SmartIp::new().with_trusted_proxies(["127.0.0.1/32".parse::<IpNet>().unwrap()]),
+        )
+        .expect_connect_info()
+        .quota_default(axum_governor::Quota::requests_per_minute(
+            std::num::NonZeroU32::new(per_min).unwrap(),
+        ))
+        .error_handler(|reason| {
+            let body = serde_json::json!({"message": "rate limited", "status": 429});
+            let mut response = axum::response::Json(body).into_response();
+            if let axum_governor::RejectionReason::QuotaExceeded { wait, .. } = reason {
+                let headers = response.headers_mut();
+                headers.insert(
+                    "retry-after",
+                    axum::http::HeaderValue::from_str(&wait.as_secs().to_string()).unwrap(),
+                );
+            }
+            *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
+            response
+        })
+        .finish()
+        .unwrap()
 }
 
 // ---------------------------------------------------------------------------

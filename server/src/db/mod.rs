@@ -19,13 +19,19 @@ pub use crate::models::{RoundRow, RoundSummaryRow, SessionRow};
 // SQLite pragma constants
 // ---------------------------------------------------------------------------
 
-/// SQLite page cache size in pages (negative = KiB). 200 MiB.
-/// Tuned for typical session workload; increase if working set grows.
-const SQLITE_CACHE_SIZE: &str = "-200000";
+/// SQLite page cache size in pages (negative = KiB). 16 MiB per connection.
+///
+/// Page caches are **per connection and not shared** — the memory budget is
+/// `DB_POOL_MAX × cache_size`. 8 × 16 MiB = 128 MiB worst case, sized for a
+/// 2c/2g VPS where the OS/kernel also need a share of RAM. Cache is allocated
+/// lazily as pages are touched, so idle connections cost far less.
+const SQLITE_CACHE_SIZE: &str = "-16384";
 
-/// SQLite mmap size in bytes. 512 MiB.
-/// Enables memory-mapped I/O for read-heavy workloads.
-const SQLITE_MMAP_SIZE: &str = "536870912";
+/// SQLite mmap size in bytes. 256 MiB.
+/// Memory-mapped reads are file-backed, shared across all connections in the
+/// process, and reclaimable under memory pressure — unlike the per-connection
+/// page cache, so mmap can safely be larger than the cache budget.
+const SQLITE_MMAP_SIZE: &str = "268435456";
 
 /// SQLite WAL auto-checkpoint threshold in pages.
 /// Default 1000 pages ~ 4 MiB; balances write throughput vs recovery time.
@@ -601,6 +607,29 @@ pub async fn get_archive_status(
     .fetch_optional(pool)
     .await?;
     Ok(row.map(|r| (r.status, r.cancel_reason)))
+}
+
+/// Delete up to `limit` archived sessions archived strictly before `cutoff`
+/// (Unix seconds). Returns the number of rows deleted.
+///
+/// Batched by the caller (see `session::purge_expired_archive`); the LIMIT
+/// lives in a subquery because SQLite's DELETE ... LIMIT is a non-default
+/// build option. Uses the `idx_archive_archived_at` range index.
+pub async fn delete_archived_before(
+    pool: &Pool<Sqlite>,
+    cutoff: i64,
+    limit: i64,
+) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query!(
+        "DELETE FROM session_archive WHERE id IN (
+            SELECT id FROM session_archive WHERE archived_at < ? ORDER BY archived_at LIMIT ?
+        )",
+        cutoff,
+        limit
+    )
+    .execute(pool)
+    .await?;
+    Ok(result.rows_affected())
 }
 
 // ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@
 mod common;
 
 use common::{TestApp, body_json, get_req, grilling_minimal, json_patch, json_post};
+use grilling_sleek::session;
 use serde_json::json;
 
 // Helper: create a session, return its id.
@@ -744,6 +745,88 @@ async fn test_23_long_poll_cancelled_body_format() {
     let b = body_json(resp).await;
     assert_eq!(b["status"], "cancelled");
     assert_eq!(b["reason"], "user_cancelled");
+}
+
+// ---------------------------------------------------------------------------
+// 24. 归档保留策略：过期归档行被清理，410 → 404；窗口内行保留
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_24_archive_retention_purges_old_rows() {
+    let app = TestApp::new().await;
+
+    // Two sessions: one archived "8 days ago", one archived just now.
+    let old_sid = create_session(&app).await;
+    let fresh_sid = create_session(&app).await;
+    for sid in [&old_sid, &fresh_sid] {
+        let resp = app
+            .oneshot(json_patch(
+                &format!("/v1/sessions/{sid}"),
+                &json!({"status":"completed"}),
+            ))
+            .await;
+        assert_eq!(resp.status(), 200);
+    }
+
+    // Both report 410 before retention.
+    let resp = app
+        .oneshot(get_req(&format!("/v1/sessions/{old_sid}")))
+        .await;
+    assert_eq!(resp.status(), 410);
+    let resp = app
+        .oneshot(get_req(&format!("/v1/sessions/{fresh_sid}")))
+        .await;
+    assert_eq!(resp.status(), 410);
+
+    // Backdate the first archive row past a 7-day window.
+    let now = session::time_now();
+    sqlx::query("UPDATE session_archive SET archived_at = ? WHERE id = ?")
+        .bind(now - 8 * 86_400)
+        .bind(&old_sid)
+        .execute(&app.pool)
+        .await
+        .unwrap();
+
+    let deleted = session::purge_expired_archive(&app.pool, 7, now).await;
+    assert_eq!(deleted, 1);
+
+    // Purged: 410 gone → 404 not found.
+    let resp = app
+        .oneshot(get_req(&format!("/v1/sessions/{old_sid}")))
+        .await;
+    assert_eq!(resp.status(), 404);
+    // Within the window: still 410.
+    let resp = app
+        .oneshot(get_req(&format!("/v1/sessions/{fresh_sid}")))
+        .await;
+    assert_eq!(resp.status(), 410);
+}
+
+#[tokio::test]
+async fn test_24b_archive_retention_zero_disables_purge() {
+    let app = TestApp::new().await;
+    let sid = create_session(&app).await;
+    let _ = app
+        .oneshot(json_patch(
+            &format!("/v1/sessions/{sid}"),
+            &json!({"status":"completed"}),
+        ))
+        .await;
+
+    // Far past the cutoff, but retention_days = 0 must purge nothing.
+    let now = session::time_now();
+    sqlx::query("UPDATE session_archive SET archived_at = ? WHERE id = ?")
+        .bind(now - 400 * 86_400)
+        .bind(&sid)
+        .execute(&app.pool)
+        .await
+        .unwrap();
+
+    let deleted = session::purge_expired_archive(&app.pool, 0, now).await;
+    assert_eq!(deleted, 0);
+
+    let resp = app.oneshot(get_req(&format!("/v1/sessions/{sid}"))).await;
+    assert_eq!(resp.status(), 410);
 }
 
 // ---------------------------------------------------------------------------

@@ -20,9 +20,14 @@ use tempfile::TempDir;
 use tower::ServiceExt;
 
 /// A per-test harness: owns the temp DB dir (cleaned on drop) and exposes
-/// the application router for oneshot requests.
+/// the application router for oneshot requests, plus the underlying pool for
+/// tests that need direct SQL access (e.g. backdating archive rows).
 pub struct TestApp {
     pub router: axum::Router,
+    /// Direct SQL access for tests that need it (e.g. backdating archive
+    /// rows). Only some test binaries read it — silence dead_code for the rest.
+    #[allow(dead_code)]
+    pub pool: Pool<Sqlite>,
     _db_dir: TempDir,
 }
 
@@ -54,7 +59,7 @@ impl TestApp {
 
         let handles = session::new_session_map();
         let state = AppState {
-            pool,
+            pool: pool.clone(),
             handles,
             idempotency_sessions: idempotency::new_cache(
                 grilling_sleek::config::IDEMPOTENCY_TTL,
@@ -70,6 +75,7 @@ impl TestApp {
         let router = build_app(state);
         TestApp {
             router,
+            pool,
             _db_dir: dir,
         }
     }

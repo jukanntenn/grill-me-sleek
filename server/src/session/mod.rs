@@ -179,6 +179,67 @@ pub fn time_now() -> i64 {
         .as_secs() as i64
 }
 
+// ---------------------------------------------------------------------------
+// Archive retention
+// ---------------------------------------------------------------------------
+
+/// Purge archived sessions older than the retention window. Returns the total
+/// number of rows deleted.
+///
+/// Takes `retention_days` as a parameter (not from `config::settings()`) so
+/// tests can drive it without the process-wide settings singleton. `0`
+/// disables purging entirely.
+///
+/// After a purge, links to sessions archived before the cutoff change
+/// semantics from 410 Gone to 404 Not Found — the CLI reports `not_found`
+/// (exit 1) instead of `gone`/`expired` (exit 0/76). For sessions older than
+/// the retention window both readings mean "no longer exists".
+pub async fn purge_expired_archive(pool: &Pool<Sqlite>, retention_days: u64, now: i64) -> u64 {
+    if retention_days == 0 {
+        return 0;
+    }
+    let cutoff = now - (retention_days as i64) * 86_400;
+    let mut total = 0u64;
+
+    loop {
+        match db::delete_archived_before(pool, cutoff, config::RETENTION_BATCH).await {
+            Ok(deleted) => {
+                total += deleted;
+                if deleted < config::RETENTION_BATCH as u64 {
+                    break;
+                }
+            }
+            Err(e) => {
+                // Log and stop this round; the next tick retries from where
+                // the batching left off (same cutoff predicate).
+                tracing::error!(error = %e, deleted_so_far = total, "archive retention: delete batch failed");
+                break;
+            }
+        }
+    }
+    total
+}
+
+/// Archive retention background task.
+///
+/// Purges `session_archive` rows older than
+/// `settings().archive_retention_days` every [`config::RETENTION_INTERVAL`].
+/// Bounds the steady-state disk usage of the archive table — without it the
+/// table grows without limit (every session ends up archived).
+pub async fn run_archive_retention(pool: Pool<Sqlite>) {
+    let mut interval = tokio::time::interval(config::RETENTION_INTERVAL);
+
+    loop {
+        interval.tick().await;
+        let retention_days = config::settings().archive_retention_days;
+        let deleted = purge_expired_archive(&pool, retention_days, time_now()).await;
+        if deleted > 0 {
+            crate::observability::metrics::record_archive_retention(deleted);
+            tracing::info!(deleted, retention_days, "archive retention purge");
+        }
+    }
+}
+
 /// Convert Unix seconds to RFC 3339 string.
 pub fn unix_to_rfc3339(unix_secs: i64) -> String {
     let dt = time::OffsetDateTime::UNIX_EPOCH + time::Duration::seconds(unix_secs);

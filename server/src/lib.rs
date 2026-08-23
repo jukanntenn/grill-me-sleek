@@ -104,13 +104,19 @@ pub struct AppState {
     pub base_url: Arc<str>,
 }
 
-/// 组装全部业务路由；`sessions_post` 由调用方注入，使生产环境可挂 governor
-/// 而测试环境保持裸 handler。路由表在此唯一声明（M-SINGLE-ITEM-PATH）。
-pub fn assemble_routes(sessions_post: axum::routing::MethodRouter<AppState>) -> Router<AppState> {
-    Router::new()
-        // Health probes
-        .route("/v1/healthz", get(handlers::sessions::healthz))
-        .route("/v1/readyz", get(handlers::sessions::readyz))
+/// 组装全部业务路由；`sessions_post` 与 `general_rate_limit` 由调用方注入，
+/// 使生产环境可挂 governor 而测试环境保持裸 handler。路由表在此唯一声明
+/// （M-SINGLE-ITEM-PATH）。
+///
+/// 注册顺序是限流豁免的机制：`Router::layer` 只包裹在它之前注册的路由，
+/// 因此业务路由先注册、挂通用限流层，health 探测（/v1/healthz、/v1/readyz）
+/// 在层之后注册，不受限流影响（Caddy/docker 按固定节奏探测，永不应见 429）。
+pub fn assemble_routes(
+    sessions_post: axum::routing::MethodRouter<AppState>,
+    general_rate_limit: Option<axum_governor::GovernorLayer<std::net::IpAddr>>,
+) -> Router<AppState> {
+    // Business routes — wrapped by the optional general per-IP limiter.
+    let business = Router::new()
         // Sessions
         .route("/v1/sessions", sessions_post)
         .route(
@@ -141,17 +147,31 @@ pub fn assemble_routes(sessions_post: axum::routing::MethodRouter<AppState>) -> 
         .route(
             "/v1/sessions/{session_id}/events",
             get(handlers::sse::sse_handler),
-        )
+        );
+
+    let business = match general_rate_limit {
+        Some(layer) => business.layer(layer),
+        None => business,
+    };
+
+    // Health probes — registered after the limiter, hence exempt from it.
+    business
+        .route("/v1/healthz", get(handlers::sessions::healthz))
+        .route("/v1/readyz", get(handlers::sessions::readyz))
 }
 
-/// Build the application router WITHOUT the rate-limit layer.
+/// Build the application router WITHOUT any rate-limit layer.
 ///
 /// Used by integration tests (which must not share a per-IP governor bucket
-/// across test cases — DESIGN.md §735 limits only POST /sessions to 20/min,
-/// far below the test suite's creation volume). Production attaches the
-/// governor layer in `main.rs` via `assemble_routes`.
+/// across test cases — DESIGN.md §735 limits POST /sessions to 20/min and the
+/// general layer to 120/min, both far below the test suite's request volume).
+/// Production attaches the governor layers in `main.rs` via `assemble_routes`.
 pub fn build_app(state: AppState) -> Router {
-    apply_middleware(assemble_routes(post(handlers::sessions::create_session))).with_state(state)
+    apply_middleware(assemble_routes(
+        post(handlers::sessions::create_session),
+        None,
+    ))
+    .with_state(state)
 }
 
 /// The shared middleware stack applied to both the production router (in

@@ -32,6 +32,13 @@ pub struct Settings {
 
     /// Log directory (tracing-appender rolling files).
     pub log_dir: PathBuf,
+
+    /// `session_archive` retention window in days. Rows archived longer ago
+    /// are purged by the background retention task. `0` disables purging.
+    ///
+    /// This is the direct knob for the steady-state disk budget: worst-case
+    /// archive growth is (abuse write rate) × (this window).
+    pub archive_retention_days: u64,
 }
 
 impl Default for Settings {
@@ -40,6 +47,7 @@ impl Default for Settings {
             base_url: "https://grilling-sleek.example.com".into(),
             db_path: PathBuf::from("./data/grilling-sleek.db"),
             log_dir: PathBuf::from("./log/grilling-sleek"),
+            archive_retention_days: 7,
         }
     }
 }
@@ -155,6 +163,38 @@ pub const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(30);
 /// External systems: axum-governor.
 pub const RATE_LIMIT_PER_MIN: u32 = 20;
 
+/// Per-IP general rate limit covering every business route (all /v1/* except
+/// health probes; POST /v1/sessions additionally keeps the tighter
+/// [`RATE_LIMIT_PER_MIN`] inner layer).
+///
+/// Chosen: legit peak is ~10 req/min/IP (1 long-poll per 55s per session +
+/// occasional GETs + one SSE per tab); an office NAT with 5 heavy users sits
+/// around 50 req/min — 120 gives 2-6× headroom while capping a bandwidth
+/// amplification attack at ~120 × 15 KiB (gzip'd max session) ≈ 0.25 Mbps,
+/// safely under a 3 Mbps origin uplink.
+/// Side effects: decreasing may throttle NAT'd power users; increasing raises
+/// the abuse bandwidth ceiling.
+/// External systems: axum-governor.
+pub const RATE_LIMIT_GENERAL_PER_MIN: u32 = 120;
+
+/// Archive retention purge cadence.
+///
+/// Chosen: hourly bounds purge-induced write amplification while keeping the
+/// disk steady state within one window of drift.
+/// Side effects: decreasing adds idle DELETE scans; increasing delays
+/// reclamation after bursts.
+/// External systems: none.
+pub const RETENTION_INTERVAL: Duration = Duration::from_secs(3600);
+
+/// Archive retention DELETE batch size.
+///
+/// Chosen: keeps each purge transaction small so WAL autocheckpoint
+/// (1000 pages) can truncate between batches instead of growing the WAL by
+/// the whole backlog.
+/// Side effects: increasing grows WAL spikes; decreasing slows backlog drainage.
+/// External systems: SQLite (wal_autocheckpoint).
+pub const RETENTION_BATCH: i64 = 500;
+
 /// TTL sweeper scan period.
 ///
 /// Chosen: balances scan frequency against CPU overhead.
@@ -163,21 +203,22 @@ pub const RATE_LIMIT_PER_MIN: u32 = 20;
 pub const SWEEP_INTERVAL: Duration = Duration::from_secs(30);
 
 /// SQLite busy_timeout (write-conflict retry bound).
-/// Increased to tolerate high concurrent write contention at the cost of latency.
+/// SQLite serializes writers; under contention this bounds how long a request
+/// waits on the write lock before failing, keeping tail latency predictable.
 ///
-/// Chosen: high concurrency needs longer retry window for write conflicts.
+/// Chosen: 5 s fails fast instead of stacking multi-second lock waits.
 /// Side effects: decreasing may cause write failures; increasing adds latency.
 /// External systems: SQLite.
-pub const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
+pub const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// sqlx Pool connection-acquire timeout (sqlx PoolOptions default is 30s; must be set to 5s).
-/// Distinct from the SQLite-layer `BUSY_TIMEOUT`.
-/// Increased to tolerate pool exhaustion under high concurrency.
+/// sqlx Pool connection-acquire timeout (sqlx PoolOptions default is 30s).
+/// Distinct from the SQLite-layer `BUSY_TIMEOUT`. With a small pool this is
+/// the queue bound when all connections are checked out.
 ///
-/// Chosen: aligned with busy_timeout for high-concurrency scenarios.
+/// Chosen: 5 s — fails fast while staying above CF's 100 s proxy timeout.
 /// Side effects: decreasing may cause connection acquire failures; increasing adds latency.
 /// External systems: sqlx.
-pub const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(30);
+pub const ACQUIRE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Idempotency cache entry TTL (moka TTL).
 ///
@@ -194,17 +235,29 @@ pub const IDEMPOTENCY_TTL: Duration = Duration::from_secs(300);
 pub const IDEMPOTENCY_CAPACITY: u64 = 10_000;
 
 /// SQLite pool maximum connections.
-/// Sized for moderate concurrency; SQLite writers serialize anyway.
+/// SQLite writers serialize anyway; each extra connection costs its own page
+/// cache (see `SQLITE_CACHE_SIZE`), so pool × cache is the memory budget.
 ///
-/// Chosen: SQLite writes serialize; more connections add no benefit.
-/// Side effects: decreasing limits concurrency; increasing wastes resources.
+/// Chosen: 8 × 16 MiB = 128 MiB worst-case page cache, fits a 2 GiB host.
+/// Side effects: decreasing limits read concurrency; increasing multiplies
+/// the page-cache memory budget.
 /// External systems: SQLite.
-pub const DB_POOL_MAX: u32 = 50;
+pub const DB_POOL_MAX: u32 = 8;
 
 /// SQLite pool minimum idle connections.
 /// Keeps a warm floor to avoid cold-start latency on low-traffic periods.
 ///
-/// Chosen: warm pool floor avoids cold-start latency during low traffic.
+/// Chosen: 2 connections cover one writer + one reader at idle.
 /// Side effects: decreasing increases cold-start latency; increasing wastes resources.
 /// External systems: SQLite.
-pub const DB_POOL_MIN: u32 = 4;
+pub const DB_POOL_MIN: u32 = 2;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn archive_retention_defaults_to_seven_days() {
+        assert_eq!(Settings::default().archive_retention_days, 7);
+    }
+}
