@@ -1,0 +1,56 @@
+# 压测专用环境：模拟生产 VPS 规格（2 vCPU / 2 GiB）。
+#
+# 与 docker-compose.local.yml 的差异：
+#   - cpus/mem_limit 硬限制（模拟 2c2g VPS；生产机上 OS+内核还要占 ~250MiB，
+#     这里把 2GiB 全给容器，失败可干净归因到应用自身）
+#   - pids_limit：防止线程/FD 泄漏拖垮宿主
+#   - 加载预构建镜像而不是现场 build（CI 由 workflow 先构建打
+#     grilling-sleek:load-test 标签；本地用 GSLEEK_LOAD_IMAGE 指定）
+#
+# 3 Mbps 出口带宽不在 compose 内整形（需要 NET_ADMIN + iproute2），默认靠
+# k6 带宽指标对照 3 Mbps 上限评估；需要精确整形时：
+#   docker exec grill-load sh -c 'apk add -q iproute2 tc && \
+#     tc qdisc add dev eth0 root tbf rate 3mbit burst 32kbit latency 400ms'
+# （只整容器出方向 = 下载方向；上传方向需在打流侧或 ifb 上做）
+#
+# 用法：
+#   GSLEEK_LOAD_IMAGE=192.168.5.50:5000/grilling-sleek:main \
+#     docker compose -f docker/docker-compose.load.yml up -d
+#   k6 run -e BASE_URL=https://localhost:8443 -e PROFILE=steps tests/load/core-flow.js
+
+services:
+  grilling-sleek:
+    image: ${GSLEEK_LOAD_IMAGE:-grilling-sleek:load-test}
+    container_name: grill-load
+    ports:
+      - "8443:8443"
+    cpus: 2.0
+    mem_limit: 2g
+    memswap_limit: 2g # == mem_limit：禁用 swap，OOM 行为确定
+    pids_limit: 512
+    cap_add:
+      - NET_ADMIN # 可选的 tc 出口整形
+    environment:
+      - GSLEEK_BASE_URL=https://localhost:8443
+      - GSLEEK_DB_PATH=/app/data/grilling-sleek.db
+      # 压测单 IP 打流，会被每 IP 20/min 的限流挡住；压的是裸容量，
+      # 限流行为由 e2e 覆盖。生产环境不要设这个变量。
+      - GSLEEK_DISABLE_RATE_LIMIT=true
+      - RUST_LOG=info
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - ./Caddyfile.local:/app/Caddyfile:ro
+      - load-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsk", "https://localhost:8443/v1/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    stop_grace_period: 35s
+
+volumes:
+  load-data:

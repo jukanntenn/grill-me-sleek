@@ -2,13 +2,14 @@
 # 压力测试
 #
 # 触发条件：
-#   - 发布前（tag 推送）
-#   - 手动触发（可配置参数）
+#   - 发布前（tag 推送，smoke 档位 = 快速绿色门禁）
+#   - 手动触发（可选 profile：steps 甜点区搜索 / soak 稳定性 / extreme 极限）
 #
 # 设计原则：
-#   - 使用本地 Docker 环境
-#   - 生成详细报告
-#   - 失败时也上传报告
+#   - 使用本地 Docker 环境，模拟生产 VPS 规格（2 vCPU / 2 GiB，
+#     见 docker/docker-compose.load.yml）——压测结果对线上容量有参考意义
+#   - k6 运行期间采样容器 CPU/内存，与延迟数据一起归档
+#   - 生成详细报告，失败时也上传报告
 # =============================================================================
 
 name: Load Test
@@ -18,14 +19,14 @@ on:
     tags: ["v*", "cli-v*"]
   workflow_dispatch:
     inputs:
-      duration:
-        description: "Test duration (e.g., 1m, 5m)"
+      profile:
+        description: "Load profile (smoke|steps|soak|extreme)"
         required: false
-        default: "1m"
-      vus:
-        description: "Number of virtual users"
+        default: "steps"
+      script:
+        description: "k6 script (core-flow|extreme-500vu)"
         required: false
-        default: "10"
+        default: "core-flow"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,8 +36,7 @@ jobs:
   load-test:
     name: Load Test
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -54,8 +54,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Start Docker environment
-        run: docker compose -f docker/docker-compose.local.yml up -d
+      # docker-compose.load.yml 只引用镜像不现场 build（避免二次构建），
+      # 并施加 cpus=2 / mem_limit=2g 资源限制模拟生产 VPS。
+      - name: Start constrained Docker environment (2c / 2g)
+        run: docker compose -f docker/docker-compose.load.yml up -d
 
       - name: Wait for service
         run: |
@@ -68,7 +70,7 @@ jobs:
             sleep 2
           done
           echo "Service failed to start"
-          docker compose -f docker/docker-compose.local.yml logs
+          docker compose -f docker/docker-compose.load.yml logs
           exit 1
 
       - name: Install k6
@@ -76,16 +78,26 @@ jobs:
           curl -sL https://github.com/grafana/k6/releases/download/v0.49.0/k6-v0.49.0-linux-amd64.tar.gz | tar xz
           sudo mv k6-v0.49.0-linux-amd64/k6 /usr/local/bin
 
+      # k6 运行期间后台采样容器资源（内存曲线用于发现 SQLite 缓存/连接池
+      # 的内存拐点），k6 退出后停止采样并透传其退出码。
       - name: Run load test
         run: |
-          DURATION="${{ inputs.duration || '1m' }}"
-          VUS="${{ inputs.vus || '10' }}"
-          k6 run \
+          SCRIPT="${{ inputs.script || 'core-flow' }}"
+          PROFILE="${{ inputs.profile || 'smoke' }}"
+          (
+            while sleep 5; do
+              printf '%s ' "$(date -u +%FT%TZ)"
+              docker stats --no-stream --format 'mem={{.MemUsage}} cpu={{.CPUPerc}}' grill-load
+            done
+          ) > docker-stats.log 2>&1 &
+          SAMPLER=$!
+          k6 run -e PROFILE="$PROFILE" \
             --out json=results.json \
             --out csv=results.csv \
-            --duration $DURATION \
-            --vus $VUS \
-            tests/load/core-flow.js
+            "tests/load/$SCRIPT.js"
+          K6_EXIT=$?
+          kill "$SAMPLER" || true
+          exit "$K6_EXIT"
 
       - name: Upload results
         uses: actions/upload-artifact@v4
@@ -95,8 +107,13 @@ jobs:
           path: |
             results.json
             results.csv
+            docker-stats.log
           retention-days: 30
+
+      - name: Dump service logs
+        if: failure()
+        run: docker compose -f docker/docker-compose.load.yml logs --tail 500
 
       - name: Stop Docker environment
         if: always()
-        run: docker compose -f docker/docker-compose.local.yml down
+        run: docker compose -f docker/docker-compose.load.yml down
