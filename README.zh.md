@@ -1,4 +1,4 @@
-[English](./README.md) | 简体中文
+[English](./README.md) | 中文
 
 <div align="center">
 
@@ -20,9 +20,9 @@ Agent 帮你把方案里的坑都找出来，再动手写代码。
 
 ---
 
-## 快速开始
+## Quick Start
 
-以下以 Claude Code 为例，后续会支持更多工具，见[平台支持](#平台支持)。
+以下以 Claude Code 为例，后续会支持更多工具，见[平台支持](#platform-roadmap)。
 
 ```bash
 /plugin marketplace add jukanntenn/grill-me-sleek
@@ -35,7 +35,7 @@ Agent 帮你把方案里的坑都找出来，再动手写代码。
 
 Agent 会一次生成所有问题，在浏览器打开页面等你回答。如果有新问题，下一批会在同一个标签页自动加载。
 
-## 功能说明
+## What It Does
 
 你描述一个方案，Agent 帮你找出里面的问题、假设和不确定的地方，一次性列出来。
 
@@ -46,35 +46,35 @@ Agent 会一次生成所有问题，在浏览器打开页面等你回答。如�
 
 不用在终端里一问一答，不用翻半天才看到问题，快速过完方案。
 
-## 工作流程
+## How It Works
 
 ```mermaid
 sequenceDiagram
-    participant U as 你
-    participant A as Agent（Claude Code / Codex）
+    participant U as You
+    participant A as Agent (Claude Code / Codex)
     participant C as grilling-sleek CLI
-    participant H as Hub（grillingsleek.online）
-    participant B as 浏览器
+    participant H as Hub (grillingsleek.online)
+    participant B as Browser
 
-    U->>A: 描述你的方案
-    A->>C: 创建会话 + 问题
+    U->>A: Describe your plan
+    A->>C: Create session + questions
     C->>H: POST /sessions
-    H-->>C: 会话 URL
-    C-->>A: 返回 URL
-    A-->>U: "打开此链接回答"
-    U->>B: 打开 URL
-    H-->>B: 提供问题页面
-    U->>B: 审阅并提交答案
-    B->>H: POST 答案
-    A->>C: 轮询响应
+    H-->>C: Session URL
+    C-->>A: URL returned
+    A-->>U: "Open this link to answer"
+    U->>B: Open URL
+    H-->>B: Serve question page
+    U->>B: Review & submit answers
+    B->>H: POST answers
+    A->>C: Poll for response
     C->>H: GET /response?wait=
-    H-->>C: 你的答案（JSON）
-    C-->>A: 解析答案
-    A->>A: 处理答案，生成下一批
-    Note over A,U: 每个决策分支重复此流程
-    A->>C: 完成会话
+    H-->>C: Your answers (JSON)
+    C-->>A: Answers parsed
+    A->>A: Process answers, generate next batch
+    Note over A,U: Repeat for each decision branch
+    A->>C: Complete session
     C->>H: PATCH /sessions/{id}
-    A-->>U: 所有决策的总结
+    A-->>U: Summary of all decisions
 ```
 
 每批问题变成一个网页，你在浏览器里审阅并提交。Hub 托管 UI，不需要本地服务器。
@@ -90,7 +90,7 @@ sequenceDiagram
 | **浏览器支持** | 🌐 macOS、Linux、WSL 自动打开   | 不适用             |
 | **审阅耗时**   | ⏱️ 通常 ≤ 5 分钟                | 通常 10~30 分钟    |
 
-## 平台支持
+## Platform Roadmap
 
 | 平台         | 状态                  |
 | ------------ | --------------------- |
@@ -99,7 +99,7 @@ sequenceDiagram
 | OpenCode     | 🔜 计划中             |
 | Trae         | 🔜 计划中             |
 
-## 安装
+## Install
 
 **前置条件：** Node.js ≥ 22
 
@@ -128,15 +128,15 @@ npx @grilling-sleek/cli --help
 
 ```bash
 git clone https://github.com/jukanntenn/grill-me-sleek.git
-# 用户级（所有项目可用）
+# User-level (all projects)
 cp -r grill-me-sleek/skills/grilling-sleek ~/.agents/skills/
-# 或项目级（仅当前项目）
+# Or project-level (current project only)
 # cp -r grill-me-sleek/skills/grilling-sleek .agents/skills/
 ```
 
 安装后重启 Codex，skill 在所有新会话中可用。
 
-## 使用场景
+## Use Cases
 
 | 你想做什么   | 可以这样说                                                               |
 | ------------ | ------------------------------------------------------------------------ |
@@ -145,6 +145,6 @@ cp -r grill-me-sleek/skills/grilling-sleek ~/.agents/skills/
 | 对齐项目规划 | _"Grill me on the roadmap for the new dashboard feature"_                |
 | 确认调试思路 | _"Grill me on my approach to fixing the memory leak in the worker pool"_ |
 
-## 许可证
+## License
 
 [MIT](LICENSE) © jukanntenn

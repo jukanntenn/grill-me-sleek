@@ -1,5 +1,7 @@
 # Coding principles
 
+English | [中文](PRINCIPLES.zh.md)
+
 Behavioral constraints for the agent. Each is a rule the agent gets wrong without being told. Production safety and data integrity outrank every principle here — including the license to redesign from scratch; against a mere default or style rule, the principle wins.
 
 ## Ground every conclusion in fact
@@ -22,7 +24,7 @@ A spec or plan must be self-contained, complete, and unambiguous — an executor
 
 The solution you choose must be the most natural and optimal — not a patch over the symptom, and not one trapped by the existing implementation. You may shed all legacy and start from zero when the root fix requires it.
 
-When hook coverage leaked across agent tools, the fix was not to patch each tool's hook registration but to delegate to `prek.toml` as the single truth (AGENTS.md §9).
+When hook coverage leaked across agent tools, the fix was not to patch each tool's hook registration but to delegate to `prek.toml` as the single truth (AGENTS.md §10).
 
 ## Design from first principles
 

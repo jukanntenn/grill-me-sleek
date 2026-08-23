@@ -14,7 +14,7 @@ The user's input — the request that triggered this skill, or the text passed w
 
 **Discuss** one theme at a time. Before raising any question on a theme, report the relevant code's current state; brainstorm options from first principles — shedding legacy and redesigning from zero when the root fix requires it; then decide the best option yourself when you can, and put it to the user (AskUserQuestion) only when you cannot. **Confirm** before moving on: advance to the next theme only after the user explicitly confirms this one, and stay on the current theme until then.
 
-**Land** only after the user has confirmed every theme: produce what was agreed — a spec, the implementation, or both. Discussion and production are separate phases; don't produce theme-by-theme as each settles. If the output is a spec, state the terminal design — no "was X, now Y" evolutionary prose. Finish code with `prek run --all-files` green; never commit — hand off for review (AGENTS.md §7). After touching `server/migrations/`, `server/src/db/`, or `server/Cargo.toml`, run `python3 scripts/migrate.py prepare`.
+**Land** only after the user has confirmed every theme: produce what was agreed — a spec, the implementation, or both. Discussion and production are separate phases; don't produce theme-by-theme as each settles. If the output is a spec, state the terminal design — no "was X, now Y" evolutionary prose. Finish code with `prek run --all-files` green; never commit — hand off for review (AGENTS.md §8). After touching `server/migrations/`, `server/src/db/`, or `server/Cargo.toml`, run `python3 scripts/migrate.py prepare`.
 
 ## Variants
 

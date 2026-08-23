@@ -1,0 +1,15 @@
+{
+  "exempt": [
+    "^CHANGELOG\\.md$",
+    "^specs/rust-guidelines\\.md$",
+    "^skills/",
+    "^\\.zcode/",
+    "^\\.claude/",
+    "^\\.codex/",
+    "^\\.opencode/",
+    "^\\.agents/skills/",
+    "^tests/load/",
+    "(^|/)CLAUDE\\.md$"
+  ],
+  "cjk_allowed": []
+}

@@ -1,38 +1,40 @@
-# E2E 测试规范
+# E2E testing spec
 
-## 1. 概述
+English | [中文](e2e.zh.md)
 
-### 1.1 目标
+## 1. Overview
 
-- 覆盖所有核心业务场景和边界情况
-- 验证前后端完整集成（真实环境，不使用 mock）
-- 确保新功能不引入回归 BUG
-- 测试环境尽可能接近生产环境
+### 1.1 Goals
 
-### 1.2 设计原则
+- Cover every core business scenario and boundary case
+- Verify full frontend/backend integration (real environment, no mocks)
+- Keep new features from introducing regressions
+- Keep the test environment as close to production as possible
 
-借鉴知名开源项目的测试策略：
+### 1.2 Design principles
 
-| 项目              | 策略                                         | 我们的应用                                     |
-| ----------------- | -------------------------------------------- | ---------------------------------------------- |
-| obsidian-livesync | CLI 驱动 + Docker 容器 + 临时目录隔离        | cli/ 驱动数据交互，Docker Compose 启动完整环境 |
-| airflow           | 真实 API + Page Object Model + Fixtures 管理 | cli/ 命令准备数据，Playwright 验证 UI          |
+Borrowed from well-known open-source testing strategies:
 
-**核心理念**：真实环境端对端测试，不使用 mock。
+| Project           | Strategy                                            | Our application                                                              |
+| ----------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- |
+| obsidian-livesync | CLI-driven + Docker containers + temp-dir isolation | cli/ drives data interactions; Docker Compose brings up the full environment |
+| airflow           | Real API + Page Object Model + fixture management   | cli/ commands prepare data; Playwright verifies the UI                       |
 
-### 1.3 技术选型
+**Core idea**: real-environment end-to-end testing, no mocks.
 
-| 组件       | 选型                 | 理由                           |
-| ---------- | -------------------- | ------------------------------ |
-| 测试框架   | Playwright           | 现代浏览器自动化，支持多浏览器 |
-| 测试运行器 | Node.js + TypeScript | 与前端技术栈一致               |
-| 数据交互   | cli/ 命令            | 真实环境 agent 使用的工具      |
-| 环境管理   | Docker Compose       | 接近生产环境                   |
-| 包管理器   | pnpm                 | 与项目其他部分一致             |
+### 1.3 Technology choices
 
-## 2. 测试架构
+| Component        | Choice               | Why                                      |
+| ---------------- | -------------------- | ---------------------------------------- |
+| Test framework   | Playwright           | Modern browser automation, multi-browser |
+| Test runner      | Node.js + TypeScript | Matches the frontend stack               |
+| Data interaction | cli/ commands        | The tool real agents use                 |
+| Environment      | Docker Compose       | Close to production                      |
+| Package manager  | pnpm                 | Consistent with the rest of the project  |
 
-### 2.1 整体架构
+## 2. Test architecture
+
+### 2.1 Overall architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -59,7 +61,7 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 目录结构
+### 2.2 Directory layout
 
 ```
 e2e/
@@ -87,19 +89,19 @@ e2e/
     └── shared.ts                 # 共享工具
 ```
 
-## 3. 测试执行
+## 3. Running the tests
 
-### 3.1 一键执行（推荐）
+### 3.1 One command (recommended)
 
-只需一条命令，自动完成：构建镜像 → 启动容器 → 运行测试 → 清理环境
+A single command does: build images → start containers → run tests → tear down
 
 ```bash
 cd e2e && pnpm test
 ```
 
-### 3.2 分步执行
+### 3.2 Step by step
 
-如果需要调试或只运行部分测试：
+For debugging or partial runs:
 
 ```bash
 # 1. 启动 Docker 环境（自动构建镜像）
@@ -119,7 +121,7 @@ pnpm run report
 pnpm run docker:down
 ```
 
-### 3.3 调试模式
+### 3.3 Debug modes
 
 ```bash
 # 打开浏览器窗口，逐步执行
@@ -132,9 +134,9 @@ pnpm run test:headed
 pnpm run docker:logs
 ```
 
-### 3.4 CI/CD 集成
+### 3.4 CI integration
 
-在 CI 环境中，使用与本地相同的命令：
+CI uses the same commands as local:
 
 ```yaml
 # .github/workflows/e2e.yml
@@ -142,24 +144,24 @@ pnpm run docker:logs
   run: cd e2e && pnpm test
 ```
 
-### 3.5 环境变量
+### 3.5 Environment variables
 
-| 变量        | 默认值                  | 说明                            |
-| ----------- | ----------------------- | ------------------------------- |
-| `GS_SERVER` | `http://localhost:8443` | 后端服务器地址                  |
-| `BASE_URL`  | `http://localhost:8443` | Playwright 测试基础 URL         |
-| `CI`        | -                       | CI 环境标识（影响重试和并行度） |
+| Variable    | Default                 | Purpose                                     |
+| ----------- | ----------------------- | ------------------------------------------- |
+| `GS_SERVER` | `http://localhost:8443` | Backend server address                      |
+| `BASE_URL`  | `http://localhost:8443` | Playwright base URL                         |
+| `CI`        | -                       | CI marker (affects retries and parallelism) |
 
-### 3.6 前置条件
+### 3.6 Prerequisites
 
-- Docker 和 Docker Compose
+- Docker and Docker Compose
 - Node.js 22+
-- pnpm（项目统一使用）
-- 网络访问（首次构建需要下载依赖）
+- pnpm (as everywhere in the project)
+- Network access (first build downloads dependencies)
 
-### 3.7 故障排除
+### 3.7 Troubleshooting
 
-**Docker 构建失败**
+**Docker build fails**
 
 ```bash
 # 查看构建日志
@@ -169,14 +171,14 @@ cd e2e && pnpm run docker:logs
 pnpm run docker:down && pnpm run docker:up
 ```
 
-**测试超时**
+**Test timeouts**
 
 ```bash
 # 增加超时时间
 pnpm test -- --timeout=60000
 ```
 
-**容器启动失败**
+**Container fails to start**
 
 ```bash
 # 检查端口占用
@@ -186,11 +188,11 @@ lsof -i :8443
 docker compose -f docker-compose.local.yml down -v --remove-orphans
 ```
 
-## 4. 核心组件设计
+## 4. Core component design
 
-### 4.1 cli/ 命令封装
+### 4.1 cli/ command wrappers
 
-所有数据交互都通过 cli/ 命令，与真实 agent 行为一致。
+All data interaction goes through cli/ commands, matching real agent behavior.
 
 ```typescript
 // e2e/utils/cli.ts
@@ -208,7 +210,7 @@ export async function createSession(
 
 ### 4.2 Page Object Model
 
-每个页面封装为一个类，提供稳定的接口。
+Each page is wrapped in a class exposing a stable interface.
 
 ```typescript
 // e2e/pages/QuestionsPage.ts
@@ -225,9 +227,9 @@ export class QuestionsPage extends BasePage {
 }
 ```
 
-### 4.3 Fixtures 管理
+### 4.3 Fixture management
 
-使用 Playwright 的 fixtures 管理测试数据和页面对象。
+Playwright fixtures manage test data and page objects.
 
 ```typescript
 // e2e/fixtures/data.ts
@@ -242,47 +244,47 @@ export const test = base.extend<DataFixtures>({
 });
 ```
 
-## 5. 测试用例覆盖
+## 5. Test coverage
 
-### 5.1 CLI 行为测试 (cli-behavior.spec.ts)
+### 5.1 CLI behavior tests (cli-behavior.spec.ts)
 
-| 测试                           | 说明           |
-| ------------------------------ | -------------- |
-| create 命令 > 成功创建会话     | 验证返回值结构 |
-| create 命令 > 无效 JSON 输入   | 验证错误码 64  |
-| create 命令 > Schema 验证失败  | 验证错误码 64  |
-| create 命令 > 重复问题 ID      | 验证错误码 64  |
-| push 命令 > 成功推送新轮次     | 验证返回值     |
-| push 命令 > 不存在的会话       | 验证错误码 1   |
-| poll 命令 > 超时               | 验证退出码 75  |
-| poll 命令 > 会话取消           | 验证错误信息   |
-| status 命令 > 查询活跃会话     | 验证返回值     |
-| status 命令 > 查询已完成会话   | 验证状态       |
-| status 命令 > 查询已取消会话   | 验证状态       |
-| status 命令 > 查询不存在的会话 | 验证错误码 1   |
-| complete 命令 > 成功完成会话   | 验证状态变更   |
-| cancel 命令 > 成功取消会话     | 验证状态变更   |
-| cancel 命令 > 无效的取消原因   | 验证错误码 64  |
+| Test                                       | Verifies          |
+| ------------------------------------------ | ----------------- |
+| create command > session created           | Return structure  |
+| create command > invalid JSON input        | Exit code 64      |
+| create command > schema validation failure | Exit code 64      |
+| create command > duplicate question ids    | Exit code 64      |
+| push command > new round pushed            | Return value      |
+| push command > nonexistent session         | Exit code 1       |
+| poll command > timeout                     | Exit code 75      |
+| poll command > session cancelled           | Error message     |
+| status command > active session            | Return value      |
+| status command > completed session         | Status            |
+| status command > cancelled session         | Status            |
+| status command > nonexistent session       | Exit code 1       |
+| complete command > session completed       | Status transition |
+| cancel command > session cancelled         | Status transition |
+| cancel command > invalid cancel reason     | Exit code 64      |
 
-### 5.2 会话生命周期测试 (session-lifecycle.spec.ts)
+### 5.2 Session lifecycle tests (session-lifecycle.spec.ts)
 
-| 测试         | 说明                      |
-| ------------ | ------------------------- |
-| 完整流程     | 创建 → 答题 → 多轮 → 完成 |
-| 用户取消     | 验证取消页面              |
-| 会话完成     | 验证完成页面              |
-| 查询会话状态 | 验证 API 返回值           |
-| 多轮问答流程 | 验证轮次切换              |
+| Test                 | Verifies                                     |
+| -------------------- | -------------------------------------------- |
+| Full flow            | Create → answer → multiple rounds → complete |
+| User cancellation    | Cancellation page                            |
+| Session completion   | Completion page                              |
+| Session status query | API return value                             |
+| Multi-round Q&A flow | Round transitions                            |
 
-### 5.3 待实现的测试
+### 5.3 Tests still to build
 
-- 多轮问答测试 (multi-round.spec.ts)
-- 用户交互测试 (user-interaction.spec.ts)
-- 错误处理测试 (error-handling.spec.ts)
-- SSE 事件流测试 (sse.spec.ts)
-- 边界情况测试 (edge-cases.spec.ts)
+- Multi-round Q&A tests (multi-round.spec.ts)
+- User-interaction tests (user-interaction.spec.ts)
+- Error-handling tests (error-handling.spec.ts)
+- SSE event-stream tests (sse.spec.ts)
+- Edge-case tests (edge-cases.spec.ts)
 
-## 6. Docker 配置
+## 6. Docker configuration
 
 ### 6.1 docker-compose.local.yml
 
@@ -307,7 +309,7 @@ services:
       - ./Caddyfile.local:/app/Caddyfile:ro
 ```
 
-### 6.2 Caddyfile.local（E2E/本地验收专用）
+### 6.2 Caddyfile.local (for E2E / local acceptance)
 
 ```
 {
@@ -332,22 +334,22 @@ localhost:8443 {
 }
 ```
 
-## 7. 最佳实践
+## 7. Best practices
 
-### 7.1 测试编写
+### 7.1 Writing tests
 
-1. **独立性**：每个测试用例独立运行
-2. **可读性**：使用描述性名称
-3. **稳定性**：使用自动等待，避免硬编码等待
+1. **Independence**: every test case runs on its own
+2. **Readability**: descriptive names
+3. **Stability**: auto-waiting, never hardcoded sleeps
 
-### 7.2 数据管理
+### 7.2 Data management
 
-1. **cli/ 驱动**：所有数据交互通过 cli/ 命令
-2. **Fixtures 隔离**：每个测试用例独立数据
-3. **自动清理**：测试结束后自动清理
+1. **cli/-driven**: all data interaction through cli/ commands
+2. **Fixture isolation**: each test case has its own data
+3. **Automatic cleanup**: teardown after every test
 
-### 7.3 调试技巧
+### 7.3 Debugging tips
 
-1. **查看测试报告**：`pnpm run report`
-2. **调试模式**：`pnpm run test:debug`
-3. **查看容器日志**：`pnpm run docker:logs`
+1. **Test report**: `pnpm run report`
+2. **Debug mode**: `pnpm run test:debug`
+3. **Container logs**: `pnpm run docker:logs`

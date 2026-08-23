@@ -1,5 +1,7 @@
 # @grilling-sleek/cli
 
+English | [中文](./README.zh.md)
+
 CLI tool for grilling-sleek - Stress-test your plan before vibe coding.
 
 ## Features

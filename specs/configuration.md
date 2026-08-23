@@ -1,10 +1,12 @@
-# 配置规范（Configuration）
+# Configuration spec
 
-服务端的运行时配置体系。采用 **config-rs**（0.15）实现分层配置，取代手写的 `std::env::var` 逻辑。
+English | [中文](configuration.zh.md)
 
-## 分层模型
+The server's runtime configuration system, built on **config-rs** (0.15) for layered configuration in place of hand-written `std::env::var` logic.
 
-配置按优先级从低到高合并，后者覆盖前者：
+## Layered model
+
+Sources merge from lowest to highest priority; a later source overrides an earlier one:
 
 ```
 默认值（Settings::default）
@@ -12,15 +14,15 @@
        └─ 环境变量（GSLEEK_ 前缀）
 ```
 
-- **默认值**：由 `#[serde(default)]` + `impl Default for Settings` 提供，任何来源缺失的字段回退到默认。
-- **TOML 文件**：可选。由 `GSLEEK_CONFIG_FILE` 环境变量指定文件路径（不含扩展名，config-rs 自动识别 `.toml`）。未设置则不加载文件。
-- **环境变量**：始终生效。统一 `GSLEEK_` 前缀，前缀与键之间用单 `_` 分隔（config-rs 默认行为）。`try_parsing(true)` 使数字/布尔值被正确解析；`ignore_empty(true)` 使空字符串值视为未设置。
+- **Defaults**: provided by `#[serde(default)]` + `impl Default for Settings`; any field missing from a source falls back to its default.
+- **TOML file**: optional. The path (without extension) comes from the `GSLEEK_CONFIG_FILE` environment variable; config-rs picks up `.toml` automatically. Unset means no file is loaded.
+- **Environment variables**: always in effect. Uniform `GSLEEK_` prefix with a single `_` between prefix and key (config-rs default behavior). `try_parsing(true)` parses numbers/booleans correctly; `ignore_empty(true)` treats empty-string values as unset.
 
-> config-rs `with_prefix("GSLEEK")` 默认前缀分隔符为单 `_`（源码 `config-rs/src/env.rs:245-249`），故 `GSLEEK_BASE_URL` → 键 `base_url`。
+> config-rs `with_prefix("GSLEEK")` defaults to a single `_` as the prefix separator (source: `config-rs/src/env.rs:245-249`), so `GSLEEK_BASE_URL` → key `base_url`.
 
-## 加载时机
+## Load timing
 
-`main()` 启动时一次性加载并装入进程级单例（`OnceLock<Settings>`）：
+`main()` loads once at startup and installs a process-wide singleton (`OnceLock<Settings>`):
 
 ```rust
 let settings = config::Settings::load()?;
@@ -28,57 +30,61 @@ config::init(settings);
 // 后续任意位置：config::settings().base_url
 ```
 
-## 当前可配置项
+## Configurable fields
 
-| 字段       | 环境变量          | 类型   | 默认值                               | 说明                                       |
-| ---------- | ----------------- | ------ | ------------------------------------ | ------------------------------------------ |
-| `base_url` | `GSLEEK_BASE_URL` | string | `https://grilling-sleek.example.com` | 会话链接基址（`{base_url}/#{session_id}`） |
-| `db_path`  | `GSLEEK_DB_PATH`  | string | `./data/grilling-sleek.db`           | SQLite 数据库文件路径                      |
-| `log_dir`  | `GSLEEK_LOG_DIR`  | string | `./log/grilling-sleek`               | 日志目录（tracing-appender 滚动文件）      |
+| Field                    | Environment variable            | Type   | Default                              | Notes                                                                                                                                                                                 |
+| ------------------------ | ------------------------------- | ------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `base_url`               | `GSLEEK_BASE_URL`               | string | `https://grilling-sleek.example.com` | Base for session links (`{base_url}/#{session_id}`)                                                                                                                                   |
+| `db_path`                | `GSLEEK_DB_PATH`                | string | `./data/grilling-sleek.db`           | SQLite database file path                                                                                                                                                             |
+| `log_dir`                | `GSLEEK_LOG_DIR`                | string | `./log/grilling-sleek`               | Log directory (tracing-appender rolling files)                                                                                                                                        |
+| `archive_retention_days` | `GSLEEK_ARCHIVE_RETENTION_DAYS` | int    | `7`                                  | Days to keep `session_archive` rows; a background task deletes expired rows in batches (steady-state disk ceiling ≈ worst-case abusive write rate × this value); `0` disables cleanup |
 
-## 辅助环境变量
+## Helper environment variables
 
-| 变量                          | 说明                                                                         |
-| ----------------------------- | ---------------------------------------------------------------------------- |
-| `GSLEEK_CONFIG_FILE`          | TOML 配置文件路径（不含扩展名）。设置后 config-rs 从该文件加载，缺失则报错。 |
-| `RUST_LOG`                    | tracing 日志级别（如 `info`）。                                              |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP 导出端点。设置后启用远程 OTel 导出；未设置则写本地文件。                |
+| Variable                      | Purpose                                                                                             |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- |
+| `GSLEEK_CONFIG_FILE`          | TOML config file path (without extension). When set, config-rs loads from it and errors if missing. |
+| `RUST_LOG`                    | tracing log level (e.g. `info`).                                                                    |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP export endpoint. Set enables remote OTel export; unset writes local files.                     |
 
-## 环境变量命名规范
+## Environment variable naming rules
 
-- 统一 `GSLEEK_` 前缀。
-- 键名扁平（当前所有配置项均为顶层字段，无嵌套）。
-- 前缀与键之间用单 `_` 分隔。
-- 若将来引入嵌套结构（如 `[server] host`），需用 `.separator("__")` 配置，使 `GSLEEK_SERVER__HOST` → `server.host`。
+- Uniform `GSLEEK_` prefix.
+- Flat keys (every field is a top-level key; no nesting).
+- A single `_` separates prefix from key.
+- Introducing nested structures later (e.g. `[server] host`) requires `.separator("__")` so `GSLEEK_SERVER__HOST` → `server.host`.
 
-## 尚为常量（const）的参数
+## Constants not yet in Settings
 
-以下参数目前为 `pub const`（见 `server/src/config.rs`），尚未纳入 `Settings`。后续逐步提取：
+These parameters are `pub const` today (see `server/src/config.rs`) and are not part of `Settings` yet; they migrate over time:
 
-| 常量                   | 值               | 说明                |
-| ---------------------- | ---------------- | ------------------- |
-| `LISTEN_ADDR`          | `127.0.0.1:8080` | 监听地址            |
-| `SESSION_TTL`          | `3600`（秒）     | 会话固定 TTL        |
-| `MAX_SESSIONS`         | `15_000`         | DashMap 软容量      |
-| `MAX_SSE_CONNECTIONS`  | `50_000`         | 全局 SSE 连接软上限 |
-| `LONGPOLL_WAIT`        | `55`（秒）       | 单次长轮询阻塞上限  |
-| `KEEPALIVE_INTERVAL`   | `85s`            | SSE keepalive 间隔  |
-| `SHUTDOWN_TIMEOUT`     | `30s`            | 优雅关停上限        |
-| `SWEEP_INTERVAL`       | `30s`            | TTL 扫描周期        |
-| `BUSY_TIMEOUT`         | `5s`             | SQLite busy_timeout |
-| `ACQUIRE_TIMEOUT`      | `5s`             | sqlx 连接获取超时   |
-| `RATE_LIMIT_PER_MIN`   | `20`             | 每 IP 创建会话限流  |
-| `IDEMPOTENCY_TTL`      | `300s`           | 幂等缓存条目 TTL    |
-| `IDEMPOTENCY_CAPACITY` | `10_000`         | 幂等缓存容量        |
+| Constant                     | Value            | Purpose                                                                 |
+| ---------------------------- | ---------------- | ----------------------------------------------------------------------- |
+| `LISTEN_ADDR`                | `127.0.0.1:8000` | Listen address                                                          |
+| `SESSION_TTL`                | `3600` (s)       | Fixed session TTL                                                       |
+| `MAX_SESSIONS`               | `15_000`         | DashMap soft capacity                                                   |
+| `MAX_SSE_CONNECTIONS`        | `50_000`         | Global SSE connection soft cap                                          |
+| `LONGPOLL_WAIT`              | `55` (s)         | Per-long-poll blocking cap                                              |
+| `KEEPALIVE_INTERVAL`         | `85s`            | SSE keepalive interval                                                  |
+| `SHUTDOWN_TIMEOUT`           | `30s`            | Graceful shutdown cap                                                   |
+| `SWEEP_INTERVAL`             | `30s`            | TTL sweep period                                                        |
+| `BUSY_TIMEOUT`               | `5s`             | SQLite busy_timeout                                                     |
+| `ACQUIRE_TIMEOUT`            | `5s`             | sqlx connection-acquire timeout                                         |
+| `RATE_LIMIT_PER_MIN`         | `20`             | Per-IP session-creation limit (strict inner limit on POST /v1/sessions) |
+| `RATE_LIMIT_GENERAL_PER_MIN` | `120`            | Per-IP general limit (all business routes; health probes exempt)        |
+| `IDEMPOTENCY_TTL`            | `300s`           | Idempotency cache entry TTL                                             |
+| `IDEMPOTENCY_CAPACITY`       | `10_000`         | Idempotency cache capacity                                              |
+| `RETENTION_INTERVAL`         | `3600s`          | Archive-retention cleanup period                                        |
+| `RETENTION_BATCH`            | `500`            | Rows deleted per archive-retention batch (bounds WAL peaks)             |
 
-## Duration 配置的后续方案
+## The Duration plan
 
-当前 6 个 `Duration` 类常量（`KEEPALIVE_INTERVAL` 等）未纳入配置，因 config-rs 内部值类型（`ValueKind`）只有标量/表/数组，不原生支持 `std::time::Duration`（serde 期望 `{secs, nanos}` 结构）。
+The seven `Duration`-typed constants (`KEEPALIVE_INTERVAL`, `RETENTION_INTERVAL`, …) are outside configuration because config-rs internal values (`ValueKind`) cover only scalars/tables/arrays and do not natively support `std::time::Duration` (serde expects a `{secs, nanos}` struct).
 
-后续提取时拟采用 **humantime**（2.4.0）解析人类可读字符串（如 `"85s"`、`"5m"`），可读性最佳。已调研该 crate：维护活跃，最新提交 2026-07-13，几天前刚发布 2.4.0。
+The planned extraction uses **humantime** (2.4.0) to parse human-readable strings (e.g. `"85s"`, `"5m"`) for the best readability. The crate was vetted: actively maintained, latest commit 2026-07-13, with 2.4.0 released days earlier.
 
-## 实现参考
+## Implementation references
 
-- crate：`config`（config-rs）0.15，`default-features = false, features = ["toml"]`
-- 源码：`server/src/config.rs`
-- 上下文仓库（已 clone 至 `.local/contexts/config-rs`，tag `v0.15.25`）
+- Crate: `config` (config-rs) 0.15, `default-features = false, features = ["toml"]`
+- Source: `server/src/config.rs`
+- Context repo (cloned at `.local/contexts/config-rs`, tag `v0.15.25`)

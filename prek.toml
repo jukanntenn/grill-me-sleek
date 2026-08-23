@@ -53,14 +53,31 @@ hooks = [
 [[repos]]
 repo = "local"
 
-# AI tool configs in sync (AGENTS.md == CLAUDE.md, mirrored skills identical;
-# the packaged grilling-sleek skill is deliberately not checked).
+# AI tool configs in sync (AGENTS.md == CLAUDE.md per pair, direction-free;
+# mirrored skills derived from .claude/skills/; the packaged grilling-sleek
+# skill is deliberately not checked).
 [[repos.hooks]]
 id = "agents-sync"
 name = "AI tool configs in sync"
 language = "system"
 entry = "python3 scripts/check_agents.py"
-files = '^(AGENTS|CLAUDE)\.md$|^\.claude/skills/|^\.agents/skills/|^\.zcode/skills/'
+files = '(^|/)(AGENTS|CLAUDE)\.md$|^\.claude/skills/|^\.agents/skills/|^\.zcode/skills/'
+pass_filenames = false
+stages = ["pre-commit"]
+groups = ["check"]
+
+# Documentation gates (links, current-state prose, GS-RFC format, budgets,
+# bilingual pairs, specs index) over the full Markdown corpus — see
+# specs/AGENTS.md. pass_filenames = false: the pair and index gates need the
+# whole corpus in one run (the hook runner may batch filenames), and prek
+# stashes unstaged changes during hook runs, so a full scan sees exactly the
+# state being committed. CI runs the same gates via `prek run --all-files`.
+[[repos.hooks]]
+id = "doc-check"
+name = "documentation gates"
+language = "system"
+entry = "python3 scripts/doc_sync.py"
+files = '\.md$|^scripts/(doclib|doc_sync|verify_|agentlib|doc_budgets|doc_languages)'
 pass_filenames = false
 stages = ["pre-commit"]
 groups = ["check"]
