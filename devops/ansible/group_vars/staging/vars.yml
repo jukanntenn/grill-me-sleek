@@ -15,9 +15,6 @@ image: "{{ registry }}/grilling-sleek:{{ image_tag }}"
 host_port: 8090
 public_url: "http://192.168.5.200:8090"
 
-# TLS profile for the rendered Caddyfile / compose healthcheck:
-# http = plain HTTP, auto_https off.
-tls_profile: http
 caddyfile_template: Caddyfile.staging
 
 rust_log: "info"

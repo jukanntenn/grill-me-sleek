@@ -13,8 +13,9 @@ caddyfile: "{{ app_path }}/Caddyfile"
 
 # Container internals are identical in every environment: Caddy listens on
 # 8443 (the only published port) and reverse-proxies /v1/* to the Rust
-# backend on 127.0.0.1:8000. The host-side port is per-environment
-# (host_port).
+# backend on 127.0.0.1:8000, always plain HTTP — production's TLS terminates
+# on the host Caddy gateway. The host-side port is per-environment
+# (host_port); production publishes it loopback-only for the gateway.
 app_port: 8443
 
 # Directories to create on the host (production app_dirs adds certs/ in its

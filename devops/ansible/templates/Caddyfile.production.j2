@@ -1,29 +1,27 @@
 # {{ ansible_managed }}
 # grilling-sleek Caddyfile (production — ttyo, behind Cloudflare).
 #
-# TLS with Cloudflare Origin CA certificate (Full Strict mode). Cloudflare
-# terminates visitor-side TLS at the edge; Caddy terminates the edge→origin
-# leg. The cert is mounted at /app/certs/ from the host certs/ directory.
+# Plain HTTP only. TLS terminates on the host Caddy gateway (port 443,
+# Cloudflare Origin CA cert, Full strict) — the shared systemd Caddy on the
+# VPS — which reverse-proxies grillingsleek.online to the loopback-published
+# port below; because that port binds 127.0.0.1, the host gateway is the only
+# possible peer. The direct-8443 era's @not_cf CIDR gate and CF-CIDR
+# trusted_proxies are gone with it: the host firewall (443 open to Cloudflare
+# CIDRs only) is the enforcement point, and 443 is the one proxied HTTPS port
+# where the edge actually caches.
 #
-# 仅 Cloudflare 回源：非 CF 网段的直接连接一律 403（@not_cf）。trusted_proxies
-# 使只有 Cloudflare（可信对端）可以前置 X-Forwarded-For，直连的 XFF 被 Caddy
-# 覆写，堵住伪造缺口。CIDR 来源 https://www.cloudflare.com/ips/（由
-# group_vars/production/vars.yml 的 cloudflare_cidrs 渲染）。
+# trusted_proxies private_ranges covers the gateway's NAT'd bridge address as
+# seen from the container. The default XFF append is superseded by the
+# header_up rewrite: CF-Connecting-IP passes through the gateway untouched
+# (not a hop-by-hop header), so the XFF reaching Rust is always the single
+# Cloudflare-asserted client IP — the contract server/src/main.rs's governor
+# extractor and handlers::extract_client_ip rely on.
 
 {
     auto_https off
 }
 
 :8443 {
-    # TLS: Cloudflare Origin CA certificate
-    tls /app/certs/origin.pem /app/certs/origin.key
-
-    # 仅接受 Cloudflare 回源连接，其余直接 IP 访问一律 403
-    @not_cf {
-        not remote_ip {{ cloudflare_cidrs }}
-    }
-    respond @not_cf "Forbidden" 403
-
     # Security headers
     header {
         Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self'"
@@ -41,17 +39,19 @@
     root * /app/web/dist
     file_server
 
-    # Cache-Control for Entry HTML (5min, so Cloudflare can cache it)
+    # Cache-Control for Entry HTML (5min; edge-caches on 443 via the
+    # cache-entry-html Cache Rule — without it HTML is always DYNAMIC)
     @html path /
     header @html Cache-Control "public, max-age=300"
 
-    # Cache-Control for assets (immutable, 1 year)
+    # Cache-Control for assets (immutable, 1 year; cached by default on 443
+    # — static file extensions are edge-cacheable without any rule)
     @assets path /assets/*
     header @assets Cache-Control "public, max-age=31536000, immutable"
 
     # Reverse proxy to Rust backend
     reverse_proxy /v1/* 127.0.0.1:8000 {
-        trusted_proxies {{ cloudflare_cidrs }}
+        trusted_proxies private_ranges
         transport http {
             versions h2c
         }

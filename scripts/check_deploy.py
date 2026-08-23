@@ -28,14 +28,30 @@ import urllib.error
 import urllib.request
 
 
-def fetch_json(url: str, timeout: float) -> dict | None:
+# The default Python-urllib User-Agent is 403-blocked on the Cloudflare-proxied
+# production URL (bot protection), so a fixed UA is mandatory, not cosmetic.
+UA = "grilling-sleek-check/1.0"
+
+
+def fetch_json(url: str, timeout: float) -> tuple[dict | None, int | None]:
+    """GET the URL as JSON. Returns (body, http_status); body is None on any
+    error or non-200, http_status is None when no HTTP response arrived at all
+    (DNS, connection, timeout) — callers surface the status instead of masking
+    a hard 403/521 behind "not ready yet" for the full timeout."""
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
             if resp.status != 200:
-                return None
-            return json.loads(resp.read().decode())
+                return None, resp.status
+            return json.loads(resp.read().decode()), resp.status
+    except urllib.error.HTTPError as e:
+        return None, e.code
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
-        return None
+        return None, None
+
+
+def _reason(status: int | None) -> str:
+    return f", HTTP {status}" if status is not None else ""
 
 
 def wait_healthz(base_url: str, interval: float, timeout: float) -> bool:
@@ -44,11 +60,11 @@ def wait_healthz(base_url: str, interval: float, timeout: float) -> bool:
     attempt = 0
     while time.monotonic() < deadline:
         attempt += 1
-        body = fetch_json(url, timeout=interval)
+        body, status = fetch_json(url, timeout=interval)
         if body and body.get("status") == "ok":
             print(f"healthz: ok ({url}, {attempt} attempt(s))")
             return True
-        print(f"healthz: not ready yet ({url}, attempt {attempt})", flush=True)
+        print(f"healthz: not ready yet ({url}, attempt {attempt}{_reason(status)})", flush=True)
         time.sleep(interval)
     return False
 
@@ -60,11 +76,11 @@ def wait_readyz(base_url: str, interval: float, timeout: float) -> bool:
     attempt = 0
     while time.monotonic() < deadline:
         attempt += 1
-        body = fetch_json(url, timeout=interval)
+        body, status = fetch_json(url, timeout=interval)
         if body and body.get("status") == "ok":
             print(f"readyz: ok ({url}, {attempt} attempt(s))")
             return True
-        print(f"readyz: DB not ready yet ({url}, attempt {attempt})", flush=True)
+        print(f"readyz: DB not ready yet ({url}, attempt {attempt}{_reason(status)})", flush=True)
         time.sleep(interval)
     return False
 
@@ -75,9 +91,9 @@ def normalize(version: str) -> str:
 
 def check_version(base_url: str, expected: str, timeout: float) -> bool:
     url = f"{base_url}/v1/healthz"
-    body = fetch_json(url, timeout=timeout)
+    body, status = fetch_json(url, timeout=timeout)
     if body is None:
-        print(f"version: endpoint unreachable ({url})")
+        print(f"version: endpoint unreachable ({url}{_reason(status) or ', no HTTP response'})")
         return False
     actual = str(body.get("version", ""))
     if normalize(actual) != normalize(expected):

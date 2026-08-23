@@ -1,7 +1,10 @@
 # {{ ansible_managed }}
 # grilling-sleek docker-compose — rendered by deploy.yml for {{ env }}.
-# tls_profile: http (staging) → 容器内 Caddy 走 HTTP；origin (production) →
-# Cloudflare Origin CA 证书 + certs/ 只读挂载，healthcheck 用 https -k。
+# The container serves plain HTTP in every environment: production's TLS
+# terminates on the host Caddy gateway (edge :443 → 127.0.0.1:{{ host_port }}),
+# staging has no TLS at all. The only per-environment difference is the
+# binding of the published port: loopback-only in production (the host
+# gateway is the sole consumer), all interfaces on the LAN staging host.
 
 services:
   grilling-sleek:
@@ -9,12 +12,15 @@ services:
     container_name: grilling-sleek
     restart: always
     ports:
+{% if env == 'production' %}
+      # Loopback-only: the host Caddy gateway is the sole consumer; nothing
+      # off-host can reach the container.
+      - "127.0.0.1:{{ host_port }}:{{ app_port }}"
+{% else %}
       - "{{ host_port }}:{{ app_port }}"
+{% endif %}
     volumes:
       - ./Caddyfile:/app/Caddyfile:ro
-{% if tls_profile == 'origin' %}
-      - ./certs:/app/certs:ro
-{% endif %}
       - ./data:/app/data
       - ./log:/app/log
     environment:
@@ -23,7 +29,7 @@ services:
       - GSLEEK_LOG_DIR=/app/log
       - RUST_LOG={{ rust_log | default('info') }}
     healthcheck:
-      test: ["CMD-SHELL", "curl -fs{{ 'k' if tls_profile == 'origin' else '' }} {{ 'https' if tls_profile == 'origin' else 'http' }}://127.0.0.1:{{ app_port }}/v1/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -fs http://127.0.0.1:{{ app_port }}/v1/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 3
