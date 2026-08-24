@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.2.0-rc.3] - 2026-08-24
+
+### Added
+
+- Revise submitted answers — reopen an answered round and change your replies
+  before finishing the session.
+- A landing page now greets visits without a session link instead of an error.
+- Archived sessions are cleaned up automatically after a retention window
+  (7 days by default), keeping self-hosted disk usage bounded.
+- The server reports its version at /v1/healthz for easy upgrade checks.
+
+### Changed
+
+- Pages load faster in production — static assets and the entry page are now
+  served from Cloudflare's edge cache.
+- The server stays responsive under heavy load: per-IP request limits and
+  database tuning were reworked for the constrained VPS profile.
+
+### Fixed
+
+- Sessions that ended (completed/cancelled/expired) now render a proper end
+  state, and multi-answer questions pre-select previously chosen answers.
+
 ## [0.2.0-rc.2] - 2026-07-23
 
 ### Added
