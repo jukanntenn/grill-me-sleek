@@ -51,12 +51,23 @@ stages = ["pre-commit"]
 
 # ---- pre-push: tests + build (mirrors the CI cli job) ----
 # build:prod is the artifact that ships to npm (esbuild bundle); type safety
-# is already gated at commit time by the typecheck hook.
+# is already gated at commit time by the typecheck hook. One command per
+# hook: system entries run without a shell, so a shell operator like `&&`
+# would be passed to the script as a literal argument.
 [[repos.hooks]]
-id = "cli-test-and-build"
-name = "vitest + esbuild prod (cli, pre-push)"
+id = "cli-test"
+name = "vitest (cli, pre-push)"
 language = "system"
-entry = "pnpm test && pnpm build:prod"
+entry = "pnpm test"
+files = '\.(ts|tsx|js|jsx|mjs|cjs|json|md)$|^package\.json$|^esbuild\.config\.mjs$'
+pass_filenames = false
+stages = ["pre-push"]
+
+[[repos.hooks]]
+id = "cli-build"
+name = "esbuild prod (cli, pre-push)"
+language = "system"
+entry = "pnpm build:prod"
 files = '\.(ts|tsx|js|jsx|mjs|cjs|json|md)$|^package\.json$|^esbuild\.config\.mjs$'
 pass_filenames = false
 stages = ["pre-push"]
