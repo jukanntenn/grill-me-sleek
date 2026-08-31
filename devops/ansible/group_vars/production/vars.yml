@@ -15,12 +15,12 @@ env: production
 #   v0.2.1 -> 0.2.1, v0.2.1-rc.1 -> 0.2.1-rc.1
 # 在 staging 验证通过后晋升时更新。单次覆盖：
 #   ansible-playbook devops/ansible/deploy.yml -e target=production -e image_tag=0.2.1
-image_tag: "v0.2.0-rc.2"
+image_tag: "0.2.0-rc.3"
 image: "jukanntenn/grilling-sleek:{{ image_tag }}"
 
 # /v1/healthz 必须上报的版本（server Cargo.toml 版本，与镜像 tag 一致；
 # check_deploy.py 会归一化前导 "v"）。不匹配则部署判失败。
-expected_version: "0.2.0-rc.2"
+expected_version: "0.2.0-rc.3"
 
 # Loopback-only consumer port of the host Caddy gateway (markpost's own
 # site block holds 8080; grilling-sleek takes the next one).
