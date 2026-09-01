@@ -26,7 +26,7 @@
     "prepare": "pnpm run build:prod",
     "prepublishOnly": "pnpm run build:prod"
   },
-  "packageManager": "pnpm@11.13.0",
+  "packageManager": "pnpm@11.25.0",
   "engines": {
     "node": ">=22"
   },
