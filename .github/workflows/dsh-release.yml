@@ -58,7 +58,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 11
+          version: 11.25.0 # 11.13.0 is a blocklisted broken release (@pnpm/exe ships no binary)
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
