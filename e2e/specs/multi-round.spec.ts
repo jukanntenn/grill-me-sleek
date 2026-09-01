@@ -7,7 +7,7 @@ import { createRound, listRounds, generateGrilling } from '../utils/cli';
 
 test.describe('多轮问答', () => {
   test('轮次顺序和历史', async ({ page, multiRoundSession, questionsPage }) => {
-    // 新轮次推送会触发 window.confirm，测试统一接受
+    // 新轮次推送自动跟随（无模态确认）；dialog 兜底接受以防意外弹窗
     page.on('dialog', (dialog) => dialog.accept());
 
     const { session, rounds } = multiRoundSession;
@@ -38,12 +38,10 @@ test.describe('多轮问答', () => {
     expect(roundList[1].has_response).toBe(true);
   });
 
-  test('轮次切换确认', async ({ page, multiRoundSession, questionsPage }) => {
-    let confirmCalled = false;
+  test('轮次自动跟随（新轮推送无模态确认）', async ({ page, multiRoundSession, questionsPage }) => {
+    let dialogSeen = false;
     page.on('dialog', (dialog) => {
-      if (dialog.type() === 'confirm') {
-        confirmCalled = true;
-      }
+      dialogSeen = true;
       dialog.accept();
     });
 
@@ -53,15 +51,15 @@ test.describe('多轮问答', () => {
     await page.goto(session.url);
     await questionsPage.waitForLoad();
 
-    // 在未提交第一轮的情况下推送第二轮，会触发 window.confirm
+    // 在未提交第一轮的情况下推送第二轮：页面自行切到第二轮，不弹模态确认
     await createRound(session.session_id, rounds[1].grillingJson, 'Round 2');
 
-    // 等待 confirm 被调用并切换到第二轮
-    await expect.poll(() => confirmCalled).toBe(true);
     await questionsPage.expectQuestionText('Which database?');
+    expect(dialogSeen).toBe(false);
   });
 
   test('多轮次列表', async ({ page, multiRoundSession, questionsPage }) => {
+    // 新轮次推送自动跟随（无模态确认）；dialog 兜底接受以防意外弹窗
     page.on('dialog', (dialog) => dialog.accept());
 
     const { session, rounds } = multiRoundSession;
