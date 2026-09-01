@@ -6,13 +6,14 @@
 
 ## 1. Project Overview
 
-**grill-me-sleek** 在 vibe coding 之前对计划做压力测试：agent 提问，你在精致的 web UI 里作答。三个组件，一个仓库：
+**grill-me-sleek** 在 vibe coding 之前对计划做压力测试：agent 提问，你在精致的 web UI 里作答。四个组件，一个仓库：
 
-| 组件      | 路径       | 角色                                                   |
-| --------- | ---------- | ------------------------------------------------------ |
-| `server/` | Rust       | "Hub"——REST API + SSE，SQLite 存储（axum + sqlx）      |
-| `web/`    | TypeScript | 供用户审阅问题的 React SPA                             |
-| `cli/`    | TypeScript | 发布到 npm 的 `@grilling-sleek/cli`；连接 agent 与 Hub |
+| 组件      | 路径       | 角色                                                                       |
+| --------- | ---------- | -------------------------------------------------------------------------- |
+| `server/` | Rust       | "Hub"——REST API + SSE，SQLite 存储（axum + sqlx）                          |
+| `web/`    | TypeScript | 供用户审阅问题的 React SPA                                                 |
+| `cli/`    | TypeScript | 发布到 npm 的 `@grilling-sleek/cli`；连接 agent 与 Hub                     |
+| `dsh/`    | TypeScript | 发布到 npm 的 `@grilling-sleek/dsh-tool-grill-user`；DeepSeek Harness 插件 |
 
 ## 2. Tech Stack
 
@@ -20,7 +21,7 @@ Server：Rust edition 2024（MSRV 1.85）、axum 0.8、sqlx 0.9（sqlite、migra
 
 ## 3. Commands
 
-**prek 是所有质量门控的唯一事实来源。** 每个 format/lint/check 都在 `prek.toml`（根）+ `server|web|cli/prek.toml` 里。CI 跑的是同一批钩子，因此本地绿 == CI 绿：
+**prek 是所有质量门控的唯一事实来源。** 每个 format/lint/check 都在 `prek.toml`（根）+ `server|web|cli|dsh/prek.toml` 里。CI 跑的是同一批钩子，因此本地绿 == CI 绿：
 
 ```
 prek install                    # one-time: install git hooks
@@ -45,6 +46,7 @@ prek.toml        Workspace-root prek config (builtin checks, prettier-root,
 server/          Rust service. WRITE HERE for API/DB work (own AGENTS.md).
 web/             React SPA. WRITE HERE for UI work (own AGENTS.md).
 cli/             CLI tool. WRITE HERE for CLI work (own AGENTS.md).
+dsh/             DeepSeek Harness plugin (own AGENTS.md).
 e2e/             Playwright E2E vs docker-compose.local (own AGENTS.md).
 specs/           Design reference + the documentation standard (AGENTS.md)
                  with an authoritative index (index.md).

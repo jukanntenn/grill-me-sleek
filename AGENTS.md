@@ -13,26 +13,27 @@ English | [中文](AGENTS.zh.md)
 ## 1. Project Overview
 
 **grill-me-sleek** stress-tests a plan before vibe coding: the agent asks
-questions, you answer them in a sleek web UI. Three components, one repo:
+questions, you answer them in a sleek web UI. Four components, one repo:
 
-| Component | Path       | Role                                                         |
-| --------- | ---------- | ------------------------------------------------------------ |
-| `server/` | Rust       | The "Hub" — REST API + SSE, SQLite-backed (axum + sqlx)      |
-| `web/`    | TypeScript | React SPA served to the user for reviewing questions         |
-| `cli/`    | TypeScript | Published to npm as `@grilling-sleek/cli`; bridges agent↔Hub |
+| Component | Path       | Role                                                                                   |
+| --------- | ---------- | -------------------------------------------------------------------------------------- |
+| `server/` | Rust       | The "Hub" — REST API + SSE, SQLite-backed (axum + sqlx)                                |
+| `web/`    | TypeScript | React SPA served to the user for reviewing questions                                   |
+| `cli/`    | TypeScript | Published to npm as `@grilling-sleek/cli`; bridges agent↔Hub                           |
+| `dsh/`    | TypeScript | Published to npm as `@grilling-sleek/dsh-tool-grill-user`; the DeepSeek Harness plugin |
 
 ## 2. Tech Stack
 
 Server: Rust edition 2024 (MSRV 1.85), axum 0.8, sqlx 0.9 (sqlite, migrate,
 sqlite-bundled), tokio 1. Web: React 19, Vite 8, TypeScript 5.9, Tailwind 4.3,
-ESLint 9, Vitest 3.2, Prettier 3. CLI: TypeScript 5.9, esbuild 0.25. E2E:
+ESLint 9, Vitest 3.2, Prettier 3. CLI+dsh: TypeScript 5.9, esbuild 0.25. E2E:
 Playwright 1.61. Quality gate: **prek** 0.4+ (workspace + groups). Package
 manager: **pnpm 11** (per-package lockfiles; no workspace root install).
 
 ## 3. Commands
 
 **prek is the single source of truth for all quality gating.** Every
-format/lint/check lives in `prek.toml` (root) + `server|web|cli/prek.toml`.
+format/lint/check lives in `prek.toml` (root) + `server|web|cli|dsh/prek.toml`.
 CI runs the exact same hooks, so local green == CI green:
 
 ```
@@ -59,6 +60,7 @@ prek.toml        Workspace-root prek config (builtin checks, prettier-root,
 server/          Rust service. WRITE HERE for API/DB work (own AGENTS.md).
 web/             React SPA. WRITE HERE for UI work (own AGENTS.md).
 cli/             CLI tool. WRITE HERE for CLI work (own AGENTS.md).
+dsh/             DeepSeek Harness plugin (own AGENTS.md).
 e2e/             Playwright E2E vs docker-compose.local (own AGENTS.md).
 specs/           Design reference + the documentation standard (AGENTS.md)
                  with an authoritative index (index.md).

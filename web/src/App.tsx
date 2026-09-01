@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useGrillingMachine, type State } from "./hooks/useGrillingMachine";
-import { useSSE } from "./hooks/useSSE";
+import { useSSE, type SessionNotice } from "./hooks/useSSE";
 import { useSubmit } from "./hooks/useSubmit";
 import type { RoundData, RoundSummaryData, Answer } from "./types";
 import { fetchCurrent, fetchRound, fetchRounds, fetchSession, reviseResponse } from "./lib/api";
@@ -57,14 +57,6 @@ export function App() {
     t,
   });
 
-  // --- Round created confirmation (DESIGN.md §959) ---
-  const onRoundCreated = useCallback(
-    async (newRound: number): Promise<boolean> => {
-      return window.confirm(t("confirmSwitchRound", { n: newRound }));
-    },
-    [t],
-  );
-
   // --- Reconnect round caching ---
   const onReconnectRound = useCallback((round: RoundData) => {
     // Round data is dispatched via RECONNECT_SUCCESS; no extra caching needed.
@@ -90,6 +82,23 @@ export function App() {
     if (sessionId && currentSeq !== null) void refreshRounds();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, currentSeq]);
+
+  // --- Session-advance notices (non-modal: the session owns what is current;
+  //     the only deliberate view — history — is never yanked) ---
+  const onNotice = useCallback(
+    (notice: SessionNotice) => {
+      if (notice.kind === "answered-elsewhere") {
+        setNotice(t("answeredElsewhere", { n: notice.round }));
+        void refreshRounds();
+      } else if (notice.kind === "switched-round") {
+        setNotice(t("switchedToNewRound", { n: notice.round }));
+      } else {
+        setBanner(t("newRoundWhileViewingHistory", { n: notice.round }));
+        void refreshRounds();
+      }
+    },
+    [t, refreshRounds],
+  );
 
   // --- SSE ---
   const onResponseRevised = useCallback(
@@ -127,7 +136,7 @@ export function App() {
     sessionId,
     stateRef,
     dispatch,
-    onRoundCreated,
+    onNotice,
     onReconnectRound,
     onResponseRevised,
   });

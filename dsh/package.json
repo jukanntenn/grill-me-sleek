@@ -1,0 +1,85 @@
+{
+  "name": "@grilling-sleek/dsh-tool-grill-user",
+  "version": "0.0.1",
+  "description": "DeepSeek Harness plugin: the grill_user tool — structured decision-tree grilling over the user-questions seam and a grill-me-sleek Hub round",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/index.js",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "build:prod": "NODE_ENV=production node esbuild.config.mjs",
+    "test": "vitest run",
+    "lint": "eslint src/ tests/",
+    "format": "prettier --write \"src/**/*.{ts,md,json}\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.{ts,md,json}\" \"tests/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "prepare": "pnpm run build:prod",
+    "prepublishOnly": "pnpm run build:prod"
+  },
+  "packageManager": "pnpm@11.13.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jukanntenn/grill-me-sleek.git",
+    "directory": "dsh"
+  },
+  "keywords": [
+    "grill-me-sleek",
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "grilling"
+  ],
+  "author": "jukanntenn",
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-agent": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-brand": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-skill": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-timeout": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-tool-call-timeout-policy": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-tools": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-user-questions": "^0.1.2-alpha.3"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-agent": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-brand": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-llm": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-skill": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-system-prompt": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-timeout": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-tool-call-timeout-policy": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-tools": "^0.1.2-alpha.3",
+    "@deepseek-ai/dsh-user-questions": "^0.1.2-alpha.3",
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.9.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.63.0",
+    "vitest": "^3.2.1"
+  }
+}

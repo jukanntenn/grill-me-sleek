@@ -1,0 +1,48 @@
+# GS-RFC: dsh plugin distribution — npm channel, an independent version line, push-driven releases
+
+Status: proposed
+
+English | [中文](2026-09-01-dsh-plugin-distribution.zh.md)
+
+## Problem
+
+The dsh package gated by [the integration record](../implemented/2026-08-31-dsh-grilling-integration.md) has no way to reach a user. It is unpublished (the npm name 404s), and as manifested it cannot be installed as a plugin at all: the official `dsh plugin --profile <name> add <spec>` coordinator only mounts packages that declare `"dsh": { "bundle": { "patch": "./cordis.patch.yml" } }` and ship that patch — a package without the declaration installs as a plain dependency with a one-time warning and never enters the bundle stack (the plugin marketplace's most common rejection is exactly this). `dsh/package.json` carries version `0.1.0`, a number chosen before a versioning line existed; CI has no dsh presence (`ci.yml` runs `prek validate-config` over four prek configs, `dsh/prek.toml` not among them); and the only working load path is the developer overlay pointing at `dsh/src/index.ts`. The agreed cadence — `0.0.x` dogfooding cuts, potentially daily — needs a user-facing install command and a release path whose entire local ceremony is a version bump and a push.
+
+## Proposal
+
+Distribute on npm as the single primary channel, version the plugin on its own line, and let a push to main be the release. Four decisions:
+
+1. **The installable is the npm package, mounted by its own bundle patch.** `dsh/package.json` gains the `dsh.bundle` declaration (patch `./cordis.patch.yml`); the patch inserts exactly one row — `id: tool-grill-user`, `name: '@grilling-sleek/dsh-tool-grill-user'` — the same id the developer overlay uses, so local and installed mounts are interchangeable. `files` grows to carry `cordis.patch.yml`, both READMEs, and `LICENSE` (copied from the repo root) beside the built entry. A user installs with `dsh plugin --profile web add @grilling-sleek/dsh-tool-grill-user` and restarts the profile — nothing else. The package is a prebuilt single-file esbuild bundle with every peer external, so it installs with zero build scripts: no `allowBuilds` prompt, the first-install failure that node-pty-carrying plugins inflict. Git and tarball installs remain possible and documented as secondary — the GitHub Release carries the `pnpm pack` tarball as an asset — but a git install fetches sources and demands a `prepare` script plus the user allowing install-time code execution.
+2. **The version line is the plugin's own; cli and server do not move with it.** dsh starts at `0.0.1` (resetting the never-published `0.1.0`), iterates `0.0.x` as declared dogfooding, cuts `0.1.0-rc.1` when the feature set settles, and lands `0.1.0` after community exposure. cli and server keep the existing unified `v*` line and its release machinery untouched — the plugin's contract with them is the Hub REST surface, already stable across CLI generations, not a shared number. npm dist-tags follow the repo's existing prerelease rule: plain versions publish as `latest` (during dogfooding, the tag-less install gets the current cut), `-rc.*` publishes as `next`, and `0.1.0` hands `latest` to the stable line.
+3. **A push to main is the whole release ceremony.** A new `.github/workflows/dsh-release.yml` runs on every push to main: it compares `dsh/package.json`'s version against the registry, and on a new one runs the full dsh gate (frozen-lockfile install, lint, typecheck, test, `build:prod`), packs, publishes with provenance through the existing `NPM_TOKEN` pipeline (the one already publishing cli), pushes tag `dsh-v<version>` back, and opens a GitHub Release carrying the tarball asset with notes generated from conventional commits since the previous `dsh-v*` tag. A push whose version is already published is a no-op. `0.0.x` cuts carry no hand-written changelog — the commit stream is the changelog; curated release notes begin at `0.1.0-rc.1`, when the audience becomes the community rather than the author. The `dsh-v*` namespace cannot match the `v*` triggers of `release.yml`/`docker-publish.yml`, so the tag the workflow pushes cannot re-trigger any workflow.
+4. **Discoverability follows the official on-ramps.** The repository carries the `dsh-plugin` GitHub topic from the start; once the `0.0.x` line has settled through a few cuts, a PR to awesome-dsh-plugin adds the monorepo-subpackage entry (`data/plugins/jukanntenn__grill-me-sleek--dsh.yml`, category `tools`, bilingual one-liner) — dshmarket and dsh-find-plugin list from that data automatically. The submission prerequisites are met by this record's landing (repo age and commit count already hold; `dsh.bundle` arrives with decision 1; the npm `repository` field already points back).
+
+CI gains dsh parity in the same batch: `prek validate-config` lists `dsh/prek.toml`, and a path-filtered dsh lane runs the same gates the release workflow demands.
+
+## Alternatives considered
+
+**Git-host distribution (`github:owner/repo` spec).** Officially supported and dependency-free of npm. It lost on install friction: a git install fetches sources, so the package must carry a `prepare` build script and every user must allowlist it in their profile's `pnpm-workspace.yaml` — the docs frame that allowlist as permission to execute the package's code at install time. npm serves the identical code prebuilt, with provenance, under one command.
+
+**Tag-driven release (`dsh-v*` tag push triggers publish).** Structurally identical to the repo's existing `v*` line and the most deliberate option. It lost on cadence: one extra local step per cut, against dogfooding that may cut daily; the version field in `dsh/package.json` already carries release intent, so the tag only restates it and adds a mismatch failure mode — DSH-better-sidebar's workflow exists to catch exactly that mismatch.
+
+**GitHub-Release-driven publishing.** DSH-better-sidebar's actual trigger (`on: release: published`). It lost as the slowest ceremony: a manual web-UI step per release, the opposite of what the `0.0.x` cadence wants.
+
+**Riding the unified repo version line.** Keeps one number for cli, server, and dsh and one release event. It lost on coupling: a fast-moving plugin would either drag cli/server into empty bumps or wait on their slower cadence. The REST surface, not a version number, is the plugin's real contract with the Hub.
+
+**npm Trusted Publishing (OIDC, no standing token).** Strictly better secret hygiene and proven in DSH-better-sidebar. Deferred rather than lost: it needs one-time manual per-package setup on npmjs.com, while the `NPM_TOKEN` pipeline is already proven with provenance for cli. Migrate when the token policy tightens.
+
+**A `dsh.plugin.json` + `dsh registry` channel.** DSH-better-sidebar's second distribution channel (a staged registry root with its own manifest). It lost on maintenance: a second installable root to keep fresh, covering an install path the bundle patch already serves.
+
+**Dogfooding under a non-`latest` dist-tag (`dogfood`/`alpha`).** Would keep `latest` clean for `0.1.0`. It lost on friction: every dogfood install would need an explicit `@tag` suffix, and with no stable line yet, `latest` pointing at `0.0.x` is honest. The `-rc.*` → `next` rule already protects the stable line once it exists.
+
+## Acceptance criteria
+
+- `dsh/package.json` declares the bundle manifest with version `0.0.1`; `pnpm pack` in `dsh/` yields a tarball containing `dist/index.js`, `cordis.patch.yml`, both READMEs, and `LICENSE`; the patch inserts `tool-grill-user` by package name.
+- Installing that tarball through the official CLI (`dsh plugin --profile <scratch> add ./<tarball>`) mounts the bundle — `dsh --profile <scratch> --dump-config` shows the plugin layer — with no build-script prompt.
+- Pushing a new `dsh/package.json` version to main runs `dsh-release.yml` end to end — gates, npm publish with provenance (`latest` for plain versions, `next` for `-rc.*`), tag `dsh-v<version>`, GitHub Release with the tarball asset and commit-derived notes — and a re-run against an already-published version publishes nothing.
+- `ci.yml` validates `dsh/prek.toml` and runs a dsh lane on path-filtered changes; `prek run --all-files` is green for the batch.
+- The `dsh/README.md` pair documents `dsh plugin add`, the version line, and the secondary channels in place of the hand-mount instructions; the repo carries the `dsh-plugin` topic. The awesome-dsh-plugin PR is drafted only when the `0.0.x` line settles — not in this batch.
+
+## Risks
+
+Push-driven publishing fires on any main push carrying an unpublished version, so an early bump publishes early; the guard is that a bump is itself an explicit, reviewable line, and the gates still refuse broken code — the failure leaves main holding an unpublished version that the next push retries. npm publishes are irreversible beyond a short window, so a bad `0.0.x` cut is answered by the next cut, never by deletion. `latest` pointing at dogfood `0.0.x` means early adopters ride rough edges — that is what the line declares, and the READMEs state it. The harness alpha channel can rename seams under the peers; distribution inherits the integration record's same-batch bump discipline. The workflow pushes tags with `GITHUB_TOKEN`; the `dsh-v*` prefix is chosen so no existing `v*` trigger can fire on it. awesome-dsh-plugin review is human and may refile or delay the entry; npm distribution does not wait on it. Provenance and publish ride the org `NPM_TOKEN` until Trusted Publishing replaces it — a standing secret with org-scope publish rights, mitigated by Actions secrets isolation and the recorded intent to migrate.

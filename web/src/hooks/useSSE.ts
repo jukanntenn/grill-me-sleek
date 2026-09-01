@@ -1,14 +1,19 @@
 // SSE hook — EventSource lifecycle + exponential-backoff reconnect.
 //
-// Migrated from app.ts:201-293. Key design (DESIGN.md §808-818, §949-963):
-//   - 5 event types → dispatch actions
+// Key design:
+//   - Event types → dispatch actions (terminal events) or fetch-and-route
+//     (round lifecycle: the session, not this page, owns what is current)
 //   - on error: close + schedule reconnect (exponential backoff 1/2/4/8/16s, cap 30s)
 //   - reconnect success MUST re-GET current (compensate missed events — no Last-Event-ID)
 //   - after 5 min of failure → PAGE_RECONNECT_FAILED
 //   - useRef holds EventSource + timer to avoid stale closures
 //
-// The hook takes the current state via a ref so it can decide whether to
-// reconnect (skip if terminal).
+// Answers may land from anywhere — this page, an agent-side proxy for another
+// answer surface, another tab. `response.created` arriving while a form is
+// still showing therefore syncs to the session's current state (an answered
+// round renders no form), and a `round.created` switches along without a
+// modal: the only human deliberation left is viewing history, which is never
+// yanked. The hook takes the current state via a ref so it can decide.
 
 import { useEffect, useRef } from "react";
 import type { Dispatch } from "react";
@@ -19,13 +24,18 @@ import { isTerminal } from "./useGrillingMachine";
 const BACKOFF_CAP_SEC = 30;
 const RECONNECT_TIMEOUT_MS = 5 * 60 * 1000; // 5 min
 
+/** Non-modal notices the session's advance raises for the UI layer. */
+export type SessionNotice =
+  | { kind: "answered-elsewhere"; round: number }
+  | { kind: "switched-round"; round: number }
+  | { kind: "new-round-history"; round: number };
+
 interface UseSSEParams {
   sessionId: string | null;
   stateRef: React.MutableRefObject<State>;
   dispatch: Dispatch<Action>;
-  /** Called when SSE round.created fires while user is mid-round (RENDER_QUESTIONS).
-   *  Returns true if the round switch was confirmed. */
-  onRoundCreated?: (newRound: number) => Promise<boolean>;
+  /** Non-modal notices: answered elsewhere, auto-switched to a new round, new round while viewing history. */
+  onNotice?: (notice: SessionNotice) => void;
   /** Called when reconnect succeeds — allows re-caching the round. */
   onReconnectRound?: (round: import("../types").RoundData) => void;
   /** Called when a response.revised event arrives (revision landed on `round`). */
@@ -36,7 +46,7 @@ export function useSSE({
   sessionId,
   stateRef,
   dispatch,
-  onRoundCreated,
+  onNotice,
   onReconnectRound,
   onResponseRevised,
 }: UseSSEParams) {
@@ -101,34 +111,44 @@ export function useSSE({
         const data = JSON.parse(e.data);
         const newRound = data.round as number;
         const st = stateRef.current;
-        if (
-          st.type === "RENDER_QUESTIONS" ||
-          st.type === "REVIEW_ROUND" ||
-          st.type === "REVISE_ROUND"
-        ) {
-          // Confirm with user before switching (DESIGN.md §959). Also applies
-          // while reviewing/revising an earlier round — the session moved on.
-          const confirmed = onRoundCreated ? await onRoundCreated(newRound) : true;
-          if (confirmed) {
-            dispatch({ type: "FETCH_START", sessionId: sid });
-            const result = await fetchCurrent(sid);
-            if (result.ok) {
-              dispatch({ type: "FETCH_SUCCESS", round: result.round, sessionId: sid });
-              connect(sid);
-            }
-          }
-          // If not confirmed, stay in RENDER_QUESTIONS (current answers preserved).
-        } else if (st.type === "WAIT_NEXT_ROUND") {
-          dispatch({ type: "FETCH_START", sessionId: sid });
-          const result = await fetchCurrent(sid);
-          if (result.ok) {
-            dispatch({ type: "FETCH_SUCCESS", round: result.round, sessionId: sid });
-          }
+        // Viewing history is deliberate: never yank. The stepper carries the
+        // user to the new round when they choose; only raise a notice.
+        if (st.type === "REVIEW_ROUND" || st.type === "REVISE_ROUND") {
+          onNotice?.({ kind: "new-round-history", round: newRound });
+          return;
         }
+        if (isTerminal(st)) return;
+        const wasOnForm = st.type === "RENDER_QUESTIONS" || st.type === "VALIDATE";
+        const result = await fetchCurrent(sid);
+        if (result.ok) {
+          dispatch({ type: "FETCH_SUCCESS", round: result.round, sessionId: sid });
+          if (wasOnForm) onNotice?.({ kind: "switched-round", round: newRound });
+        }
+        // A failed fetch falls through to the reconnect ladder via onerror.
       });
 
-      es.addEventListener("response.created", () => {
-        // Client-only ack; the agent receives the answer via long-poll.
+      es.addEventListener("response.created", (e: MessageEvent) => {
+        const data = JSON.parse(e.data);
+        const st = stateRef.current;
+        // An answer landed while a form is still showing: this page did not
+        // submit (own submits pass through VALIDATE), so the round was
+        // answered on another surface — or, in VALIDATE, the submit's own
+        // ack raced the POST. Either way the form is dead: sync to current.
+        if (st.type === "RENDER_QUESTIONS" || st.type === "VALIDATE") {
+          void fetchCurrent(sid).then((result) => {
+            if (result.ok) {
+              dispatch({ type: "FETCH_SUCCESS", round: result.round, sessionId: sid });
+            }
+          });
+          if (st.type === "RENDER_QUESTIONS") {
+            onNotice?.({ kind: "answered-elsewhere", round: data.round as number });
+          }
+        } else if (st.type === "REVIEW_ROUND" || st.type === "REVISE_ROUND") {
+          // A newer round got answered while viewing history: informational only.
+          onNotice?.({ kind: "answered-elsewhere", round: data.round as number });
+        }
+        // WAIT_NEXT_ROUND is the own-submit ack; other states converge on
+        // their next fetch.
       });
 
       es.addEventListener("response.revised", (e: MessageEvent) => {

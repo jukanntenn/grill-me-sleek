@@ -1,6 +1,5 @@
 // Grilling state machine — useReducer implementation.
 //
-// Mirrors DESIGN.md §902-972 (Client 渲染状态机): 11 states + transitions.
 // The reducer is a pure function (testable in isolation); all side effects
 // (fetch, SSE, timers) live in useSSE/useSubmit/lib/api.
 //
@@ -8,6 +7,11 @@
 //   BOOT → FETCH_CURRENT → RENDER_QUESTIONS ↔ VALIDATE → WAIT_NEXT_ROUND
 //                         ↘ RECONNECTING → (FETCH_CURRENT | PAGE_RECONNECT_FAILED)
 //   Terminal: PAGE_COMPLETED / PAGE_CANCELLED / PAGE_EXPIRED / ERROR_PAGE / PAGE_RECONNECT_FAILED
+//
+// A fetched "current" round that already carries a response never renders a
+// form: the session is between rounds (the round was answered — by this page,
+// another surface, or another tab), so the state machine routes to
+// WAIT_NEXT_ROUND instead of showing a form whose submit could only 409.
 
 import { useReducer, useRef, useCallback } from "react";
 import type { RoundData, Answer, GoneBody } from "../types";
@@ -60,6 +64,17 @@ export type Action =
 // Reducer — pure state transitions
 // ---------------------------------------------------------------------------
 
+/**
+ * Route a fetched "current" round by whether it is answered: an unanswered
+ * round renders its form; an answered one means the session is between
+ * rounds — wait for the next push instead of rendering a dead form.
+ */
+function routeFetchedRound(sessionId: string, round: RoundData): State {
+  return round.response
+    ? { type: "WAIT_NEXT_ROUND", sessionId, currentRound: round.round }
+    : { type: "RENDER_QUESTIONS", round, sessionId };
+}
+
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case "BOOT_NO_SESSION":
@@ -69,7 +84,7 @@ export function reducer(state: State, action: Action): State {
       return { type: "FETCH_CURRENT", sessionId: action.sessionId };
 
     case "FETCH_SUCCESS":
-      return { type: "RENDER_QUESTIONS", round: action.round, sessionId: action.sessionId };
+      return routeFetchedRound(action.sessionId, action.round);
 
     case "FETCH_NOT_FOUND":
       return { type: "ERROR_PAGE", message: "not-found" };
@@ -95,7 +110,7 @@ export function reducer(state: State, action: Action): State {
       };
 
     case "RECONNECT_SUCCESS":
-      return { type: "RENDER_QUESTIONS", round: action.round, sessionId: action.sessionId };
+      return routeFetchedRound(action.sessionId, action.round);
 
     case "RECONNECT_FAILED":
       return { type: "PAGE_RECONNECT_FAILED" };

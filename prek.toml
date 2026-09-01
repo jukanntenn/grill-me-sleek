@@ -2,6 +2,7 @@
 #   - server/prek.toml  (Rust hooks, cwd=server)
 #   - web/prek.toml     (JS/TS hooks, cwd=web)
 #   - cli/prek.toml     (JS/TS hooks, cwd=cli)
+#   - dsh/prek.toml     (JS/TS hooks, cwd=dsh)
 #
 # Single source of truth for the whole pipeline: AI post-edit hooks run
 # `prek run --group format --files <edited>`, AI Stop runs `prek run --group
@@ -83,7 +84,7 @@ stages = ["pre-commit"]
 groups = ["check"]
 
 # ---- format group: root-level formatter (non-app, non-agent dirs) ----
-# Uses web's prettier install (no root node_modules); web/ and cli/ are
+# Uses web's prettier install (no root node_modules); web/, cli/ and dsh/ are
 # excluded because they have their own per-file prettier hooks with their own
 # configs. .vscode is JSONC; agent dirs, skills/ (packaged-skill source —
 # must stay byte-identical with the packaged copies) and .sqlx are exempt.
@@ -93,7 +94,7 @@ name = "prettier (root, non-app dirs)"
 language = "system"
 entry = "web/node_modules/.bin/prettier --write"
 files = '\.(md|ya?ml|json|html|css)$'
-exclude = '^(\.agents|\.claude|\.codex|\.opencode|\.zcode|\.vscode)/|^skills/|^(web|cli)/|^server/\.sqlx/|pnpm-lock\.yaml$'
+exclude = '^(\.agents|\.claude|\.codex|\.opencode|\.zcode|\.vscode)/|^skills/|^(web|cli|dsh)/|^server/\.sqlx/|pnpm-lock\.yaml$'
 pass_filenames = true
 groups = ["format"]
 stages = ["pre-commit"]

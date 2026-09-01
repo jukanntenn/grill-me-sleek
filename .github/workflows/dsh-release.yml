@@ -1,0 +1,158 @@
+# =============================================================================
+# dsh 插件发版（推送驱动，独立版本线）
+#
+# 触发条件：
+#   - push 到 main：dsh/package.json 的 version 在 npm registry 上不存在
+#     即发版；已发布版本的重跑是 no-op（比对后跳过发布步骤）
+#   - 手动触发 dry-run：只跑门禁和 pack，不发布
+#
+# 一个 push 到 main 携带新版本号即为全部本地仪式（0.0.x dogfooding 阶段
+# 无人工 changelog）：
+#   门禁（lint/typecheck/test/build:prod）
+#   → pnpm pack → npm publish（provenance，复用 cli 的 NPM_TOKEN 管线）
+#   → 回推 tag dsh-v<version>
+#   → GitHub Release：附 tarball 资产，notes 自上一个 dsh-v* tag 以来
+#      触及 dsh/ 的 conventional commits 生成
+#
+# dist-tag 策略（与 release.yml / docker-publish.yml 的预发布判定同一条
+# 规则）：纯版本（0.0.x dogfooding、0.1.0）→ latest；含预发布段
+# （-rc.* 等）→ next。
+#
+# tag 用 dsh-v* 前缀：匹配不到 release.yml / docker-publish.yml 的 v*
+# 触发器，工作流回推的 tag 不会再触发任何工作流。
+#
+# 设计记录：.agents/gs-rfcs/proposed/2026-09-01-dsh-plugin-distribution.md
+# =============================================================================
+
+name: dsh Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run gates and pack only; skip publish/tag/release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # 回推 tag + 创建 GitHub Release
+  id-token: write # npm provenance
+
+concurrency:
+  group: dsh-release
+  cancel-in-progress: false # 发布串行；不取消进行中的发布
+
+jobs:
+  release:
+    name: gates · pack · publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # release notes 需要自上一个 dsh-v* tag 的完整历史
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: dsh/pnpm-lock.yaml
+
+      - name: Check version against registry
+        id: check
+        run: |
+          VERSION=$(node -p "require('./dsh/package.json').version")
+          PUBLISHED=$(npm view "@grilling-sleek/dsh-tool-grill-user@${VERSION}" version 2>/dev/null || true)
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            PUBLISH=false
+            NOTE="dry-run (gates + pack only)"
+          elif [ -n "$PUBLISHED" ]; then
+            PUBLISH=false
+            NOTE="${VERSION} already on the registry — no-op"
+          else
+            PUBLISH=true
+            NOTE="new version, publish"
+          fi
+          {
+            echo "version=${VERSION}"
+            echo "publish=${PUBLISH}"
+            if [[ "$VERSION" == *-* ]]; then
+              echo "tag=next"
+              echo "prerelease=true"
+              echo "make_latest=false"
+            else
+              echo "tag=latest"
+              echo "prerelease=false"
+              echo "make_latest=true"
+            fi
+          } >> "$GITHUB_OUTPUT"
+          echo "📦 dsh ${VERSION}: ${NOTE}"
+
+      - name: Install dependencies
+        run: pnpm --dir dsh install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm --dir dsh lint
+
+      - name: Typecheck
+        run: pnpm --dir dsh typecheck
+
+      - name: Tests
+        run: pnpm --dir dsh test
+
+      - name: Build (production)
+        run: pnpm --dir dsh run build:prod
+
+      - name: Pack
+        run: |
+          cd dsh
+          pnpm pack
+          ls -1 ./*.tgz
+
+      - name: Publish to npm
+        if: steps.check.outputs.publish == 'true'
+        run: pnpm --dir dsh publish --access public --provenance --no-git-checks --tag "${{ steps.check.outputs.tag }}"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Generate release notes
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          LAST=$(git tag -l 'dsh-v*' --sort=-v:refname | head -n 1)
+          if [ -n "$LAST" ]; then
+            git log "${LAST}..HEAD" --format='- %s (%h)' -- dsh/ > dsh-release-notes.md
+          else
+            git log --format='- %s (%h)' -- dsh/ > dsh-release-notes.md
+          fi
+          [ -s dsh-release-notes.md ] || echo '- Initial dogfooding cut.' > dsh-release-notes.md
+          echo "--- notes (since ${LAST:-the beginning}) ---"
+          cat dsh-release-notes.md
+
+      - name: Push release tag
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "dsh-v${{ steps.check.outputs.version }}"
+          git push origin "dsh-v${{ steps.check.outputs.version }}"
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.publish == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dsh-v${{ steps.check.outputs.version }}
+          name: dsh v${{ steps.check.outputs.version }}
+          body_path: dsh-release-notes.md
+          prerelease: ${{ steps.check.outputs.prerelease }}
+          make_latest: ${{ steps.check.outputs.make_latest }}
+          files: dsh/*.tgz

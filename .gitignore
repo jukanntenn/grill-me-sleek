@@ -30,6 +30,8 @@ server/.vite/
 node_modules/
 web/dist/
 cli/dist/
+dsh/dist/
+dsh/*.tgz
 
 # Playwright test artifacts (screenshots/snapshots regenerated on test runs)
 e2e/playwright-report/

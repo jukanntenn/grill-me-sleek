@@ -9,6 +9,16 @@ const mockRound: RoundData = {
   response: null,
 };
 
+/** A current round already answered elsewhere — no form may render for it. */
+const mockAnsweredRound: RoundData = {
+  ...mockRound,
+  response: {
+    round: 1,
+    answers: {},
+    submitted_at: "2026-09-01T00:00:00Z",
+  },
+};
+
 const mockSessionId = "sess-123";
 
 function run(state: State, action: Action): State {
@@ -39,6 +49,16 @@ describe("reducer: FETCH_CURRENT outcomes", () => {
       sessionId: mockSessionId,
     });
     expect(result.type).toBe("RENDER_QUESTIONS");
+  });
+
+  it("FETCH_SUCCESS with an answered round → WAIT_NEXT_ROUND (no dead form)", () => {
+    const result = run(fetchState, {
+      type: "FETCH_SUCCESS",
+      round: mockAnsweredRound,
+      sessionId: mockSessionId,
+    });
+    expect(result.type).toBe("WAIT_NEXT_ROUND");
+    expect((result as { currentRound: number }).currentRound).toBe(1);
   });
 
   it("FETCH_NOT_FOUND → ERROR_PAGE", () => {
@@ -143,6 +163,15 @@ describe("reducer: RECONNECTING", () => {
       { type: "RECONNECT_SUCCESS", round: mockRound, sessionId: mockSessionId },
     );
     expect(result.type).toBe("RENDER_QUESTIONS");
+  });
+
+  it("RECONNECT_SUCCESS with an answered round → WAIT_NEXT_ROUND", () => {
+    const result = run(
+      { type: "RECONNECTING", sessionId: mockSessionId, attempt: 2, since: 1000 },
+      { type: "RECONNECT_SUCCESS", round: mockAnsweredRound, sessionId: mockSessionId },
+    );
+    expect(result.type).toBe("WAIT_NEXT_ROUND");
+    expect((result as { currentRound: number }).currentRound).toBe(1);
   });
 
   it("RECONNECT_FAILED → PAGE_RECONNECT_FAILED", () => {

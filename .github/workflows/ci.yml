@@ -2,10 +2,10 @@
 # CI: prek 质量门控 + 单元测试 + 构建
 #
 # 单一真相源：所有 format/lint/check 都在 prek 中声明（prek.toml +
-# server/prek.toml + web/prek.toml + cli/prek.toml）。gate job 只负责装好
-# prek hooks 需要的工具链，然后运行 `prek run --all-files`。CI 中不存在
-# 第二套 lint/format 定义 —— 本地（git commit / AI hooks / pre-push）与
-# CI 跑的是同一批 hooks，不会 drift。
+# server/prek.toml + web/prek.toml + cli/prek.toml + dsh/prek.toml）。gate
+# job 只负责装好 prek hooks 需要的工具链，然后运行 `prek run --all-files`。
+# CI 中不存在第二套 lint/format 定义 —— 本地（git commit / AI hooks /
+# pre-push）与 CI 跑的是同一批 hooks，不会 drift。
 #
 # gate 无路径过滤（简单优先于 CI 分钟数：纯 web 改动也会装 Rust 工具链）；
 # test/build job 仍按路径过滤（dorny/paths-filter），纯文档改动零成本。
@@ -59,11 +59,13 @@ jobs:
           cache-dependency-path: |
             web/pnpm-lock.yaml
             cli/pnpm-lock.yaml
+            dsh/pnpm-lock.yaml
 
       - name: Install dependencies
         run: |
           pnpm --dir web install --frozen-lockfile
           pnpm --dir cli install --frozen-lockfile
+          pnpm --dir dsh install --frozen-lockfile
 
       # prek 的 actionlint hook 本地未安装时优雅跳过，CI 负责强制执行。
       - name: Install actionlint
@@ -76,7 +78,7 @@ jobs:
         uses: astral-sh/setup-uv@v9
 
       - name: Validate prek config
-        run: uvx prek validate-config prek.toml server/prek.toml web/prek.toml cli/prek.toml
+        run: uvx prek validate-config prek.toml server/prek.toml web/prek.toml cli/prek.toml dsh/prek.toml
 
       - name: prek run --all-files
         run: uvx prek run --all-files
@@ -92,6 +94,7 @@ jobs:
       server: ${{ steps.filter.outputs.server }}
       web: ${{ steps.filter.outputs.web }}
       cli: ${{ steps.filter.outputs.cli }}
+      dsh: ${{ steps.filter.outputs.dsh }}
       docker: ${{ steps.filter.outputs.docker }}
     steps:
       - name: Checkout
@@ -109,6 +112,8 @@ jobs:
               - 'web/**'
             cli:
               - 'cli/**'
+            dsh:
+              - 'dsh/**'
             docker:
               - 'docker/**'
               - '.dockerignore'
@@ -211,7 +216,48 @@ jobs:
         run: node dist/grilling-sleek.js --help
 
   # ---------------------------------------------------------------------------
-  # Job 5: Docker 构建检查
+  # Job 5: dsh 插件测试 + 构建 + tarball 形状（lint/format 由 gate 覆盖）
+  # 与 dsh-release.yml 的发版门禁同一套命令；pack 顺带证明 bundle patch
+  # 与 README/LICENSE 随 tarball 而行。
+  # ---------------------------------------------------------------------------
+  dsh:
+    name: DSH plugin
+    needs: changes
+    if: needs.changes.outputs.dsh == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: dsh/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Build (production)
+        run: pnpm build:prod
+
+      - name: Pack (bundle manifest rides the tarball)
+        run: pnpm pack --dry-run | grep -E 'cordis\.patch\.yml|README\.zh\.md|LICENSE'
+
+  # ---------------------------------------------------------------------------
+  # Job 6: Docker 构建检查
   # ---------------------------------------------------------------------------
   docker:
     name: Docker
