@@ -1,131 +1,74 @@
 #!/usr/bin/env python3
-"""
-Sync version from root package.json to all components.
+"""Propagate the version from the anchor (root package.json) to the rest
+of the unified version train. The member set is shared with the read-only
+gate (scripts/verify_versions.py) via versionlib, so the mutating tool
+and the gate cannot drift apart. Used by the release skill's bump step;
+--dry-run previews. server/Cargo.lock is refreshed by cargo itself on the
+next cargo invocation (clippy --locked gates its freshness); after any
+real run the train is re-read and must be consistent."""
+from __future__ import annotations
 
-Usage:
-    python scripts/sync-version.py [--dry-run]
-
-This script reads the version from the root package.json and syncs it to:
-- cli/package.json
-- web/package.json
-- server/Cargo.toml
-"""
-
-import json
-import re
 import sys
-from pathlib import Path
+from typing import Sequence
+
+from versionlib import ANCHOR, ROOT, TRAIN, read_train
 
 
-def get_project_root() -> Path:
-    """Get the project root directory."""
-    return Path(__file__).parent.parent
+def main(argv: Sequence[str]) -> int:
+    dry_run = "--dry-run" in argv
 
+    anchor_member = next(m for m in TRAIN if m[0] == ANCHOR)
+    anchor = anchor_member[1](ROOT / ANCHOR)
+    if anchor is None:
+        print(f"Error: no version in {ANCHOR}", file=sys.stderr)
+        return 1
 
-def read_version_from_package_json(root: Path) -> str:
-    """Read version from root package.json."""
-    package_json = root / "package.json"
-    if not package_json.exists():
-        print(f"Error: {package_json} not found", file=sys.stderr)
-        sys.exit(1)
-
-    with open(package_json, "r") as f:
-        data = json.load(f)
-
-    version = data.get("version")
-    if not version:
-        print("Error: No version found in package.json", file=sys.stderr)
-        sys.exit(1)
-
-    return version
-
-
-def update_package_json(file_path: Path, version: str, dry_run: bool = False) -> bool:
-    """Update version in a package.json file."""
-    if not file_path.exists():
-        print(f"Warning: {file_path} not found, skipping", file=sys.stderr)
-        return False
-
-    with open(file_path, "r") as f:
-        data = json.load(f)
-
-    old_version = data.get("version")
-    if old_version == version:
-        print(f"✓ {file_path.relative_to(get_project_root())} already at version {version}")
-        return True
-
-    if dry_run:
-        print(f"✓ {file_path.relative_to(get_project_root())}: {old_version} → {version} (dry run)")
-        return True
-
-    data["version"] = version
-    with open(file_path, "w") as f:
-        json.dump(data, f, indent=2)
-        f.write("\n")
-
-    print(f"✓ {file_path.relative_to(get_project_root())}: {old_version} → {version}")
-    return True
-
-
-def update_cargo_toml(file_path: Path, version: str, dry_run: bool = False) -> bool:
-    """Update version in Cargo.toml."""
-    if not file_path.exists():
-        print(f"Warning: {file_path} not found, skipping", file=sys.stderr)
-        return False
-
-    with open(file_path, "r") as f:
-        content = f.read()
-
-    # Match version = "x.y.z" in [package] section
-    pattern = r'^(version\s*=\s*)"[^"]*"'
-    replacement = f'\\1"{version}"'
-
-    new_content, count = re.subn(pattern, replacement, content, count=1, flags=re.MULTILINE)
-
-    if count == 0:
-        print(f"Warning: No version field found in {file_path}", file=sys.stderr)
-        return False
-
-    if dry_run:
-        print(f"✓ {file_path.relative_to(get_project_root())}: version → {version} (dry run)")
-        return True
-
-    with open(file_path, "w") as f:
-        f.write(new_content)
-
-    print(f"✓ {file_path.relative_to(get_project_root())}: version → {version}")
-    return True
-
-
-def main():
-    dry_run = "--dry-run" in sys.argv
-
-    root = get_project_root()
-    version = read_version_from_package_json(root)
-
-    print(f"📦 Syncing version: {version}")
+    print(f"📦 Propagating version: {anchor}")
     if dry_run:
         print("(dry run mode)")
     print()
 
-    success = True
-
-    # Update cli/package.json
-    success &= update_package_json(root / "cli" / "package.json", version, dry_run)
-
-    # Update web/package.json
-    success &= update_package_json(root / "web" / "package.json", version, dry_run)
-
-    # Update server/Cargo.toml
-    success &= update_cargo_toml(root / "server" / "Cargo.toml", version, dry_run)
+    ok = True
+    for rel, reader, setter in TRAIN:
+        if rel == ANCHOR:
+            continue
+        path = ROOT / rel
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            print(f"✗ {rel}: unreadable", file=sys.stderr)
+            ok = False
+            continue
+        old = reader(path)
+        if old == anchor:
+            print(f"✓ {rel} already at version {anchor}")
+            continue
+        new_text, changed = setter(text, anchor)
+        if not changed:
+            print(f"✗ {rel}: no version to replace", file=sys.stderr)
+            ok = False
+            continue
+        if dry_run:
+            print(f"✓ {rel}: {old} → {anchor} (dry run)")
+            continue
+        path.write_text(new_text, encoding="utf-8")
+        print(f"✓ {rel}: {old} → {anchor}")
 
     print()
-    if success:
-        print(f"✅ Version {version} synced to all components")
-    else:
-        print("⚠️  Some components failed to update", file=sys.stderr)
-        sys.exit(1)
+    if not ok:
+        print("⚠️  Some members failed to update", file=sys.stderr)
+        return 1
+    if dry_run:
+        print(f"✅ Version {anchor} would be propagated to the whole train")
+        return 0
+
+    versions = {version for _, version in read_train() if version is not None}
+    if versions != {anchor}:
+        print(f"⚠️  Post-write check failed — train carries {sorted(versions)}", file=sys.stderr)
+        return 1
+    print(f"✅ Version {anchor} synced across the train")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(sys.argv))

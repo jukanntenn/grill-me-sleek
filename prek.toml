@@ -83,6 +83,24 @@ pass_filenames = false
 stages = ["pre-commit"]
 groups = ["check"]
 
+# Unified version train consistency: every version carrier in the tree
+# must agree (member set: scripts/versionlib.py, shared with the mutating
+# scripts/sync-version.py). Fires when any member — or the gate itself —
+# is staged; pass_filenames = false for the same reason as doc-check:
+# prek stashes unstaged changes, so one full-train scan sees exactly the
+# state being committed. CI runs it via `prek run --all-files`; the
+# publish workflows additionally run it with --expect <tag> before any
+# artifact goes out.
+[[repos.hooks]]
+id = "version-sync"
+name = "version train consistency"
+language = "system"
+entry = "python3 scripts/verify_versions.py"
+files = '^package\.json$|^(cli|web|e2e)/package\.json$|^server/Cargo\.toml$|^\.claude-plugin/(plugin|marketplace)\.json$|^README(\.zh)?\.md$|^scripts/(versionlib|verify_versions|sync-version)\.py$'
+pass_filenames = false
+stages = ["pre-commit"]
+groups = ["check"]
+
 # ---- format group: root-level formatter (non-app, non-agent dirs) ----
 # Uses web's prettier install (no root node_modules); web/, cli/ and dsh/ are
 # excluded because they have their own per-file prettier hooks with their own

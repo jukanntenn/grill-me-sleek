@@ -18,7 +18,7 @@ Verify clean tree and identify current state:
 
 ```bash
 git status                         # must be clean
-grep '"version"' .claude-plugin/plugin.json  # current version (field "version": "X.Y.Z")
+python3 scripts/verify_versions.py # current version, whole train (must already be consistent)
 git describe --tags --abbrev=0 2>/dev/null || echo "NO_TAGS"  # last tag (may not exist yet)
 ```
 
@@ -47,27 +47,35 @@ If any check fails → report which check failed + the specific violations, STOP
    ```
 2. **Determine version number:**
    - If the user provided a version number → **validate it:**
-     1. Semver format: `X.Y.Z` where X/Y/Z are non-negative integers
+     1. Semver format: `X.Y.Z` or `X.Y.Z-<prerelease>` (e.g. `0.2.0-rc.4`), X/Y/Z non-negative integers
      2. Higher than current version (no downgrades)
      3. No skipped intermediate versions (e.g. 0.1.1 → 0.3.0 skips 0.2.0 → soft warning, NOT a blocker)
-     4. Tag does not already exist (`git tag -l "vX.Y.Z"` must be empty)
+     4. Tag does not already exist (`git tag -l "vX.Y.Z"` / `git tag -l "vX.Y.Z-rc.N"` must be empty)
      - Present validation results as **non-binding suggestions** — the user may override any warning.
    - If the user did NOT provide a version → recommend one based on semver principles (patch=fixes, minor=features, major=breaking), using your best judgment. **Show your reasoning** (e.g. "3 feat + 2 fix commits since v0.1.1 → recommending minor bump to 0.2.0").
 3. **PAUSE — confirm version number.** Present the chosen version + reasoning/validation results and wait for explicit user confirmation. Do NOT proceed until the user gives a clear affirmative response (e.g. ok / 确认 / yes / 行 / 好的 / LGTM / 没问题 / 可以 / proceed / confirm).
 
    **⚠️ Anti-ambiguity rule:** You MUST NOT interpret silence, vague acknowledgments, or topic-adjacent replies as consent. Only explicit affirmative words count. When in doubt, ask.
 
-4. Update exactly FOUR files with the confirmed version `X.Y.Z`:
-   - `.claude-plugin/plugin.json`: update `"version"` field
-   - `.claude-plugin/marketplace.json`: update `"version"` field in the plugins array entry
-   - `README.md`: update the badge URL `version-X.Y.Z-brightgreen`
-   - `README_zh.md`: update the badge URL `version-X.Y.Z-brightgreen`
-5. Verify all four files show the same new version:
+4. Bump the **unified version train** with the confirmed version:
+   1. Edit `"version"` in the root `package.json` — the anchor of the train.
+   2. Propagate to the whole train (member set lives in `scripts/versionlib.py`,
+      shared with the gates):
+      ```bash
+      python3 scripts/sync-version.py
+      ```
+      This rewrites `cli/`, `web/`, `e2e/` `package.json`, `server/Cargo.toml`,
+      `.claude-plugin/plugin.json` + `marketplace.json`, and the `README.md` /
+      `README.zh.md` badges (shields.io `-` → `--` escaping handled for you).
+   3. Refresh `server/Cargo.lock` for the new Cargo version —
+      `cargo clippy --locked` fails the commit otherwise:
+      ```bash
+      cd server && cargo update -p grilling-sleek && cd ..
+      ```
+5. Verify the train is consistent (the prek `version-sync` hook re-runs this at
+   commit — surface failures now, not mid-ceremony):
    ```bash
-   grep '"version"' .claude-plugin/plugin.json
-   grep '"version"' .claude-plugin/marketplace.json
-   grep 'version-' README.md
-   grep 'version-' README_zh.md
+   python3 scripts/verify_versions.py
    ```
 
 ### Step 3: Update CHANGELOG
@@ -121,7 +129,7 @@ Present summary:
 
 ```
 Steps 1–4 complete:
-- Version: X.Y.Z (plugin.json + marketplace.json + README.md + README_zh.md)
+- Version: X.Y.Z across the whole train (package.json + components + Cargo.toml + plugin/marketplace + README badges; verify_versions.py green)
 - CHANGELOG: updated
 - READMEs: verified consistent
 
@@ -152,7 +160,10 @@ If the file is missing or incomplete → create/fix it, explain what was done, a
 ### Step 6: Commit
 
 ```bash
-git add .claude-plugin/plugin.json .claude-plugin/marketplace.json CHANGELOG.md README.md README_zh.md .github/workflows/release.yml
+git add package.json cli/package.json web/package.json e2e/package.json \
+  server/Cargo.toml server/Cargo.lock \
+  .claude-plugin/plugin.json .claude-plugin/marketplace.json \
+  README.md README.zh.md CHANGELOG.md .github/workflows/release.yml
 git commit -m "chore: release vX.Y.Z"
 ```
 
@@ -187,7 +198,7 @@ Provide user with:
 
 1. **GitHub Release**: check body matches CHANGELOG entry
    → `https://github.com/jukanntenn/grill-me-sleek/releases/tag/vX.Y.Z`
-2. **Version checklist**: confirm all four files (plugin.json, marketplace.json, README.md, README_zh.md) show vX.Y.Z
+2. **Version checklist**: `python3 scripts/verify_versions.py --expect vX.Y.Z` green — the whole train carries the release; the publish workflows' `verify` job already enforced this before any artifact went out
 3. **Rollback options**:
    - Delete the tag: `git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`
    - Edit the GitHub Release manually via the web UI

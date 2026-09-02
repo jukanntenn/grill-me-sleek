@@ -7,6 +7,9 @@
 #
 # 设计原则：
 #   - 统一版本号：cli/server/web 使用同一个版本
+#   - 版本在仓库内提升（release skill + scripts/sync-version.py 传播），
+#     发布时不做任何运行时覆盖 —— verify job 校验 tag 与版本列车一致，
+#     不一致则整个发布失败（prek version-sync 钩子在提交侧拦同一不变量）
 #   - 自动从 CHANGELOG.md 提取版本
 #   - 创建 GitHub Release
 #   - 发布 CLI 到 npm（使用可信发布，无需 token）
@@ -30,10 +33,39 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # 版本一致性门禁：tag 版本必须等于版本列车（scripts/verify_versions.py）。
+  # tag push 不经过 pre-commit，CI 的 prek gate 也不监听 tag —— 这个 job 是
+  # 错误 tag 唯一的拦截点，发布产物（npm/GitHub Release）都以它为前置。
+  # ---------------------------------------------------------------------------
+  verify:
+    name: Verify tag matches version train
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "📦 Version: $VERSION"
+
+      - name: Verify version train
+        run: python3 scripts/verify_versions.py --expect "${{ steps.version.outputs.version }}"
+
+  # ---------------------------------------------------------------------------
   # 发布 CLI 到 npm
   # ---------------------------------------------------------------------------
   release-cli:
     name: Release CLI to npm
+    needs: [verify]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,28 +77,15 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
 
-      - name: Extract version
-        id: version
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION=${GITHUB_REF#refs/tags/v}
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "📦 Version: $VERSION"
-
       - name: Enable corepack
         run: corepack enable
 
+      # 版本一致性由 verify job 保证：cli/package.json 在 tag 里就是发布版
+      # 本，发布时不做任何覆盖（曾经的 pnpm version 覆盖掩盖过版本漂移）。
       - name: Build and publish
         run: |
           cd cli
           pnpm install --frozen-lockfile
-          CURRENT=$(node -p "require('./package.json').version")
-          if [ "$CURRENT" != "${{ steps.version.outputs.version }}" ]; then
-            pnpm version ${{ steps.version.outputs.version }} --no-git-tag-version
-          fi
           NODE_ENV=production pnpm run build:prod
           pnpm publish --access public --provenance --no-git-checks
         env:
@@ -77,6 +96,7 @@ jobs:
   # ---------------------------------------------------------------------------
   release-github:
     name: Create GitHub Release
+    needs: [verify]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -84,21 +104,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract version
-        id: version
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION=${GITHUB_REF#refs/tags/v}
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "📦 Version: $VERSION"
-
       - name: Extract release notes
         id: changelog
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.verify.outputs.version }}"
           awk "/\\[${VERSION}\\]/{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md > release_notes.md
           if [ ! -s release_notes.md ]; then
             echo "::error::CHANGELOG.md 中未找到版本 ${VERSION} 的条目"
@@ -109,7 +118,7 @@ jobs:
       - name: Detect pre-release
         id: prerelease
         run: |
-          VERSION="${{ steps.version.outputs.version }}"
+          VERSION="${{ needs.verify.outputs.version }}"
           if [[ "$VERSION" == *-* ]]; then
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
             echo "make_latest=false" >> "$GITHUB_OUTPUT"

@@ -12,6 +12,10 @@
 # 多架构原生构建（无 QEMU）：amd64 在 ubuntu-latest，arm64 在 GitHub arm
 # runner。每个架构推 per-arch tag，manifest job 合并成最终的多架构列表。
 # 本地多平台构建只能走 buildx（QEMU），见 docker/build.py。
+#
+# 镜像二进制的 /v1/healthz 上报 server/Cargo.toml 版本 —— verify job 先
+# 校验 tag 与版本列车一致（scripts/verify_versions.py），不一致则不构建
+# 不推送（tag push 不经过 pre-commit，这是错误 tag 唯一的拦截点）。
 # =============================================================================
 
 name: Publish Docker image
@@ -23,7 +27,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Docker tag to publish (e.g. 0.2.0-rc.2); empty = use the pushed tag"
+        description: "Docker tag to publish (e.g. 0.2.0-rc.4); empty = use the pushed tag"
         required: false
 
 concurrency:
@@ -31,7 +35,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # 版本一致性门禁（两条触发路径都校验：tag push 与 workflow_dispatch 的
+  # 手动 version 输入）。
+  # ---------------------------------------------------------------------------
+  verify:
+    name: Verify tag matches version train
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            TAG="v${{ inputs.version }}"
+          else
+            TAG=${GITHUB_REF#refs/tags/}
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "git tag: $TAG"
+
+      - name: Verify version train
+        run: python3 scripts/verify_versions.py --expect "$TAG"
+
   build_single_arch:
+    needs: verify
     name: Build & push (${{ matrix.arch }})
     strategy:
       fail-fast: false
