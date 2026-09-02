@@ -737,6 +737,11 @@ describe("grill_user tool", () => {
       content: expect.stringContaining("One decision-tree branch per `grill_user` call") as string,
     });
     expect(registered?.content).toContain("Never spawn `@grilling-sleek/cli`");
+    // The Construction rules are the model's only pre-call view of the
+    // execute-time value constraints; dropping them reopens the first-call
+    // rejection loop this section exists to close.
+    expect(registered?.content).toContain("Construction rules");
+    expect(registered?.content).toContain("`grill_additional_notes`");
   });
 
   it("unregisters the tool and skill when its contributing fiber is disposed (HMR-safety)", async () => {

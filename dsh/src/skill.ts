@@ -2,7 +2,11 @@
  * The grilling-sleek skill body this plugin registers at runtime, so the
  * interview discipline travels with the tool it instructs. Routing lives in
  * the description: skill digests carry name and description only, and
- * `whenToUse` never reaches the model.
+ * `whenToUse` never reaches the model. The body's Construction rules
+ * enumerate every value constraint `mapping.ts` enforces at execute time —
+ * the enforced schema subset cannot express them, so the body is the model's
+ * only pre-call view of what will reject a batch. Keep the list in step with
+ * mapping.ts's checks; a future gate will enforce that sync mechanically.
  *
  * @module @grilling-sleek/dsh-tool-grill-user/skill
  */
@@ -33,7 +37,18 @@ Discipline:
 - Decisions belong to me. Do not act on the plan until I explicitly confirm we have reached a shared understanding.
 - Grill from the main agent. A subagent has no human answerer: resolve your own remaining questions and include them in your final report.
 
-Build each call's questions with stable \`grill_\`-prefixed snake_case ids, a short \`header\`, the full \`question\`, and — when the question has choices — two or more \`options\` with your recommendation marked. Omit \`options\` for free-text questions. Answers come back as structured JSON (\`answers[]\` with \`id\`, selected \`selected\` labels, and free \`custom\` text); treat them as my decisions for that branch. When a result carries \`hub.url\`, repeat that link alone on its own line in your reply — alone, because auto-linking swallows trailing punctuation — so I can reach the answer page for the next round.
+Construction rules — the enforced schema subset cannot carry these checks, so \`grill_user\` enforces them itself and rejects the whole call on the first violation. Learn them before your first call; build every call to them exactly:
+
+- \`branch\`: one short non-empty line naming the branch this round grills.
+- \`questions\`: 1 to 16 items by default — the deployment's \`maxQuestionsPerRound\` cap.
+- every \`id\`: snake_case carrying the \`grill_\` prefix (e.g. \`grill_auth_provider\`), unique within the batch; never \`grill_additional_notes\`, which is reserved for the notes catch-all the round appends itself.
+- \`header\` and \`question\`: non-empty.
+- \`options\`: omit for a free-text question; otherwise two or more entries, each with a non-empty \`label\`.
+- \`recommended\`: the 0-based index into \`options\` of your recommended choice — only on a question that has \`options\`, always within range; always pair it with \`explanation\`.
+- \`multiSelect\`: \`true\` only on a question that has \`options\`.
+- \`maxLength\`: at least 1.
+
+Answers come back as structured JSON (\`answers[]\` with \`id\`, selected \`selected\` labels, and free \`custom\` text); treat them as my decisions for that branch. When a result carries \`hub.url\`, repeat that link alone on its own line in your reply — alone, because auto-linking swallows trailing punctuation — so I can reach the answer page for the next round.
 
 When the grilling concludes, summarize the decisions taken across all rounds before proceeding.
 `;

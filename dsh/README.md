@@ -101,6 +101,14 @@ return as `{ roundId, hub?: { sessionId, url }, answers: [{ id, selected,
 custom? }] }` — `hub` present whenever the round raced on one — including the
 synthesized `grill_additional_notes` catch-all.
 
+The runtime skill body carries these as an explicit Construction rules
+checklist. The tool schema's enforced subset cannot express value
+constraints (no pattern, minItems, or minimum), so `mapping.ts` checks them
+at execute time; the checklist is the model's only pre-call view of them,
+kept in step with the checks by JSDoc cross-references until a mechanical
+gate replaces the prose anchor
+([GS-RFC 2026-09-02](../.agents/gs-rfcs/implemented/2026-09-02-dsh-skill-construction-rules.md)).
+
 ## Known limitations
 
 - **No custom session events.** The Harness persistence read path refuses

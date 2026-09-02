@@ -2,7 +2,12 @@
  * Value mapping between the three grilling forms: the model-authored tool
  * args, the `userQuestions` items, and the Hub wire payloads — plus the value
  * constraints the parameter schema cannot express (the schema is the parsing
- * boundary; these checks guard model JSON it cannot shape).
+ * boundary; these checks guard model JSON it cannot shape). Each
+ * {@link toQuestions} check has a counterpart line in the runtime skill
+ * body's Construction rules (`skill.ts`) — the model's only pre-call view of
+ * these constraints. When a check changes here, move its line there in the
+ * same change; a future gate will enforce that sync mechanically instead of
+ * this prose anchor.
  *
  * @module @grilling-sleek/dsh-tool-grill-user/mapping
  */

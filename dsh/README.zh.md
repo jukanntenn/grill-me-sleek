@@ -87,6 +87,13 @@ Release（[GS-RFC 2026-09-01](../.agents/gs-rfcs/proposed/2026-09-01-dsh-plugin-
 [{ id, selected, custom? }] }` 返回——只要该轮在 Hub 上开出，`hub` 即在——
 含合成的 `grill_additional_notes` 追问。
 
+运行时 skill 正文把以上纪律承载为显式的 Construction rules 清单。工具
+schema 的强制子集表达不了值约束（没有 pattern、minItems、minimum），
+`mapping.ts` 只能在 execute 期校验它们；这份清单是模型在首次调用前
+唯一能看到它们的渠道，靠 JSDoc 交叉引用与校验保持同步，直到机械式
+门禁取代这层散文锚定
+（[GS-RFC 2026-09-02](../.agents/gs-rfcs/implemented/2026-09-02-dsh-skill-construction-rules.zh.md)）。
+
 ## Known limitations
 
 - **无自定义会话事件。** Harness 的持久化读取路径会拒绝其生成目录之外
