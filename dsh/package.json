@@ -1,6 +1,6 @@
 {
   "name": "@grilling-sleek/dsh-tool-grill-user",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "DeepSeek Harness plugin: the grill_user tool — structured decision-tree grilling over the user-questions seam and a grill-me-sleek Hub round",
   "type": "module",
   "main": "dist/index.js",
