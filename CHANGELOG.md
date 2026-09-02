@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0-rc.4] - 2026-09-02
+
+### Added
+
+- DeepSeek Harness support — agents running on dsh can now grill you with
+  the same structured questions via the new `grill_user` plugin
+  (`@grilling-sleek/dsh-tool-grill-user`); answer from your desktop card or
+  the web answer page — whichever you answer first wins.
+
 ## [0.2.0-rc.3] - 2026-08-24
 
 ### Added
