@@ -28,6 +28,9 @@ server/.vite/
 
 # Node
 node_modules/
+# Per-package lockfiles only; no workspace root install — a root
+# pnpm-lock.yaml is an accidental `pnpm install` at the repo root.
+/pnpm-lock.yaml
 web/dist/
 cli/dist/
 dsh/dist/
