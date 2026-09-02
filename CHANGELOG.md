@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.0-rc.5] - 2026-09-02
+
+### Fixed
+
+- Every component reports the true release version again — rc.3/rc.4 server
+  builds answered 0.2.0-rc.2 on /v1/healthz while npm and the plugin
+  marketplace carried different numbers; a release can no longer ship with
+  mismatched versions.
+
 ## [0.2.0-rc.4] - 2026-09-02
 
 ### Added
