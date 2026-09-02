@@ -71,3 +71,21 @@ export interface GrillingAnswer {
 
 /** How a grilling round closed. */
 export type GrillingOutcome = "answered" | "cancelled" | "expired";
+
+/**
+ * A user-initiated revision of an earlier round's stored answers, delivered
+ * alongside a later round's result: the Hub round number, the branch name it
+ * was pushed under, the revision now stored there, and the full latest
+ * answers. The Hub is the source of truth — the latest revision of every
+ * round supersedes whatever was delivered before.
+ */
+export interface GrillingRevision {
+  /** Hub round number of the revised round. */
+  round: number;
+  /** The branch name the round was pushed under, when the Hub reports one. */
+  name?: string;
+  /** The revision now stored on the Hub. */
+  revision: number;
+  /** The revised round's full latest answers, in question order. */
+  answers: GrillingAnswer[];
+}

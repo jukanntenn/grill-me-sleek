@@ -1,7 +1,9 @@
 /**
  * REST client for a grill-me-sleek Hub: session creation, round push, the
- * clamped long-poll answer loop, proxy submission with revise-on-conflict,
- * and best-effort cancellation — the Hub link of the `grill_user` race. The
+ * clamped long-poll answer loop (collecting revision notices from 202
+ * bodies), round listing and detail fetch for the revision watermark sync,
+ * proxy submission with revise-on-conflict, the SSE events URL, and
+ * best-effort cancellation — the Hub link of the `grill_user` race. The
  * Hub's contract lives in this repository (`server/schemas/*.json`); this
  * module is the only place here that speaks it.
  *
@@ -57,6 +59,34 @@ export interface HubStoredResponse {
   submitted_at: string;
   revision?: number;
   revised_at?: string;
+}
+
+/** One round summary row, as returned by the round-list endpoint. */
+export interface HubRoundSummary {
+  round: number;
+  name?: string | null;
+  has_response: boolean;
+  revision: number;
+}
+
+/** One round's full record: the pushed grilling plus the stored response. */
+export interface HubRoundDetail {
+  round: number;
+  name?: string | null;
+  grilling: HubGrilling;
+  response?: HubStoredResponse;
+}
+
+/** A revision the long-poll loop observed on another round while parked. */
+export interface HubRoundNotice {
+  round: number;
+  revision: number;
+}
+
+/** What a completed wait returns: the stored response plus revisions observed on other rounds during the wait. */
+export interface HubAwaitOutcome {
+  response: HubStoredResponse;
+  notices: HubRoundNotice[];
 }
 
 /** A Hub HTTP failure the caller can classify by status. */
@@ -202,13 +232,48 @@ export class GrillingHubClient {
   }
 
   /**
+   * List the session's round summaries — the per-round revision counters the
+   * watermark sync compares against.
+   * @param sessionId - the owning Hub session.
+   * @param signal - cancellation lifetime of the call.
+   */
+  async listRounds(sessionId: string, signal: AbortSignal): Promise<HubRoundSummary[]> {
+    return (await this.#getJsonWithRetry(
+      `sessions/${sessionId}/rounds`,
+      signal,
+    )) as HubRoundSummary[];
+  }
+
+  /**
+   * Fetch one round's full record — the pushed grilling plus the stored
+   * response — for mapping a revision's latest answers.
+   * @param sessionId - the owning Hub session.
+   * @param round - the round number.
+   * @param signal - cancellation lifetime of the call.
+   */
+  async getRound(sessionId: string, round: number, signal: AbortSignal): Promise<HubRoundDetail> {
+    return (await this.#getJsonWithRetry(
+      `sessions/${sessionId}/rounds/${round}`,
+      signal,
+    )) as HubRoundDetail;
+  }
+
+  /** The session's SSE event-stream URL — the watcher subscribes here. */
+  eventsUrl(sessionId: string): string {
+    return `${this.#baseUrl}/v1/sessions/${sessionId}/events`;
+  }
+
+  /**
    * Long-poll one round until it is answered. Each request waits one
    * ≤55 s window and the loop re-arms until an answer, a terminal session
-   * state, an unrecoverable error, or the abort signal ends it.
+   * state, an unrecoverable error, or the abort signal ends it. A 202 body
+   * may carry a revision that landed on another round while this loop was
+   * parked; those notices are collected and returned alongside the answer.
    * @param sessionId - the owning Hub session.
    * @param round - the round number to wait on.
    * @param signal - cancellation lifetime of the whole wait.
-   * @returns the stored response once the round is answered.
+   * @returns the stored response once the round is answered, plus any
+   *   revision notices observed on other rounds during the wait.
    * @throws {GrillingHubError} status 410 when the Hub session reached a
    *   terminal state, 404 when the session or round is unknown.
    */
@@ -216,7 +281,8 @@ export class GrillingHubClient {
     sessionId: string,
     round: number,
     signal: AbortSignal,
-  ): Promise<HubStoredResponse> {
+  ): Promise<HubAwaitOutcome> {
+    const notices = new Map<number, number>();
     let consecutiveErrors = 0;
     while (true) {
       let response: Response;
@@ -234,8 +300,24 @@ export class GrillingHubClient {
         await sleepAbortable(backoffMs(consecutiveErrors), signal);
         continue;
       }
-      if (response.status === 200) return (await readJson(response)) as HubStoredResponse;
+      if (response.status === 200) {
+        return {
+          response: (await readJson(response)) as HubStoredResponse,
+          notices: [...notices].map(([round_, revision]) => ({ round: round_, revision })),
+        };
+      }
       if (response.status === 202) {
+        const pending = (await readJson(response).catch(() => null)) as {
+          revised?: { round?: unknown; revision?: unknown };
+        } | null;
+        if (
+          typeof pending?.revised?.round === "number" &&
+          typeof pending.revised.revision === "number"
+        ) {
+          // Keep the highest revision seen per round; bursts collapse.
+          const { round: noticed, revision } = pending.revised;
+          notices.set(noticed, Math.max(revision, notices.get(noticed) ?? 0));
+        }
         consecutiveErrors = 0;
         continue;
       }
@@ -338,6 +420,36 @@ export class GrillingHubClient {
       body: JSON.stringify(body),
       signal: AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
     });
+  }
+
+  /** GET a JSON document, retrying transient failures until aborted. */
+  async #getJsonWithRetry(path: string, signal: AbortSignal): Promise<unknown> {
+    let consecutiveErrors = 0;
+    while (true) {
+      let response: Response;
+      try {
+        response = await this.#fetch(`${this.#baseUrl}/v1/${path}`, {
+          headers: { accept: "application/json" },
+          signal: AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
+        });
+      } catch (error) {
+        if (signal.aborted) throw abortError(signal, error);
+        consecutiveErrors++;
+        await sleepAbortable(backoffMs(consecutiveErrors), signal);
+        continue;
+      }
+      if (response.status === 200) return await readJson(response);
+      if (response.status === 429) {
+        await sleepAbortable(retryAfterMs(response), signal);
+        continue;
+      }
+      if (isTransient(response.status)) {
+        consecutiveErrors++;
+        await sleepAbortable(backoffMs(consecutiveErrors), signal);
+        continue;
+      }
+      throw await hubError(response);
+    }
   }
 
   async #requestJsonWithRetry(

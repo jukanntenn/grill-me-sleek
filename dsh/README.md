@@ -33,6 +33,43 @@ log records the round through the tool call itself — arguments carry the
 questions, the result carries the answers and the opened Hub linkage — so
 replay and history see what was asked and answered.
 
+## How revisions reach the agent
+
+The Hub is the source of truth for answers, and the user can revise any
+answered round on the answer page at any time while the session is active.
+Everything the agent was delivered is a cached view with a per-round revision
+watermark, and three layers converge it — the watcher accelerates delivery,
+the other two make it lossless:
+
+1. **The revision watcher.** From the first successfully opened round, the
+   plugin reads the session's SSE stream (the same one the answer page uses).
+   Every `response.revised` fetches that round's latest answers and delivers
+   them to the agent out-of-band — an idle agent is woken (`followup`), a busy
+   one is handed an inject for its next step boundary — under a small
+   consecutive-wake budget that an answered round refills. Every
+   (re)connection replays the round summaries, so a missed event or a dropped
+   stream heals by the watermark comparison. Node has no dependable global
+   `EventSource`, so the reader is a small fetch-body parser with reconnect
+   and backoff.
+2. **The result delta.** Before each new round opens, the plugin aligns the
+   watermarks with the Hub and carries any newly revised rounds in the
+   result's `revisions[]` field — each entry holds the round number, its
+   branch name, the revision, and the full latest answers.
+3. **The wait notices.** The long-poll loop collects the revision notices the
+   Hub attaches to pending responses, and the result delivers those rounds'
+   latest answers too.
+
+Layered this way, a revision is lost only when every layer fails at once; the
+watermark comparison collapses duplicates across layers. A failed or aborted
+round cancels the Hub session and resets the linkage (the next call opens a
+fresh session), and agent disposal cancels the session best-effort — the
+answer page then says so instead of collecting revisions nobody will read.
+Beyond that the plugin never closes a session: sessions live to their TTL
+(one hour on the public Hub), and that lifetime is the user's revision
+window. The skill body teaches the model the matching discipline: the latest
+revision of every round supersedes earlier deliveries, and no close action
+exists or is needed.
+
 ## Install
 
 Prerequisite: [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
@@ -97,8 +134,9 @@ One branch per call; stable `grill_`-prefixed snake_case question ids; two or
 more options with the recommendation marked (`recommended` + `explanation`);
 optionless questions are free text. Main agent only — an owned subagent has
 no human answerer and its call is rejected before any round exists. Answers
-return as `{ roundId, hub?: { sessionId, url }, answers: [{ id, selected,
-custom? }] }` — `hub` present whenever the round raced on one — including the
+return as `{ roundId, hub?: { sessionId, url }, revisions?: [...], answers:
+[{ id, selected, custom? }] }` — `hub` present whenever the round raced on
+one, `revisions` present whenever earlier rounds changed — including the
 synthesized `grill_additional_notes` catch-all.
 
 The runtime skill body carries these as an explicit Construction rules
@@ -128,8 +166,15 @@ gate replaces the prose anchor
 - **Late answers are dropped by design.** An answer submitted in the
   milliseconds between the race settling and the withdrawal arriving is
   accepted by its surface and silently discarded.
+- **Revision delivery degrades, never gates.** The watcher is an accelerator:
+  a deployment that blocks SSE still converges every revision at the next
+  `grill_user` call's result delta, and the wake budget means a long run of
+  idle revisions past three without an answered round in between is injected
+  (parked for the next step boundary) rather than waking the agent.
 - The package tracks the published dsh alpha channel (`0.1.2-alpha.x`);
   pre-release Harness may rename seams, and this package follows.
 
 Design rationale and the alternatives that lost live in
-[GS-RFC 2026-08-31](../.agents/gs-rfcs/implemented/2026-08-31-dsh-grilling-integration.md).
+[GS-RFC 2026-08-31](../.agents/gs-rfcs/implemented/2026-08-31-dsh-grilling-integration.md)
+and, for the revision model,
+[GS-RFC 2026-09-02](../.agents/gs-rfcs/implemented/2026-09-02-dsh-revision-awareness.md).

@@ -215,9 +215,71 @@ describe("GrillingHubClient", () => {
       fakeResponse(200, { json: STORED }),
     ]);
     const client = new GrillingHubClient({ baseUrl: "https://hub", fetch });
-    await expect(client.awaitResponse("s1", 1, signal())).resolves.toEqual(STORED);
+    await expect(client.awaitResponse("s1", 1, signal())).resolves.toEqual({
+      response: STORED,
+      notices: [],
+    });
     expect(calls).toHaveLength(2);
     expect(calls[0]!.url).toContain("wait=55");
+  });
+
+  it("collects the revision notices 202 bodies carry for other rounds", async () => {
+    const { fetch } = scriptedFetch([
+      fakeResponse(202, { json: { status: "pending", revised: { round: 2, revision: 3 } } }),
+      fakeResponse(202, { json: { status: "pending", revised: { round: 2, revision: 4 } } }),
+      fakeResponse(202, { json: { status: "pending", revised: { round: 5, revision: 2 } } }),
+      fakeResponse(202, { json: { status: "pending" } }),
+      fakeResponse(202, { json: { status: "pending", revised: { round: "no" } } }),
+      fakeResponse(200, { json: STORED }),
+    ]);
+    const client = new GrillingHubClient({ baseUrl: "https://hub", fetch });
+    await expect(client.awaitResponse("s1", 1, signal())).resolves.toEqual({
+      response: STORED,
+      notices: [
+        { round: 2, revision: 4 },
+        { round: 5, revision: 2 },
+      ],
+    });
+  });
+
+  it("lists round summaries and fetches one round's detail on 200", async () => {
+    const summaries = [{ round: 1, name: "auth", has_response: true, revision: 2 }];
+    const detail = {
+      round: 1,
+      name: "auth",
+      grilling: GRILLING,
+      response: { ...STORED, revision: 2 },
+    };
+    const { fetch, calls } = scriptedFetch([
+      fakeResponse(200, { json: summaries }),
+      fakeResponse(200, { json: detail }),
+    ]);
+    const client = new GrillingHubClient({ baseUrl: "https://hub", fetch });
+    await expect(client.listRounds("s1", signal())).resolves.toEqual(summaries);
+    await expect(client.getRound("s1", 1, signal())).resolves.toEqual(detail);
+    expect(calls[0]!.url).toBe("https://hub/v1/sessions/s1/rounds");
+    expect(calls[1]!.url).toBe("https://hub/v1/sessions/s1/rounds/1");
+    expect(client.eventsUrl("s1")).toBe("https://hub/v1/sessions/s1/events");
+  });
+
+  it("retries a transient 500 on a round detail fetch, then succeeds", async () => {
+    const detail = { round: 1, grilling: GRILLING };
+    const { fetch } = scriptedFetch([
+      fakeResponse(500, { text: "oops" }),
+      fakeResponse(200, { json: detail }),
+    ]);
+    const client = new GrillingHubClient({ baseUrl: "https://hub", fetch });
+    const promise = client.getRound("s1", 1, signal());
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(promise).resolves.toEqual(detail);
+  });
+
+  it("surfaces a 404 round detail fetch without retrying", async () => {
+    const { fetch } = scriptedFetch([
+      fakeResponse(404, { json: { message: "no round", status: 404 } }),
+    ]);
+    const client = new GrillingHubClient({ baseUrl: "https://hub", fetch });
+    await expect(client.getRound("s1", 9, signal())).rejects.toThrow("no round");
   });
 
   it("resets the error ladder after a clean 202 window", async () => {
@@ -231,7 +293,7 @@ describe("GrillingHubClient", () => {
     const promise = client.awaitResponse("s1", 1, signal());
     await vi.advanceTimersByTimeAsync(1000);
     await vi.advanceTimersByTimeAsync(1000);
-    await expect(promise).resolves.toEqual(STORED);
+    await expect(promise).resolves.toEqual({ response: STORED, notices: [] });
   });
 
   it("honors retry-after on a rate-limited poll window, then answers", async () => {
@@ -242,7 +304,7 @@ describe("GrillingHubClient", () => {
     const client = new GrillingHubClient({ baseUrl: "https://hub", fetch });
     const promise = client.awaitResponse("s1", 1, signal());
     await vi.advanceTimersByTimeAsync(1000);
-    await expect(promise).resolves.toEqual(STORED);
+    await expect(promise).resolves.toEqual({ response: STORED, notices: [] });
   });
 
   it("retries a network failure between polls after backoff, then answers", async () => {
@@ -250,7 +312,7 @@ describe("GrillingHubClient", () => {
     const client = new GrillingHubClient({ baseUrl: "https://hub", fetch });
     const promise = client.awaitResponse("s1", 1, signal());
     await vi.advanceTimersByTimeAsync(1000);
-    await expect(promise).resolves.toEqual(STORED);
+    await expect(promise).resolves.toEqual({ response: STORED, notices: [] });
   });
 
   it("throws a 410 GrillingHubError when the session went terminal during a poll", async () => {

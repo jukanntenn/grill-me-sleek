@@ -26,6 +26,32 @@ Hub round 在卡片发出前先开出（受 2 s 揭示预算约束），因此�
 round——参数承载问题、结果承载答案与开出的 Hub 链接——回放与历史因此
 看得到问过与答过什么。
 
+## How revisions reach the agent
+
+Hub 是答案的唯一真相源，而会话存活期间用户随时可在应答页修订任意已答
+轮。agent 已收到的一切都是带每轮 revision 水位线的缓存视图，由三层机制
+收敛——watcher 加速送达，另两层保证零丢失：
+
+1. **修订 watcher。** 自第一个成功开出的 round 起，插件读取会话的 SSE
+   流（应答页用的同一条）。每个 `response.revised` 取回该轮最新答案并
+   以带外方式送达 agent——空闲 agent 被唤醒（`followup`），忙碌 agent
+   在其下一个步骤边界收到 inject——连续唤醒有小型预算，一轮应答即回填。
+   每次（重）连接都会重放轮次摘要，漏掉的事件或断掉的流经水位线比对
+   自愈。Node 没有可靠的全局 `EventSource`，读取器是自带重连与退避的
+   小型 fetch 流解析器。
+2. **结果增量。** 每个新 round 开出前，插件用水位线与 Hub 对齐，把新
+   出现修订的轮次放进结果的 `revisions[]` 字段——每项含轮号、分支名、
+   revision 与完整最新答案。
+3. **等待通知。** 长轮询循环收集 Hub 附在 pending 响应上的修订通知，
+   这些轮的最新答案同样随结果送达。
+
+三层叠加，修订只会在三层同时失败时丢失；水位线比对消解跨层重复。失败
+或中止的 round 会取消 Hub 会话并重置链接（下一次调用开全新会话）；agent
+消亡时尽力取消会话——应答页会如实告知，而不是继续收集再无人读的修订。
+除此之外插件从不关闭会话：会话活到 TTL（公共 Hub 上为一小时），这段
+生命周期就是用户的修订窗口。skill 正文教给模型与之匹配的纪律：每轮以
+最新 revision 为准，且不存在也不需要任何关闭动作。
+
 ## Install
 
 前提：先装好 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（`dsh`）本体。然后一条命令：
@@ -83,9 +109,10 @@ Release（[GS-RFC 2026-09-01](../.agents/gs-rfcs/proposed/2026-09-01-dsh-plugin-
 一次一个分支；稳定的 `grill_` 前缀 snake_case 问题 id；两个及以上选项
 并标出推荐（`recommended` + `explanation`）；无选项的问题即自由文本。
 仅限主 agent——被拥有的 subagent 没有人类应答者，其调用在任何 round
-诞生之前即被拒绝。答案以 `{ roundId, hub?: { sessionId, url }, answers:
-[{ id, selected, custom? }] }` 返回——只要该轮在 Hub 上开出，`hub` 即在——
-含合成的 `grill_additional_notes` 追问。
+诞生之前即被拒绝。答案以 `{ roundId, hub?: { sessionId, url },
+revisions?: [...], answers: [{ id, selected, custom? }] }` 返回——只要该
+轮在 Hub 上开出，`hub` 即在；更早轮次有变化时带 `revisions`——含合成
+的 `grill_additional_notes` 追问。
 
 运行时 skill 正文把以上纪律承载为显式的 Construction rules 清单。工具
 schema 的强制子集表达不了值约束（没有 pattern、minItems、minimum），
@@ -109,8 +136,13 @@ schema 的强制子集表达不了值约束（没有 pattern、minItems、minimu
   其诊断面。
 - **迟到应答按设计丢弃。** 竞速落定与撤卡到达之间几毫秒内提交的应答
   会被其所在面接受后静默丢弃。
+- **修订送达只降级、不设卡。** watcher 是加速器：屏蔽 SSE 的部署仍会在
+  下一次 `grill_user` 调用的结果增量处收敛全部修订；唤醒预算意味着连续
+  超过三次的空闲期修订（其间无应答轮）会改为 inject（停放到下一个步骤
+  边界）而不是唤醒 agent。
 - 本包追踪已发布的 dsh alpha 频道（`0.1.2-alpha.x`）；预发布期的
   Harness 可能重命名 seam，本包随之跟进。
 
 设计依据与落选方案见
-[GS-RFC 2026-08-31](../.agents/gs-rfcs/implemented/2026-08-31-dsh-grilling-integration.zh.md)。
+[GS-RFC 2026-08-31](../.agents/gs-rfcs/implemented/2026-08-31-dsh-grilling-integration.zh.md)
+与 [GS-RFC 2026-09-02](../.agents/gs-rfcs/implemented/2026-09-02-dsh-revision-awareness.zh.md)（修订模型）。

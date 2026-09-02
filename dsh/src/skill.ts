@@ -50,7 +50,9 @@ Construction rules — the enforced schema subset cannot carry these checks, so 
 
 Answers come back as structured JSON (\`answers[]\` with \`id\`, selected \`selected\` labels, and free \`custom\` text); treat them as my decisions for that branch. When a result carries \`hub.url\`, repeat that link alone on its own line in your reply — alone, because auto-linking swallows trailing punctuation — so I can reach the answer page for the next round.
 
-When the grilling concludes, summarize the decisions taken across all rounds before proceeding.
+I can revise any answered round on the answer page at any time while the session lives. Revisions reach you two ways: a result's \`revisions[]\` field, and plugin notices between calls — both carry that round's latest answers and its \`revision\` counter. The latest revision of every round is my decision; every earlier delivery of that round is stale, and acting on a stale answer is acting against my stated choice.
+
+When the grilling concludes, summarize the decisions taken across all rounds — each round at its latest revision — before proceeding. The answer page stays open until the session expires on its own; you have no close action and need none.
 `;
 
 /**

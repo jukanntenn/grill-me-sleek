@@ -193,6 +193,31 @@ export function toHubGrilling(branch: string, questions: GrillingQuestion[]): Hu
 }
 
 /**
+ * Rebuild the canonical question list from a stored Hub grilling — the
+ * inverse of {@link toHubGrilling}, used when mapping the latest answers of a
+ * round the model did not ask about in this call (a revision delivered by
+ * the watermark sync or the watcher).
+ * @param grilling - the stored Hub grilling of the revised round.
+ * @returns the canonical questions the stored answers map against.
+ */
+export function hubGrillingToQuestions(grilling: HubGrilling): GrillingQuestion[] {
+  return grilling.questions.map((question): GrillingQuestion => ({
+    id: question.id,
+    header: question.header,
+    question: question.text,
+    ...(question.options !== undefined
+      ? { options: question.options.map((option) => ({ ...option })) }
+      : {}),
+    ...(question.type === "multi" ? { multiSelect: true } : {}),
+    ...(question.recommended !== undefined ? { recommended: question.recommended } : {}),
+    ...(question.explanation !== undefined ? { explanation: question.explanation } : {}),
+    ...(question.required !== undefined ? { required: question.required } : {}),
+    ...(question.placeholder !== undefined ? { placeholder: question.placeholder } : {}),
+    ...(question.max_length !== undefined ? { maxLength: question.max_length } : {}),
+  }));
+}
+
+/**
  * Normalize a stored Hub response into the link-neutral answer list. The
  * question list decides how each wire answer reads: a free-text question
  * carries its answer in `selected` (the answer page's text field), which

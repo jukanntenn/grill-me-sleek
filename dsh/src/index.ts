@@ -6,8 +6,11 @@
  * Hub round opens first so its URL rides the card, then the two links race,
  * the losing surface is converged, and the Harness records the round through
  * the tool call itself (arguments carry the questions, the result carries the
- * answers and the opened Hub linkage). The interview skill rides along as a
- * runtime skill registration.
+ * answers, the opened Hub linkage, and any earlier-round revisions the
+ * watermark sync surfaced). A per-session revision watcher delivers the
+ * user's between-call answer revisions to the agent, and agent disposal
+ * cancels the session it can no longer answer for. The interview skill rides
+ * along as a runtime skill registration.
  *
  * @module @grilling-sleek/dsh-tool-grill-user
  */
@@ -21,7 +24,7 @@ import type { Agent } from "@deepseek-ai/dsh-agent";
 // Type-only: resolves the ctx.agents registry declaration for optional access.
 import type {} from "@deepseek-ai/dsh-agent";
 import { toQuestions } from "./mapping.ts";
-import { askRound } from "./race.ts";
+import { askRound, closeHubLink } from "./race.ts";
 import type { HubSessionLink } from "./race.ts";
 import { registerGrillingSkill } from "./skill.ts";
 import { GrillingHubClient } from "./hub.ts";
@@ -180,6 +183,48 @@ export function apply(ctx: Context, config: Config): void {
                 },
               },
             },
+            revisions: {
+              type: "array",
+              description:
+                "Earlier rounds whose stored answers the user revised since they were last delivered. " +
+                "Each carries that round's latest answers and supersedes every earlier delivery of it; " +
+                "revision notices may also arrive between calls as plugin messages. Absent when nothing changed.",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  round: {
+                    type: "integer",
+                    required: true,
+                    description: "The Hub round number of the revised round.",
+                  },
+                  name: {
+                    type: "string",
+                    description: "The branch the revised round grilled, when the Hub reports one.",
+                  },
+                  revision: {
+                    type: "integer",
+                    required: true,
+                    description:
+                      "The revision now stored on the Hub; quote it when referring to this revision.",
+                  },
+                  answers: {
+                    type: "array",
+                    required: true,
+                    description: "The revised round's full latest answers, in question order.",
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      properties: {
+                        id: { type: "string", required: true },
+                        selected: { type: "array", required: true, items: { type: "string" } },
+                        custom: { type: "string" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             answers: {
               type: "array",
               required: true,
@@ -228,6 +273,7 @@ export function apply(ctx: Context, config: Config): void {
         return {
           roundId,
           ...(result.hub !== undefined ? { hub: result.hub } : {}),
+          ...(result.revisions.length > 0 ? { revisions: result.revisions } : {}),
           answers: result.answers,
         };
       },
@@ -239,4 +285,18 @@ export function apply(ctx: Context, config: Config): void {
       }),
     }),
   );
+
+  // A disposed agent can no longer hear revisions: close its watcher and
+  // cancel its Hub session (best effort) so the answer page says so instead
+  // of collecting revisions nobody will ever read. The Hub's TTL sweeper is
+  // the final net when even this cancel is lost.
+  ctx.on("agent/disposed", ({ agent }) => {
+    const state = hubSessions.get(agent.session);
+    if (state === undefined) return;
+    const sessionId = state.sessionId;
+    closeHubLink(state);
+    if (hub !== undefined && sessionId !== undefined) {
+      void hub.cancelSession(sessionId, new AbortController().signal).catch(() => {});
+    }
+  });
 }

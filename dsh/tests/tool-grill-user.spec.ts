@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Context } from "@deepseek-ai/cordis";
 import { ToolCallId } from "@deepseek-ai/dsh-llm";
 import AgentRegistry from "@deepseek-ai/dsh-agent";
@@ -74,6 +74,7 @@ class StubHub {
   readonly #server: Server;
   #baseUrl = "";
   readonly #listening: Promise<void>;
+  readonly #sse: import("node:http").ServerResponse[] = [];
 
   constructor() {
     const server = createServer((req, res) => {
@@ -101,7 +102,19 @@ class StubHub {
     this.#scripts = [...this.#scripts, ...entries];
   }
 
+  /** How many SSE streams are currently held open. */
+  get sseStreams(): number {
+    return this.#sse.length;
+  }
+
+  /** Push one SSE event to every open stream (the Hub's event broadcast). */
+  ssePush(event: string, data: unknown): void {
+    const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const client of this.#sse) client.write(frame);
+  }
+
   async close(): Promise<void> {
+    for (const client of this.#sse) client.end();
     this.#server.closeAllConnections();
     await new Promise<void>((resolve) => {
       this.#server.close(() => resolve());
@@ -124,6 +137,19 @@ class StubHub {
         : (JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown);
     const path = (req.url ?? "").split("?")[0]!;
     this.requests.push({ method: req.method ?? "", path, body });
+    if (req.method === "GET" && /\/events$/.test(path)) {
+      res.writeHead(200, {
+        "content-type": "text/event-stream",
+        "cache-control": "no-cache",
+        connection: "keep-alive",
+      });
+      this.#sse.push(res);
+      res.on("close", () => {
+        const index = this.#sse.indexOf(res);
+        if (index !== -1) this.#sse.splice(index, 1);
+      });
+      return;
+    }
     const index = this.#scripts.findIndex(
       (s) => s.method === (req.method ?? "") && s.match.test(path),
     );
@@ -163,7 +189,13 @@ async function setup(config: Partial<tool.Config> = {}): Promise<Context> {
 
 /** A root Agent stand-in; the race keys its Hub linkage on `agent.session`. */
 function agentWithSession(ctx: Context, id: string): Agent {
-  const agent = { id, session: { id } } as unknown as Agent;
+  const agent = {
+    id,
+    session: { id },
+    status: "idle",
+    followup: vi.fn(),
+    inject: vi.fn(),
+  } as unknown as Agent;
   ctx.agents.enter(agent, undefined);
   return agent;
 }
@@ -230,6 +262,18 @@ const pushed = (round: number): Script => ({
   match: /^\/v1\/sessions\/[^/]+\/rounds$/,
   status: 201,
   json: { round, name: null, grilling: {} },
+});
+const roundList = (rows: unknown): Script => ({
+  method: "GET",
+  match: /^\/v1\/sessions\/[^/]+\/rounds$/,
+  status: 200,
+  json: rows,
+});
+const roundDetail = (json: unknown): Script => ({
+  method: "GET",
+  match: /^\/v1\/sessions\/[^/]+\/rounds\/\d+$/,
+  status: 200,
+  json,
 });
 const poll = (json: unknown, status = 200): Script => ({
   method: "GET",
@@ -299,7 +343,12 @@ describe("grill_user tool", () => {
     const outputProperties = (
       definition.output.schema as unknown as { properties: Record<string, unknown> }
     ).properties;
-    expect(Object.keys(outputProperties).sort()).toEqual(["answers", "hub", "roundId"]);
+    expect(Object.keys(outputProperties).sort()).toEqual([
+      "answers",
+      "hub",
+      "revisions",
+      "roundId",
+    ]);
   });
 
   it("applies config: the round deadline and question cap are real configurability", async () => {
@@ -703,6 +752,222 @@ describe("grill_user tool", () => {
     expect(hub.recorded("POST", /rounds$/)).toHaveLength(1);
     expect(hub.requests.filter((req) => /rounds\/1\/response/.test(req.path))).toHaveLength(1);
     expect(hub.requests.filter((req) => /rounds\/2\/response/.test(req.path))).toHaveLength(1);
+  });
+
+  it("delivers earlier-round revisions with the next round's result (watermark sync)", async () => {
+    const hub = new StubHub();
+    hubs.push(hub);
+    const baseUrl = await hub.ready();
+    hub.script([
+      created(1),
+      poll({
+        round: 1,
+        answers: { grill_auth_provider: { selected: "oauth2" } },
+        submitted_at: "t",
+        revision: 1,
+      }),
+    ]);
+    const ctx = await setup({ baseUrl });
+    const agent = agentWithSession(ctx, "revision-sync");
+    const first = await callGrill(ctx, callArgs("auth approach"), { agent });
+    expect(first.isError).toBe(false);
+
+    hub.script([
+      roundList([{ round: 1, name: "auth approach", has_response: true, revision: 2 }]),
+      roundDetail({
+        round: 1,
+        name: "auth approach",
+        grilling: {
+          name: "auth approach",
+          additional_notes: {},
+          questions: [
+            {
+              id: "grill_auth_provider",
+              header: "Auth",
+              text: "Which auth provider should guard the API?",
+              type: "single",
+              options: [{ label: "oauth2" }, { label: "sessions" }],
+            },
+          ],
+        },
+        response: {
+          round: 1,
+          answers: { grill_auth_provider: { selected: "sessions" } },
+          submitted_at: "t",
+          revision: 2,
+        },
+      }),
+      pushed(2),
+      poll({
+        round: 2,
+        answers: { grill_deadline: { selected: "soon" } },
+        submitted_at: "t",
+        revision: 1,
+      }),
+    ]);
+    const second = await callGrill(ctx, callArgs("data model"), { agent });
+
+    expect(second.isError).toBe(false);
+    if (second.isError) throw new Error("expected grill_user success");
+    expect(second.value).toMatchObject({
+      revisions: [
+        {
+          round: 1,
+          name: "auth approach",
+          revision: 2,
+          answers: [{ id: "grill_auth_provider", selected: ["sessions"] }],
+        },
+      ],
+    });
+  });
+
+  it("delivers revisions the long-poll windows noticed on other rounds", async () => {
+    const hub = new StubHub();
+    hubs.push(hub);
+    const baseUrl = await hub.ready();
+    hub.script([
+      created(1),
+      poll({
+        round: 1,
+        answers: { grill_auth_provider: { selected: "oauth2" } },
+        submitted_at: "t",
+        revision: 1,
+      }),
+    ]);
+    const ctx = await setup({ baseUrl });
+    const agent = agentWithSession(ctx, "noticed-revision");
+    const first = await callGrill(ctx, callArgs(), { agent });
+    expect(first.isError).toBe(false);
+
+    hub.script([
+      pushed(2),
+      poll({ status: "pending", revised: { round: 1, revision: 2 } }, 202),
+      poll({
+        round: 2,
+        answers: { grill_deadline: { selected: "soon" } },
+        submitted_at: "t",
+        revision: 1,
+      }),
+      roundDetail({
+        round: 1,
+        name: null,
+        grilling: {
+          name: "auth approach",
+          additional_notes: {},
+          questions: [
+            {
+              id: "grill_auth_provider",
+              header: "Auth",
+              text: "Which auth provider should guard the API?",
+              type: "single",
+              options: [{ label: "oauth2" }, { label: "sessions" }],
+            },
+          ],
+        },
+        response: {
+          round: 1,
+          answers: { grill_auth_provider: { selected: "sessions" } },
+          submitted_at: "t",
+          revision: 2,
+        },
+      }),
+    ]);
+    const second = await callGrill(ctx, callArgs("data model"), { agent });
+
+    expect(second.isError).toBe(false);
+    if (second.isError) throw new Error("expected grill_user success");
+    expect(second.value).toMatchObject({
+      revisions: [
+        { round: 1, revision: 2, answers: [{ id: "grill_auth_provider", selected: ["sessions"] }] },
+      ],
+    });
+  });
+
+  it("watches the session stream and wakes the agent on a between-call revision", async () => {
+    const hub = new StubHub();
+    hubs.push(hub);
+    const baseUrl = await hub.ready();
+    hub.script([
+      created(1),
+      poll({
+        round: 1,
+        answers: { grill_auth_provider: { selected: "oauth2" } },
+        submitted_at: "t",
+        revision: 1,
+      }),
+    ]);
+    const ctx = await setup({ baseUrl });
+    const agent = agentWithSession(ctx, "sse-watch");
+    const result = await callGrill(ctx, callArgs(), { agent });
+    expect(result.isError).toBe(false);
+    await until(() => hub.sseStreams > 0);
+
+    hub.script([
+      roundDetail({
+        round: 1,
+        name: "auth approach",
+        grilling: {
+          name: "auth approach",
+          additional_notes: {},
+          questions: [
+            {
+              id: "grill_auth_provider",
+              header: "Auth",
+              text: "Which auth provider should guard the API?",
+              type: "single",
+              options: [{ label: "oauth2" }, { label: "sessions" }],
+            },
+          ],
+        },
+        response: {
+          round: 1,
+          answers: { grill_auth_provider: { selected: "sessions" } },
+          submitted_at: "t",
+          revision: 2,
+        },
+      }),
+    ]);
+    hub.ssePush("response.revised", { round: 1, revision: 2 });
+    const followup = agent.followup as ReturnType<typeof vi.fn>;
+    await until(() => followup.mock.calls.length > 0);
+    const message = followup.mock.calls[0]![0] as {
+      content: { type: string; text: string }[];
+    };
+    expect(message.content[0]!.text).toContain("revision 2");
+    expect(message.content[0]!.text).toContain('"sessions"');
+  });
+
+  it("cancels the Hub session when the agent session is disposed", async () => {
+    const hub = new StubHub();
+    hubs.push(hub);
+    const baseUrl = await hub.ready();
+    hub.script([
+      created(1),
+      poll({
+        round: 1,
+        answers: { grill_auth_provider: { selected: "oauth2" } },
+        submitted_at: "t",
+        revision: 1,
+      }),
+    ]);
+    const ctx = await setup({ baseUrl });
+    const agent = agentWithSession(ctx, "dispose-me");
+    const result = await callGrill(ctx, callArgs(), { agent });
+    expect(result.isError).toBe(false);
+    await until(() => hub.sseStreams > 0);
+
+    hub.script([cancelled]);
+    (ctx as unknown as { emit: (name: string, payload: unknown) => void }).emit("agent/disposed", {
+      agent,
+    });
+    await until(() => hub.recorded("PATCH", /^\/v1\/sessions\//).length > 0);
+    expect(hub.recorded("PATCH", /^\/v1\/sessions\//)[0]?.body).toEqual({
+      status: "cancelled",
+      reason: "agent_aborted",
+      actor: "agent",
+    });
+    // The watcher's stream went down with the session.
+    await until(() => hub.sseStreams === 0);
   });
 
   it("presents the call with the branch as its title", async () => {
